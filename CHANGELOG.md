@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.6.0
+
+- **OpenAI-compatible HTTP endpoint**: `bajaclaw serve` exposes every
+  BajaClaw profile behind an OpenAI-style `/v1/chat/completions` API.
+  Anything that speaks the OpenAI chat API — Cursor, Open WebUI, the
+  `openai` SDKs, curl, LangChain, LlamaIndex — can drive BajaClaw as if
+  it were an LLM. Each request runs a full cycle (memory recall, skill
+  matching, MCP inheritance, backend call, post-cycle extract).
+- Endpoints:
+  - `GET /health`
+  - `GET /v1/models` — lists exposed profiles as OpenAI model entries
+  - `POST /v1/chat/completions` — non-streaming and SSE streaming
+  - `POST /v1/bajaclaw/cycle` — native full `CycleOutput`
+  - `POST /v1/bajaclaw/tasks` — enqueue without waiting
+- Auth: optional bearer token via `--api-key` or `api.apiKey` in
+  `~/.bajaclaw/api.json`. Non-localhost binds without a key are refused.
+- Model name maps to a profile (`"model": "default"` or
+  `"model": "bajaclaw:default"`). Multi-message histories render as a
+  prior transcript; the last message is the current task.
+- CORS headers on every response; `OPTIONS` preflight handled.
+- New built-in guide skill `setup-api` — ask your agent "help me set up
+  the API" and it walks you through the whole flow.
+- New docs: `docs/api.md` with full endpoint reference and client
+  examples (Python SDK, Node SDK, curl streaming, Cursor/Open WebUI).
+
 ## 0.5.0
 
 - **Self-knowledge skills**: BajaClaw now ships 13 built-in skills that
