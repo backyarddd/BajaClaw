@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "test": "node --test tests/",
+    "test": "node --test \"tests/**/*.test.js\"",
     "lint": "tsc --noEmit"
   },
   "keywords": ["claude", "agent", "autonomous", "mcp", "cli"],
