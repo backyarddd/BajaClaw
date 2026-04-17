@@ -55,6 +55,6 @@ export async function cmdRegister(profile?: string): Promise<void> {
       console.log(chalk.yellow(`skip ${p}: ${(e as Error).message}`));
     }
   }
-  console.log(chalk.dim(`BajaClaw MCP server registered. Restart Claude Desktop to pick up changes.`));
+  console.log(chalk.dim(`BajaClaw MCP server registered. Restart the desktop MCP client to pick up changes.`));
   console.log(chalk.dim(`State dir: ${bajaclawHome()}`));
 }

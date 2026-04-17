@@ -1,15 +1,15 @@
-// 13-step cycle loop. Derived from YonderClaw's cycle pattern, rewritten.
+// 13-step cycle loop.
 // Steps:
 //  1. Load profile config
 //  2. Open DB + check schema
 //  3. Circuit-breaker + rate-limit gate
 //  4. Select task from queue or heartbeat trigger
 //  5. Recall relevant memories (FTS5)
-//  6. Load CLAUDE.md, SOUL.md, HEARTBEAT.md
+//  6. Load AGENT.md, SOUL.md, HEARTBEAT.md
 //  7. Match skills against task, inject top N
 //  8. Build MCP config for subprocess
 //  9. Assemble final prompt
-// 10. Invoke claude CLI (printMode JSON by default)
+// 10. Invoke the CLI backend (print mode, JSON output)
 // 11. Parse response, persist cycle row
 // 12. Extract durable memories (post-cycle)
 // 13. Dispatch follow-up actions (channel replies, queued tasks, self-improve reflection)
@@ -73,7 +73,7 @@ export async function runCycle(input: CycleInput): Promise<CycleOutput> {
     const prompt = assemblePrompt({
       task,
       memories: memories.map((m) => `- [${m.kind}] ${m.content}`).join("\n"),
-      claudeMd: systemDocs.claude,
+      agentMd: systemDocs.agent,
       soulMd: systemDocs.soul,
       heartbeat: systemDocs.heartbeat,
       skills: matched.map((s) => `## Skill: ${s.name}\n${s.body}`).join("\n\n"),
@@ -174,14 +174,17 @@ function insertCycle(db: import("./db.js").DB, c: {
   return info.lastInsertRowid as number;
 }
 
-function loadSystemDocs(profile: string): { claude: string; soul: string; heartbeat: string } {
+function loadSystemDocs(profile: string): { agent: string; soul: string; heartbeat: string } {
   const dir = profileDir(profile);
   const read = (name: string) => {
     const p = join(dir, name);
     return existsSync(p) ? readFileSync(p, "utf8") : "";
   };
+  // AGENT.md is the canonical name. Fall back to the older CLAUDE.md for
+  // migrated profiles.
+  const agent = read("AGENT.md") || read("CLAUDE.md");
   return {
-    claude: read("CLAUDE.md"),
+    agent,
     soul: read("SOUL.md"),
     heartbeat: read("HEARTBEAT.md"),
   };
@@ -190,7 +193,7 @@ function loadSystemDocs(profile: string): { claude: string; soul: string; heartb
 interface AssembleInput {
   task: string;
   memories: string;
-  claudeMd: string;
+  agentMd: string;
   soulMd: string;
   heartbeat: string;
   skills: string;
@@ -199,7 +202,7 @@ interface AssembleInput {
 export function assemblePrompt(input: AssembleInput): string {
   const sections: string[] = [];
   if (input.soulMd.trim()) sections.push(`# Agent Identity\n${input.soulMd.trim()}`);
-  if (input.claudeMd.trim()) sections.push(`# Operating Guide\n${input.claudeMd.trim()}`);
+  if (input.agentMd.trim()) sections.push(`# Operating Guide\n${input.agentMd.trim()}`);
   if (input.heartbeat.trim()) sections.push(`# Heartbeat Schedule\n${input.heartbeat.trim()}`);
   if (input.memories.trim()) sections.push(`# Recalled Memories\n${input.memories.trim()}`);
   if (input.skills.trim()) sections.push(`# Active Skills\n${input.skills.trim()}`);

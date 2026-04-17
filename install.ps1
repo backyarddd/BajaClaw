@@ -6,7 +6,8 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   exit 1
 }
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-  Write-Host "Claude Code CLI not found. Install it first: https://docs.claude.com/claude-code"
+  Write-Host "The 'claude' CLI backend was not found on your PATH."
+  Write-Host "BajaClaw drives it as a subprocess - install it first, then rerun."
   exit 1
 }
 npx create-bajaclaw @args

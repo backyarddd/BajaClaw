@@ -9,13 +9,16 @@ import { runHealthCmd } from "./commands/health.js";
 import { runMigrate } from "./commands/migrate.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { runTrigger } from "./commands/trigger.js";
+import { runUpdate, maybeNoticeAtExit } from "./commands/update.js";
+import { currentVersion } from "./updater.js";
+import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
 import * as skill from "./commands/skill.js";
 import * as profile from "./commands/profile.js";
 import * as daemon from "./commands/daemon.js";
 import * as channel from "./commands/channel.js";
 
-const pkg = { name: "bajaclaw", version: "0.1.0" };
+const pkg = { name: "bajaclaw", version: currentVersion() };
 
 function defaultProfile(explicit?: string): string {
   const p = explicit ?? process.env.BAJACLAW_PROFILE;
@@ -27,7 +30,7 @@ function defaultProfile(explicit?: string): string {
 }
 
 const program = new Command();
-program.name(pkg.name).description("BajaClaw — autonomous agents on your Claude subscription").version(pkg.version);
+program.name(pkg.name).description("BajaClaw — autonomous agents on your terms").version(pkg.version);
 
 program
   .command("init [name]")
@@ -51,16 +54,16 @@ program
     await runStart({ profile: defaultProfile(p), task: opts.task, dryRun: !!opts.dryRun });
   });
 
-program.command("dry-run [profile]").description("Show assembled prompt without calling claude")
+program.command("dry-run [profile]").description("Show assembled prompt without executing")
   .option("--task <text>")
   .action(async (p, opts) => runDryRun(defaultProfile(p), opts.task));
 
-program.command("doctor").description("Check toolchain + Claude CLI").action(runDoctor);
+program.command("doctor").description("Check toolchain + backend").action(runDoctor);
 program.command("status [profile]").description("Summary stats").action(async (p) => runStatus(p));
 program.command("health [profile]").description("Breaker + rate limit + recent cycles").action(async (p) => runHealthCmd(defaultProfile(p)));
 program.command("dashboard [profile]").description("Serve dashboard HTML").action(async (p) => runDashboard(defaultProfile(p)));
 
-program.command("migrate [profile]").description("Import from YonderClaw dir (strips QIS/Hive)")
+program.command("migrate [profile]").description("Import from a foreign profile directory (strips legacy artifacts)")
   .requiredOption("--from-yonderclaw <dir>", "path to yonderclaw directory")
   .action(async (p, opts) => runMigrate(defaultProfile(p), opts.fromYonderclaw));
 
@@ -120,6 +123,24 @@ chanCmd.command("add [profile]").argument("<kind>").requiredOption("--token <t>"
   .action(async (p, kind, o) => channel.cmdAdd(defaultProfile(p), kind as "telegram" | "discord", o.token, o.channelId));
 chanCmd.command("remove [profile]").argument("<kind>").action(async (p, kind) => channel.cmdRemove(defaultProfile(p), kind as "telegram" | "discord"));
 chanCmd.command("list [profile]").action(async (p) => channel.cmdList(defaultProfile(p)));
+
+// Update
+program.command("update").description("Check for and install a newer version")
+  .option("--check", "only check; don't install")
+  .option("--yes", "apply without confirmation")
+  .action(async (opts) => runUpdate({ check: !!opts.check, yes: !!opts.yes }));
+
+// Banner
+program.command("banner").description("Print the ASCII banner").action(() => {
+  printBanner(pkg.version, { force: true });
+});
+
+program.hook("postAction", async () => {
+  // Non-blocking notice at the end of any command. Skipped for update itself.
+  const cmd = process.argv[2];
+  if (cmd === "update" || cmd === "banner") return;
+  await maybeNoticeAtExit();
+});
 
 program.parseAsync(process.argv).catch((e) => {
   console.error(`error: ${(e as Error).message}`);
