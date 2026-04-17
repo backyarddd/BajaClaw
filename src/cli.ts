@@ -16,6 +16,7 @@ import { cmdSkillPort, cmdMcpPort, listDesktopServers } from "./commands/port.js
 import { runModel } from "./commands/model.js";
 import { runEffort } from "./commands/effort.js";
 import { runGuide } from "./commands/guide.js";
+import { runServe } from "./commands/serve.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
@@ -204,6 +205,22 @@ program.command("guide [topic]")
   .description("Print a self-setup walkthrough, or list available guides")
   .option("--profile <name>", "profile to use for skill lookup")
   .action(async (topic, opts) => runGuide(topic, { profile: opts.profile }));
+
+// Serve — OpenAI-compatible HTTP endpoint
+program.command("serve")
+  .description("Serve BajaClaw over an OpenAI-compatible HTTP API")
+  .option("--host <host>", "bind host (default 127.0.0.1)")
+  .option("--port <n>", "bind port (default 8765)")
+  .option("--api-key <key>", "require this bearer token (required for non-localhost bind)")
+  .option("--expose <names...>", "allowlist of profile names (default: all)")
+  .option("--stream-delay <ms>", "delay between streamed chunks (default 20)")
+  .action(async (opts) => runServe({
+    host: opts.host,
+    port: opts.port ? Number(opts.port) : undefined,
+    apiKey: opts.apiKey,
+    exposedProfiles: opts.expose,
+    streamDelayMs: opts.streamDelay ? Number(opts.streamDelay) : undefined,
+  }));
 
 // Banner
 program.command("banner").description("Print the ASCII banner").action(() => {

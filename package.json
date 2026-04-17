@@ -1,6 +1,6 @@
 {
   "name": "create-bajaclaw",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "BajaClaw — autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {

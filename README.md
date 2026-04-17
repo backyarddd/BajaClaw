@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.5.0
+          autonomous agents on your terms  ·  MIT  ·  v0.6.0
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -309,6 +309,47 @@ BAJACLAW_PROFILE=triage bajaclaw daemon start
 
 ---
 
+## Use BajaClaw as an OpenAI-compatible HTTP endpoint
+
+```
+bajaclaw serve                                   # 127.0.0.1:8765, no auth
+bajaclaw serve --api-key $(openssl rand -hex 32) # with auth
+bajaclaw serve --host 0.0.0.0 --api-key <key>    # bind all (auth required)
+```
+
+Anything that speaks the OpenAI chat API — Cursor, Open WebUI, LibreChat,
+`openai` SDKs, curl, LangChain, LlamaIndex — can drive BajaClaw as an LLM.
+The request's `model` field is a profile name; each request is one full
+cycle (memory recall, skill matching, MCP inheritance, backend call,
+post-cycle extract).
+
+```
+curl http://localhost:8765/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "default",
+    "messages": [{"role": "user", "content": "what is on my plate today"}]
+  }'
+```
+
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:8765/v1", api_key="any")
+r = client.chat.completions.create(
+    model="default",
+    messages=[{"role": "user", "content": "hello"}],
+)
+print(r.choices[0].message.content)
+```
+
+Endpoints: `GET /health`, `GET /v1/models`, `POST /v1/chat/completions`
+(non-stream + SSE), `POST /v1/bajaclaw/cycle` (native full `CycleOutput`),
+`POST /v1/bajaclaw/tasks` (enqueue without waiting). Non-localhost binds
+require `--api-key`. Full reference + client examples in
+[`docs/api.md`](docs/api.md). Guided setup: `bajaclaw guide api`.
+
+---
+
 ## Auto-update
 
 BajaClaw checks the npm registry at most once per 24h. When a newer version
@@ -491,6 +532,7 @@ Full detail in [`docs/commands.md`](docs/commands.md). Summary:
 | `model [id] [profile]` | show/set the model (lists known if no id) |
 | `effort [level] [profile]` | show/set effort (low/medium/high) |
 | `guide [topic]` | print a built-in setup walkthrough |
+| `serve` | OpenAI-compatible HTTP endpoint |
 | `update` | check for / install a newer version |
 | `banner` | print the ASCII banner |
 
@@ -543,7 +585,8 @@ Deeper in [`docs/architecture.md`](docs/architecture.md).
 - [`skills.md`](docs/skills.md) — scoping, matching, self-generated skills
 - [`memory.md`](docs/memory.md) — FTS5 recall + extract, cross-tool sync
 - [`heartbeat.md`](docs/heartbeat.md) — scheduling + supervisor
-- [`channels.md`](docs/channels.md) — Telegram + Discord
+- [`channels.md`](docs/channels.md)
+- [`api.md`](docs/api.md) — OpenAI-compatible HTTP endpoint — Telegram + Discord
 - [`security.md`](docs/security.md) — threat model + mitigations
 - [`troubleshooting.md`](docs/troubleshooting.md) — common fixes
 - [`faq.md`](docs/faq.md) — frequently asked
