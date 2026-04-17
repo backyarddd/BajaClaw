@@ -1,13 +1,17 @@
-import { spawn, execFileSync, spawnSync } from "node:child_process";
-import { writeFileSync, readFileSync, existsSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
-import { platform } from "node:os";
+import { spawn } from "node:child_process";
+import { writeFileSync, readFileSync, existsSync, unlinkSync, openSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { profileDir, ensureDir } from "../paths.js";
 import { Logger } from "../logger.js";
 import { pickAdapter } from "../scheduler/index.js";
 import { runCycle } from "../agent.js";
 import { openDb } from "../db.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// __dirname is <repo>/src/commands (tsx) or <repo>/dist/commands (built).
+const LAUNCHER = join(__dirname, "..", "..", "bin", "bajaclaw.js");
 
 function pidPath(profile: string): string {
   return join(profileDir(profile), "daemon.pid");
@@ -31,9 +35,8 @@ export async function cmdStart(profile: string, foreground = false): Promise<voi
   if (foreground) return runLoop(profile);
 
   const bin = process.execPath;
-  const selfLauncher = join(new URL(import.meta.url).pathname, "..", "..", "..", "..", "bin", "bajaclaw.js");
-  const out = require("node:fs").openSync(logPath(profile), "a");
-  const child = spawn(bin, [selfLauncher, "daemon", "run", profile], {
+  const out = openSync(logPath(profile), "a");
+  const child = spawn(bin, [LAUNCHER, "daemon", "run", profile], {
     detached: true,
     stdio: ["ignore", out, out],
     env: { ...process.env, BAJACLAW_DAEMON: "1" },
@@ -74,9 +77,8 @@ export async function cmdRestart(profile: string): Promise<void> {
 
 export async function cmdInstall(profile: string): Promise<void> {
   const adapter = pickAdapter();
-  const launcher = join(new URL(import.meta.url).pathname, "..", "..", "..", "..", "bin", "bajaclaw.js");
-  await adapter.install(profile, "heartbeat", "*/15 * * * *", [process.execPath, launcher, "start", profile]);
-  console.log(chalk.green(`✓ installed heartbeat for ${profile} via ${platform()} scheduler`));
+  await adapter.install(profile, "heartbeat", "*/15 * * * *", [process.execPath, LAUNCHER, "start", profile]);
+  console.log(chalk.green(`✓ installed heartbeat for ${profile}`));
 }
 
 export async function cmdRun(profile: string): Promise<void> {

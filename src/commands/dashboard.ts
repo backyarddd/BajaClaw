@@ -8,7 +8,8 @@ import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DASHBOARD_HTML = join(__dirname, "..", "..", "..", "src", "dashboard.html");
+// __dirname is <repo>/src/commands (tsx) or <repo>/dist/commands (built).
+const DASHBOARD_HTML = join(__dirname, "..", "..", "src", "dashboard.html");
 
 export async function runDashboard(profile: string): Promise<void> {
   const cfg = loadConfig(profile);
