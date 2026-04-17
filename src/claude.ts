@@ -1,4 +1,4 @@
-import { execa, type ExecaChildProcess } from "execa";
+import { execa, type ResultPromise } from "execa";
 import { platform } from "node:os";
 import type { ClaudeEvent, ClaudeOptions, ClaudeResult } from "./types.js";
 
@@ -108,7 +108,7 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
   }
 }
 
-export function runStream(prompt: string, opts: ClaudeOptions = {}): ExecaChildProcess | null {
+export function runStream(prompt: string, opts: ClaudeOptions = {}): ResultPromise | null {
   const cmd = buildCommand(prompt, opts);
   const bin = cachedBinary;
   if (!bin) return null;
