@@ -49,12 +49,12 @@ export async function runInit(opts: InitOptions): Promise<void> {
   writeClaudeAgentMd(cfg);
 
   console.log(chalk.green(`✓ Scaffolded profile at ${dir}`));
-  console.log(chalk.green(`✓ Wrote Claude Code agent at ${claudeAgentsDir(opts.name)}/${opts.name}.md`));
+  console.log(chalk.green(`✓ Wrote agent descriptor at ${claudeAgentsDir(opts.name)}/${opts.name}.md`));
   console.log("");
   console.log("Next:");
   console.log(`  bajaclaw doctor`);
   console.log(`  bajaclaw start ${opts.name} --dry-run`);
-  console.log(`  bajaclaw mcp register ${opts.name}`);
+  console.log(`  bajaclaw mcp register ${opts.name}   # optional: expose BajaClaw as an MCP server`);
 }
 
 function copyTemplateDir(from: string, to: string, vars: Record<string, string>): void {
@@ -95,6 +95,10 @@ function defaultTools(template: TemplateName): { allowed?: string[]; disallowed?
 }
 
 function writeClaudeAgentMd(cfg: AgentConfig): void {
+  // BajaClaw shares state with the user's CLI backend via ~/.claude/agents/.
+  // The frontmatter below is a standard agent descriptor; the CLI picks it up
+  // automatically so `@<name>` routing works in any tool that respects the
+  // convention.
   const dir = ensureDir(claudeAgentsDir(cfg.profile));
   const body = `---
 name: ${cfg.name}
@@ -111,8 +115,7 @@ background: true
 Paired BajaClaw profile: ~/.bajaclaw/profiles/${cfg.profile}/
 Template: ${cfg.template}
 
-Operating guide lives in CLAUDE.md of the profile directory. This agent is
-invokable from Claude Code via @${cfg.name}.
+Operating guide lives in AGENT.md of the profile directory.
 `;
   writeFileSync(join(dir, `${cfg.name}.md`), body);
 }

@@ -20,18 +20,20 @@ export async function runHealth(): Promise<Check[]> {
   });
 
   const bin = await findClaudeBinary();
-  out.push({ name: "claude CLI", ok: !!bin, detail: bin ?? "not found in PATH" });
+  out.push({ name: "cli backend", ok: !!bin, detail: bin ?? "`claude` not found in PATH" });
 
   if (bin) {
     const v = await claudeVersion();
-    out.push({ name: "claude version", ok: !!v, detail: v ?? "unable to read version" });
+    // The backend prints its own brand in --version; show only the semver prefix.
+    const semver = v ? (v.match(/\d+\.\d+\.\d+\S*/) ?? [null])[0] : null;
+    out.push({ name: "cli version", ok: !!v, detail: semver ?? v ?? "unable to read version" });
   }
 
-  out.push({ name: "claude home", ok: existsSync(claudeHome()), detail: claudeHome() });
+  out.push({ name: "cli state dir", ok: existsSync(claudeHome()), detail: claudeHome() });
   out.push({ name: "bajaclaw home", ok: true, detail: bajaclawHome() });
 
   const desk = claudeDesktopConfigPath();
-  out.push({ name: "claude desktop config", ok: existsSync(desk), detail: desk });
+  out.push({ name: "desktop mcp config", ok: existsSync(desk), detail: desk });
 
   try {
     const db = new Database(":memory:");

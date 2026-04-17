@@ -1,7 +1,10 @@
 import chalk from "chalk";
 import { runHealth } from "../health-check.js";
+import { printBanner } from "../banner.js";
+import { currentVersion } from "../updater.js";
 
 export async function runDoctor(): Promise<void> {
+  printBanner(currentVersion(), { force: true });
   const checks = await runHealth();
   let failed = 0;
   for (const c of checks) {

@@ -1,8 +1,12 @@
 {
   "name": "create-bajaclaw",
-  "version": "0.1.0",
-  "description": "BajaClaw — autonomous agents on your Claude subscription",
+  "version": "0.2.0",
+  "description": "BajaClaw — autonomous agents on your terms",
   "type": "module",
+  "bajaclaw": {
+    "npmName": "create-bajaclaw",
+    "updateUrl": "https://raw.githubusercontent.com/backyarddd/BajaClaw/main/package.json"
+  },
   "bin": {
     "create-bajaclaw": "bin/create-bajaclaw.js",
     "bajaclaw": "bin/bajaclaw.js"

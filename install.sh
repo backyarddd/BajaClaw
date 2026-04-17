@@ -5,7 +5,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 if ! command -v claude >/dev/null 2>&1; then
-  echo "Claude Code CLI not found. Install it first: https://docs.claude.com/claude-code"
+  echo "The \`claude\` CLI backend was not found on your PATH."
+  echo "BajaClaw drives it as a subprocess — install it first, then rerun."
   exit 1
 fi
 exec npx create-bajaclaw "$@"
