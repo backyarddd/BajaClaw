@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>BajaClaw</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{background:#0a0a0a;color:#e5e5e5} .card{background:#141414;border:1px solid #222}</style>
+</head>
+<body class="min-h-screen">
+<div class="max-w-6xl mx-auto p-6">
+  <header class="flex items-baseline justify-between mb-6">
+    <h1 class="text-2xl font-semibold">BajaClaw</h1>
+    <div id="summary" class="text-sm text-neutral-400"></div>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section class="card rounded p-4">
+      <h2 class="font-medium mb-2">Cycles</h2>
+      <div id="cycles" class="text-sm font-mono whitespace-pre-wrap text-neutral-300"></div>
+    </section>
+
+    <section class="card rounded p-4">
+      <h2 class="font-medium mb-2">Memories</h2>
+      <input id="mem-filter" placeholder="filter…" class="w-full bg-black border border-neutral-800 rounded px-2 py-1 text-sm mb-2" />
+      <div id="memories" class="text-sm space-y-1"></div>
+    </section>
+
+    <section class="card rounded p-4">
+      <h2 class="font-medium mb-2">Schedules</h2>
+      <div id="schedules" class="text-sm font-mono"></div>
+    </section>
+
+    <section class="card rounded p-4">
+      <h2 class="font-medium mb-2">Inbox / Tasks</h2>
+      <div id="tasks" class="text-sm"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+async function j(p){ const r = await fetch(p); return r.ok ? r.json() : []; }
+
+async function refresh(){
+  const sum = await j("/api/summary");
+  document.getElementById("summary").textContent =
+    `${sum.profile} · ${sum.cycles} cycles · $${(sum.totalCostUsd || 0).toFixed(4)} · ${sum.memories} memories`;
+
+  const cycles = await j("/api/cycles");
+  document.getElementById("cycles").textContent = cycles.map(c =>
+    `[${c.status}] #${c.id}  ${c.started_at}  ${(c.task || "").slice(0, 80)}`
+  ).join("\n");
+
+  const mems = await j("/api/memories");
+  const q = document.getElementById("mem-filter").value.toLowerCase();
+  const filtered = mems.filter(m => !q || (m.content || "").toLowerCase().includes(q));
+  document.getElementById("memories").innerHTML = filtered.map(m =>
+    `<div class="border-b border-neutral-900 py-1"><span class="text-xs text-neutral-500">[${m.kind}]</span> ${escapeHtml(m.content.slice(0, 240))}</div>`
+  ).join("");
+
+  const sch = await j("/api/schedules");
+  document.getElementById("schedules").textContent = sch.map(s =>
+    `${s.enabled ? "✓" : "·"} ${s.cron}  ${s.task}  ${s.next_run ? "→ " + s.next_run : ""}`
+  ).join("\n") || "(none)";
+
+  const ts = await j("/api/tasks");
+  document.getElementById("tasks").innerHTML = ts.map(t =>
+    `<div class="border-b border-neutral-900 py-1"><span class="text-xs text-neutral-500">[${t.status}/${t.priority}]</span> ${escapeHtml((t.body || "").slice(0, 240))}</div>`
+  ).join("") || "(empty)";
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+document.getElementById("mem-filter").addEventListener("input", refresh);
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+// 13-step cycle loop. Derived from YonderClaw's cycle pattern, rewritten.
+// Steps:
+//  1. Load profile config
+//  2. Open DB + check schema
+//  3. Circuit-breaker + rate-limit gate
+//  4. Select task from queue or heartbeat trigger
+//  5. Recall relevant memories (FTS5)
+//  6. Load CLAUDE.md, SOUL.md, HEARTBEAT.md
+//  7. Match skills against task, inject top N
+//  8. Build MCP config for subprocess
+//  9. Assemble final prompt
+// 10. Invoke claude CLI (printMode JSON by default)
+// 11. Parse response, persist cycle row
+// 12. Extract durable memories (post-cycle)
+// 13. Dispatch follow-up actions (channel replies, queued tasks, self-improve reflection)
+
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { loadConfig } from "./config.js";
+import { openDb } from "./db.js";
+import { Logger } from "./logger.js";
+import { runOnce } from "./claude.js";
+import { profileDir } from "./paths.js";
+import { shouldAllow, rateLimit, recordFailure, recordSuccess } from "./safety.js";
+import { recall } from "./memory/recall.js";
+import { extract } from "./memory/extract.js";
+import { syncFromClaude } from "./memory/claude-compat.js";
+import { loadAllSkills } from "./skills/loader.js";
+import { matchSkills } from "./skills/matcher.js";
+import { buildMcpConfig } from "./mcp/consumer.js";
+import type { AgentConfig, ClaudeOptions } from "./types.js";
+
+export interface CycleInput {
+  profile: string;
+  task?: string;
+  dryRun?: boolean;
+}
+
+export interface CycleOutput {
+  cycleId: number;
+  ok: boolean;
+  text: string;
+  costUsd?: number;
+  durationMs: number;
+  dryRun?: boolean;
+  prompt: string;
+  command?: string[];
+  error?: string;
+}
+
+export async function runCycle(input: CycleInput): Promise<CycleOutput> {
+  const cfg = loadConfig(input.profile);
+  const db = openDb(input.profile);
+  const log = new Logger(input.profile);
+  const started = new Date().toISOString();
+
+  try {
+    const gate = shouldAllow(db);
+    if (!gate.allow) throw new Error(gate.reason ?? "breaker");
+    const limit = rateLimit(db);
+    if (!limit.allow) throw new Error(`rate limit exceeded (${limit.used}/hr)`);
+
+    const task = input.task ?? popTask(db) ?? "Heartbeat check. Review state, note anything worth action, and return a brief summary.";
+
+    if (cfg.memorySync) syncFromClaude(db, log);
+
+    const memories = recall(db, task, 10);
+    const systemDocs = loadSystemDocs(input.profile);
+    const allSkills = loadAllSkills(input.profile);
+    const matched = matchSkills(allSkills, task, 3);
+    const mcpConfig = buildMcpConfig(input.profile);
+
+    const prompt = assemblePrompt({
+      task,
+      memories: memories.map((m) => `- [${m.kind}] ${m.content}`).join("\n"),
+      claudeMd: systemDocs.claude,
+      soulMd: systemDocs.soul,
+      heartbeat: systemDocs.heartbeat,
+      skills: matched.map((s) => `## Skill: ${s.name}\n${s.body}`).join("\n\n"),
+    });
+
+    const cycleId = insertCycle(db, {
+      started_at: started,
+      status: "running",
+      task,
+      prompt_preview: prompt.slice(0, 500),
+    });
+
+    log.info("cycle.start", { cycleId, task: task.slice(0, 80) });
+
+    const opts: ClaudeOptions & { dryRun?: boolean } = {
+      model: cfg.model,
+      effort: cfg.effort,
+      maxTurns: cfg.maxTurns,
+      allowedTools: cfg.allowedTools,
+      disallowedTools: cfg.disallowedTools,
+      mcpConfig,
+      workdir: profileDir(input.profile),
+      printMode: true,
+      dryRun: input.dryRun,
+    };
+
+    const result = await runOnce(prompt, opts);
+    const finished = new Date().toISOString();
+
+    if (!result.ok) {
+      recordFailure(db);
+      db.prepare(
+        "UPDATE cycles SET finished_at=?, status=?, error=?, response_preview=? WHERE id=?"
+      ).run(finished, "error", result.error ?? "unknown", result.text.slice(0, 500), cycleId);
+      log.error("cycle.fail", { cycleId, error: result.error });
+      return {
+        cycleId,
+        ok: false,
+        text: result.text,
+        durationMs: result.durationMs,
+        prompt,
+        command: result.command,
+        error: result.error,
+      };
+    }
+
+    recordSuccess(db);
+    db.prepare(
+      "UPDATE cycles SET finished_at=?, status=?, response_preview=?, cost_usd=?, input_tokens=?, output_tokens=?, turns=? WHERE id=?"
+    ).run(
+      finished,
+      "ok",
+      result.text.slice(0, 500),
+      result.costUsd ?? null,
+      result.inputTokens ?? null,
+      result.outputTokens ?? null,
+      result.turns ?? null,
+      cycleId,
+    );
+
+    if (!result.dryRun && result.text.length > 50) {
+      try { await extract(db, cycleId, task, result.text, cfg); }
+      catch (e) { log.warn("memory.extract.fail", { error: (e as Error).message }); }
+    }
+
+    log.info("cycle.ok", { cycleId, costUsd: result.costUsd, turns: result.turns });
+
+    return {
+      cycleId,
+      ok: true,
+      text: result.text,
+      costUsd: result.costUsd,
+      durationMs: result.durationMs,
+      dryRun: result.dryRun,
+      prompt,
+      command: result.command,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+function popTask(db: import("./db.js").DB): string | null {
+  const row = db.prepare(
+    "SELECT id, body FROM tasks WHERE status='pending' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, created_at ASC LIMIT 1"
+  ).get() as { id: number; body: string } | undefined;
+  if (!row) return null;
+  db.prepare("UPDATE tasks SET status='running' WHERE id=?").run(row.id);
+  return row.body;
+}
+
+function insertCycle(db: import("./db.js").DB, c: {
+  started_at: string; status: "running"; task: string; prompt_preview: string;
+}): number {
+  const info = db.prepare(
+    "INSERT INTO cycles(started_at,status,task,prompt_preview) VALUES(?,?,?,?)"
+  ).run(c.started_at, c.status, c.task, c.prompt_preview);
+  return info.lastInsertRowid as number;
+}
+
+function loadSystemDocs(profile: string): { claude: string; soul: string; heartbeat: string } {
+  const dir = profileDir(profile);
+  const read = (name: string) => {
+    const p = join(dir, name);
+    return existsSync(p) ? readFileSync(p, "utf8") : "";
+  };
+  return {
+    claude: read("CLAUDE.md"),
+    soul: read("SOUL.md"),
+    heartbeat: read("HEARTBEAT.md"),
+  };
+}
+
+interface AssembleInput {
+  task: string;
+  memories: string;
+  claudeMd: string;
+  soulMd: string;
+  heartbeat: string;
+  skills: string;
+}
+
+export function assemblePrompt(input: AssembleInput): string {
+  const sections: string[] = [];
+  if (input.soulMd.trim()) sections.push(`# Agent Identity\n${input.soulMd.trim()}`);
+  if (input.claudeMd.trim()) sections.push(`# Operating Guide\n${input.claudeMd.trim()}`);
+  if (input.heartbeat.trim()) sections.push(`# Heartbeat Schedule\n${input.heartbeat.trim()}`);
+  if (input.memories.trim()) sections.push(`# Recalled Memories\n${input.memories.trim()}`);
+  if (input.skills.trim()) sections.push(`# Active Skills\n${input.skills.trim()}`);
+  sections.push(`# Current Task\n${input.task.trim()}`);
+  return sections.join("\n\n---\n\n");
+}
+
+// Re-export for consumers that want a typed AgentConfig without importing config.ts directly.
+export type { AgentConfig };
