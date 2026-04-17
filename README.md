@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.3.0
+          autonomous agents on your terms  ·  MIT  ·  v0.4.0
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -88,23 +88,30 @@ You can invoke it from a Claude Code session the same way you invoke any
 other agent. The BajaClaw profile is the durable side; the Claude Code
 descriptor is the handle.
 
-### Claude Code skills — shared format, shared scopes
+### Claude Code skills — compatible format, **isolated scope**
 
 A BajaClaw skill is a `SKILL.md` file with YAML frontmatter — byte-for-byte
-the same shape Claude Code uses. BajaClaw scans six directories per cycle:
+the same shape Claude Code uses. But BajaClaw reads only BajaClaw-owned
+directories:
 
-| priority | path | shared with Claude Code? |
-|---|---|---|
-| 1 | `<agent-dir>/skills/` | no (profile-private) |
-| 2 | `~/.bajaclaw/profiles/<name>/skills/` | no |
-| 3 | `~/.bajaclaw/skills/` | no |
-| 4 | `<repo>/skills/` (built-ins) | no |
-| 5 | `~/.claude/skills/` | **yes** |
-| 6 | `.claude/skills/` (project cwd) | **yes** |
+| priority | path |
+|---|---|
+| 1 | `<agent-dir>/skills/` |
+| 2 | `~/.bajaclaw/profiles/<name>/skills/` |
+| 3 | `~/.bajaclaw/skills/` |
+| 4 | `<repo>/skills/` (built-ins) |
 
-A skill you drop into `~/.claude/skills/` works in both Claude Code and
-BajaClaw. A skill you write for BajaClaw in scopes 1-4 is valid Claude Code
-skill format — copy it into scope 5 and it's usable everywhere.
+`~/.claude/skills/` is **not** read automatically — that keeps the two
+agents from stepping on each other's skill libraries.
+
+**Porting skills from Claude Code is a one-liner:**
+
+```
+bajaclaw skill port                     # copy all from ~/.claude/skills
+bajaclaw skill port --names my-skill    # just one
+bajaclaw skill port --link              # symlink (live sync from Claude Code)
+bajaclaw skill port --scope profile --profile default
+```
 
 When BajaClaw matches skills for a cycle, scoring is:
 - Trigger phrase hit: +5
@@ -114,19 +121,55 @@ When BajaClaw matches skills for a cycle, scoring is:
 Top 3 (where score > 0) are injected into the system prompt as `# Active
 Skills`. See [`docs/skills.md`](docs/skills.md).
 
-### MCP — consume
+### Auto-generated skills
 
-BajaClaw reads your desktop MCP config at cycle time:
+After any cycle that uses 5+ tools (configurable), BajaClaw calls the
+backend once more to decide whether the procedure is worth saving. If yes,
+it writes a structured `SKILL.md` with When-to-use / Quick-reference /
+Procedure / Pitfalls / Verification sections into
+`~/.bajaclaw/skills/auto/<name>/` for review.
 
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Linux: `~/.config/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+This is BajaClaw's take on the "create a skill after a complex task"
+behavior from agents like Hermes — capture procedures the first time you
+solve them so repeats are faster.
 
-It merges that with `~/.bajaclaw/profiles/<name>/mcp-config.json` (profile
-additions) and `agent-mcp-config.json` (agent overrides), writes the result
-to `.mcp-merged.json`, and passes it to the `claude` subprocess via
-`--mcp-config`. **Every MCP server you've already configured is available to
-every BajaClaw cycle**, with zero extra setup.
+Candidates live in `auto/` until you promote them:
+
+```
+bajaclaw skill review              # print every candidate
+bajaclaw skill promote <name>      # move candidate into user scope
+```
+
+Tune the trigger in the profile's `config.json`:
+
+```json
+{ "autoSkill": { "enabled": true, "minToolUses": 5, "maxPerDay": 10 } }
+```
+
+### MCP — isolated by default
+
+BajaClaw uses its own MCP config. The desktop CLI's `mcpServers` is **not**
+inherited by default. Merge order per cycle (highest wins):
+
+1. `<profile>/agent-mcp-config.json`
+2. `<profile>/mcp-config.json`
+3. `~/.bajaclaw/mcp-config.json` (user-global BajaClaw)
+4. Desktop CLI config — **only if `mergeDesktopMcp: true`** in the profile
+
+Port servers from Claude Code on demand:
+
+```
+bajaclaw mcp port --list            # show what Claude Code has
+bajaclaw mcp port                   # copy every server into BajaClaw
+bajaclaw mcp port --names fs git    # just these two
+bajaclaw mcp port --force           # overwrite existing BajaClaw entries
+```
+
+Or set `"mergeDesktopMcp": true` in a profile's config to inherit the
+desktop MCP list on every cycle (pre-0.4 behavior).
+
+BajaClaw's own MCP entry (`bajaclaw`) is skipped automatically during port
+to avoid self-references.
 
 ### MCP — expose
 
@@ -411,8 +454,8 @@ Full detail in [`docs/commands.md`](docs/commands.md). Summary:
 | `doctor` | toolchain + backend verification |
 | `dashboard [profile]` | serve dashboard HTML |
 | `daemon` | supervisor loop (start/stop/status/logs/install/run/restart) |
-| `mcp` | consume + expose (list/add/remove/serve/register) |
-| `skill` | list/new/install/review |
+| `mcp` | consume + expose (list/add/remove/serve/register/port) |
+| `skill` | list/new/install/review/promote/port |
 | `profile` | list/create/switch/delete |
 | `channel` | add/remove/list telegram + discord bridges |
 | `trigger [profile] <event>` | enqueue a task |

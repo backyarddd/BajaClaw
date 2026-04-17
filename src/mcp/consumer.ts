@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { claudeDesktopConfigPath, profileDir, ensureDir } from "../paths.js";
+import { claudeDesktopConfigPath, profileDir, bajaclawHome, ensureDir } from "../paths.js";
+import { loadConfig } from "../config.js";
 
 export interface McpServerEntry {
   command: string;
@@ -18,18 +19,39 @@ export function readMcpFile(path: string): McpConfigFile {
   catch { return {}; }
 }
 
+export function userMcpPath(): string {
+  return join(bajaclawHome(), "mcp-config.json");
+}
+
 export function listConfigured(profile: string): Record<string, McpServerEntry> {
   const merged = mergeMcp(profile);
   return merged.mcpServers ?? {};
 }
 
+// Merge order (highest wins):
+//   1. <profile>/agent-mcp-config.json
+//   2. <profile>/mcp-config.json
+//   3. ~/.bajaclaw/mcp-config.json (user-global BajaClaw MCP)
+//   4. Desktop CLI MCP config — ONLY if mergeDesktopMcp: true in the profile.
+//
+// This keeps BajaClaw's MCP separate from the desktop CLI's by default.
+// Use `bajaclaw mcp port` to copy servers from desktop into BajaClaw's scope,
+// or set mergeDesktopMcp: true in config.json to auto-inherit.
 export function mergeMcp(profile: string): McpConfigFile {
-  const desktop = readMcpFile(claudeDesktopConfigPath());
+  const userFile = readMcpFile(userMcpPath());
   const profileFile = readMcpFile(join(profileDir(profile), "mcp-config.json"));
   const agentFile = readMcpFile(join(profileDir(profile), "agent-mcp-config.json"));
+
+  let desktop: McpConfigFile = {};
+  try {
+    const cfg = loadConfig(profile) as { mergeDesktopMcp?: boolean };
+    if (cfg.mergeDesktopMcp) desktop = readMcpFile(claudeDesktopConfigPath());
+  } catch { /* profile may not exist yet */ }
+
   return {
     mcpServers: {
       ...(desktop.mcpServers ?? {}),
+      ...(userFile.mcpServers ?? {}),
       ...(profileFile.mcpServers ?? {}),
       ...(agentFile.mcpServers ?? {}),
     },

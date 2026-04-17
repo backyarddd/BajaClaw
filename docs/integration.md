@@ -1,7 +1,8 @@
 # Integration
 
-BajaClaw is designed to slot into an existing `claude`-CLI setup without
-overlaying itself on top of your tools. This document describes every seam.
+BajaClaw keeps its state **separate** from the desktop CLI's state by
+default. You opt in to sharing, skill by skill and server by server. This
+document describes every seam.
 
 ## 1. The CLI backend
 
@@ -22,31 +23,75 @@ Detection: `findClaudeBinary()` uses `which claude` (POSIX) or `where.exe
 claude` (Windows). If the binary is missing, `bajaclaw doctor` flags it and
 `runCycle` returns `ok=false` with a clear error.
 
-`supportsJsonOutput()` probes `--help` once per process and caches the
-result. Older backends without `--output-format` still work — BajaClaw
-parses the final text directly.
+## 2. Skills — isolated by default
 
-## 2. MCP — consume
+BajaClaw scans only BajaClaw-owned directories:
 
-Merge order (highest wins):
+1. `<agent-dir>/skills/`
+2. `~/.bajaclaw/profiles/<name>/skills/`
+3. `~/.bajaclaw/skills/` (user-global)
+4. `<repo>/skills/` (built-ins)
 
-1. The desktop MCP config:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Linux: `~/.config/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-2. `~/.bajaclaw/profiles/<name>/mcp-config.json`
-3. `~/.bajaclaw/profiles/<name>/agent-mcp-config.json`
+The desktop CLI's `~/.claude/skills/` is **not** read automatically. If you
+want a skill available to BajaClaw, port it in:
+
+```
+bajaclaw skill port                           # copy all from ~/.claude/skills
+bajaclaw skill port --names quick-math        # port one
+bajaclaw skill port --link                    # symlink (live sync from desktop)
+bajaclaw skill port --scope profile --profile default
+bajaclaw skill port --source /path/to/skills  # arbitrary source
+```
+
+This works the other direction too — copy a BajaClaw skill into
+`~/.claude/skills/` manually and the desktop CLI picks it up (format is
+compatible).
+
+See [`skills.md`](skills.md) for the full skill documentation.
+
+## 3. MCP — isolated by default
+
+BajaClaw uses its own MCP config, not the desktop CLI's. Merge order
+(highest wins):
+
+1. `<profile>/agent-mcp-config.json`
+2. `<profile>/mcp-config.json`
+3. `~/.bajaclaw/mcp-config.json` (user-global BajaClaw MCP)
+4. Desktop CLI MCP config — **only if `mergeDesktopMcp: true`** in the
+   profile's `config.json`
 
 The merged file is written to `.mcp-merged.json` in the profile directory
-before every cycle and passed via `--mcp-config`. Whatever MCP servers you've
-configured for your desktop client are automatically available to every
-BajaClaw cycle.
+before every cycle and passed via `--mcp-config`.
 
-Commands: `bajaclaw mcp list | add | remove`.
+### Porting MCP servers from the desktop CLI
 
-## 3. MCP — expose
+```
+bajaclaw mcp port --list           # show what's configured for the desktop CLI
+bajaclaw mcp port                  # copy every server into BajaClaw's user MCP
+bajaclaw mcp port --names fs git   # port just these two
+bajaclaw mcp port --force          # overwrite existing BajaClaw entries
+```
 
-BajaClaw exposes itself as an MCP server (`src/mcp/server.ts`). Resources:
+BajaClaw's own MCP entry (`bajaclaw`) is skipped during port — no
+self-references.
+
+### Auto-inherit from desktop (opt-in)
+
+If you want the pre-isolation behavior back — every desktop MCP server
+inherited on every cycle — set this in the profile's `config.json`:
+
+```json
+{ "mergeDesktopMcp": true }
+```
+
+Per profile, not globally.
+
+## 4. MCP — expose
+
+BajaClaw is itself an MCP server (`src/mcp/server.ts`). `bajaclaw setup`
+auto-registers it in every known desktop MCP config path for your OS.
+
+**Resources:**
 
 - `bajaclaw://profiles`
 - `bajaclaw://profile/<n>/agents`
@@ -54,64 +99,69 @@ BajaClaw exposes itself as an MCP server (`src/mcp/server.ts`). Resources:
 - `bajaclaw://profile/<n>/cycles`
 - `bajaclaw://profile/<n>/schedules`
 
-Tools: `bajaclaw_memory_search`, `bajaclaw_task_create`,
-`bajaclaw_agent_status`, `bajaclaw_skill_list`.
+**Tools:**
+
+- `bajaclaw_memory_search({ query, limit, profile })`
+- `bajaclaw_task_create({ agent, task, priority })`
+- `bajaclaw_agent_status({ agent })`
+- `bajaclaw_skill_list({ profile })`
 
 Transports:
 
-- stdio (default, for config files): `bajaclaw mcp serve --stdio`
-- SSE / HTTP (for remote clients): `bajaclaw mcp serve --port 8765`
+- stdio: `bajaclaw mcp serve --stdio`
+- SSE: `bajaclaw mcp serve --port 8765`
 
-`bajaclaw mcp register [profile]` writes an entry into every known desktop
-MCP config path for your OS. After that, restart the desktop client and it
-can query BajaClaw state directly.
-
-## 4. Agent descriptor
+## 5. Agent descriptor
 
 `bajaclaw init` writes two paired files:
 
 - `~/.claude/agents/<profile>/<name>.md` — standard agent frontmatter
   (`name`, `description`, `model`, `effort`, `maxTurns`, `disallowedTools`,
-  `isolation`, `background`). Any tool that recognises this convention can
+  `isolation`, `background`). Any tool that respects this convention can
   pick up the agent via `@<name>`.
 - `~/.bajaclaw/profiles/<name>/config.json` — BajaClaw's runtime config:
   heartbeat, channels, DB path, skill scopes.
 
-Together they define a BajaClaw agent.
-
-## 5. Skills
-
-`SKILL.md` is a markdown file with frontmatter — identical format to
-skills in other agent tools. Scopes, highest priority first:
-
-1. `<agent-dir>/skills/`
-2. `~/.bajaclaw/profiles/<name>/skills/`
-3. `~/.bajaclaw/skills/`
-4. `<repo>/skills/` (built-ins)
-5. `~/.claude/skills/` (cross-visible with the CLI backend)
-6. `.claude/skills/` (project-local)
-
-A skill in scope 5 is available to BajaClaw and any other tool that reads
-that directory. A BajaClaw built-in skill is a plain file that can be
-copied into scope 5 if you want it visible elsewhere.
+The descriptor is written once. Edit it freely — BajaClaw only reads its
+own config, never the descriptor.
 
 ## 6. Memory compatibility
 
-With `memorySync: true` in the profile config, each cycle:
+Set `memorySync: true` in the profile config to enable two-way sync with
+`~/.claude/memory/`:
 
-- Reads `~/.claude/memory/`, imports new/changed files into the FTS table as
-  memories with `source=claude-code`.
-- Optionally writes a digest back to
-  `~/.claude/memory/bajaclaw-<profile>.md` so sessions of other tools see
-  BajaClaw's extracted facts.
+- **In**: each cycle, new/modified `*.md` files under `~/.claude/memory/`
+  become memories with `source=claude-code`.
+- **Out**: `writeClaudeMemoryFile(profile)` writes a digest to
+  `~/.claude/memory/bajaclaw-<profile>.md`.
 
-Disabled by default. Sync is a per-profile setting — some profiles will want
-shared memory, others won't.
+Disabled by default.
 
 ## 7. Sub-agent delegation
 
-For heavy coding work, `src/delegation.ts` exports `delegateCoding(task,
+For coding-heavy work, `src/delegation.ts` exports `delegateCoding(task,
 opts)` which spawns a dedicated backend session with a writable toolset and
 an isolated workdir. The orchestrating BajaClaw agent never writes code
-directly — it plans, delegates, and summarizes. This keeps the orchestrator's
-transcript reviewable before any code exists.
+directly.
+
+## 8. Auto-skill synthesis
+
+After a successful cycle that uses 5+ tools (configurable), BajaClaw calls
+the backend once more to decide whether the procedure is worth saving. If
+yes, a structured `SKILL.md` lands in `~/.bajaclaw/skills/auto/<name>/` for
+review. The synthesized format includes `When to use`, `Quick reference`,
+`Procedure`, `Pitfalls`, and `Verification` sections.
+
+See [`skills.md`](skills.md) for configuration + review workflow.
+
+---
+
+## Summary
+
+| surface | default behavior | opt-in path |
+|---|---|---|
+| skills | BajaClaw-only scopes | `bajaclaw skill port` |
+| MCP | BajaClaw-only config | `bajaclaw mcp port` or `mergeDesktopMcp: true` |
+| memory | isolated | `memorySync: true` |
+| agent descriptor | always written | — |
+| MCP server | registered on `setup` | — |

@@ -5,20 +5,20 @@ import {
   profileDir,
   profileSkillsDir,
   userSkillsDir,
-  claudeSkillsDir,
 } from "../paths.js";
 import type { Skill, SkillScope } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// BajaClaw skills live in BajaClaw-only directories. The desktop CLI's skill
+// directory is not read automatically — use `bajaclaw skill port` to copy
+// specific skills into BajaClaw's scope when you want them shared.
 export function loadAllSkills(profile: string): Skill[] {
   const scopes: { dir: string; scope: SkillScope }[] = [
     { dir: join(profileDir(profile), "skills"), scope: "agent" },
     { dir: profileSkillsDir(profile), scope: "agent" },
     { dir: userSkillsDir(), scope: "bajaclaw-user" },
     { dir: repoBuiltinSkillsDir(), scope: "bajaclaw-builtin" },
-    { dir: claudeSkillsDir(), scope: "claude-user" },
-    { dir: join(process.cwd(), ".claude", "skills"), scope: "claude-project" },
   ];
 
   const byName = new Map<string, Skill>();
