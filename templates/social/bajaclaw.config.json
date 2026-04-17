@@ -1,0 +1,5 @@
+{
+  "name": "{{AGENT_NAME}}",
+  "template": "{{TEMPLATE}}",
+  "notes": "Edit this file to override per-agent settings. Top-level config lives in ~/.bajaclaw/profiles/{{AGENT_NAME}}/config.json"
+}
