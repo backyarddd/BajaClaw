@@ -32,7 +32,8 @@ export function loadAllSkills(profile: string): Skill[] {
 }
 
 function repoBuiltinSkillsDir(): string {
-  return join(__dirname, "..", "..", "..", "skills");
+  // __dirname is <repo>/src/skills (tsx) or <repo>/dist/skills (built).
+  return join(__dirname, "..", "..", "skills");
 }
 
 function scanDir(dir: string, scope: SkillScope): Skill[] {

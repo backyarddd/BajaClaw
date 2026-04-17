@@ -35,7 +35,8 @@ export async function cmdServe(opts: { profile?: string; port?: number; stdio?: 
 export async function cmdRegister(profile?: string): Promise<void> {
   const paths = [claudeDesktopConfigPath(), join(process.env.HOME ?? "", ".claude", "claude_desktop_config.json")];
   const bajaclawBin = process.execPath;
-  const launcher = join(dirname(new URL(import.meta.url).pathname), "..", "..", "..", "bin", "bajaclaw.js");
+  // dirname(this file) is <repo>/src/commands (tsx) or <repo>/dist/commands (built).
+  const launcher = join(dirname(new URL(import.meta.url).pathname), "..", "..", "bin", "bajaclaw.js");
   const entry = {
     command: bajaclawBin,
     args: [launcher, "mcp", "serve", "--stdio"],

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0
+
+- **Packaged install**: `npm install -g create-bajaclaw` auto-runs `bajaclaw
+  setup` (via `postinstall` hook) to create the default profile, write the
+  agent descriptor, and register the MCP server. No profile name to pick.
+- **`bajaclaw setup`**: idempotent bootstrap. Safe to rerun at any time to
+  repair integrations (MCP registration, agent descriptor) without touching
+  existing data.
+- **`bajaclaw uninstall`**: full teardown. Stops daemons, removes OS
+  scheduler entries, removes agent descriptors, removes the MCP registration,
+  removes memory sync files, and (unless `--keep-data`) removes `~/.bajaclaw/`.
+  Requires `--yes` to actually apply.
+- **Default profile**: `bajaclaw start` with no arguments now targets the
+  `default` profile, auto-bootstrapping it on first use if missing. Override
+  with `BAJACLAW_DEFAULT_PROFILE`.
+- **Full tool access**: the `research`, `outreach`, `support`, `social`, and
+  `custom` templates now ship without tool restrictions — agents can Write,
+  Edit, and run Bash. The `code` template keeps its orchestrator pattern
+  (read-only, delegates to sub-agent). Existing profiles are unaffected.
+- **README**: comprehensive rewrite covering what the cycle does, the full
+  Claude Code integration (agent descriptors, shared skills scopes, MCP
+  consume/expose, memory sync, sub-agent delegation), auto-update, setup /
+  uninstall, on-disk layout, safety, and the full command reference.
+- **`create-bajaclaw`**: with no arguments, runs `setup`. With a name,
+  scaffolds a new named profile via `init`.
+
 ## 0.2.0
 
 - Auto-update: `bajaclaw update` checks the npm registry (or a configured raw

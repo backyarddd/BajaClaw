@@ -10,6 +10,8 @@ import { runMigrate } from "./commands/migrate.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { runTrigger } from "./commands/trigger.js";
 import { runUpdate, maybeNoticeAtExit } from "./commands/update.js";
+import { runSetup, autoBootstrapIfNeeded, DEFAULT_PROFILE_NAME } from "./commands/setup.js";
+import { runUninstall } from "./commands/uninstall.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
@@ -21,12 +23,7 @@ import * as channel from "./commands/channel.js";
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
 function defaultProfile(explicit?: string): string {
-  const p = explicit ?? process.env.BAJACLAW_PROFILE;
-  if (!p) {
-    console.error("No profile given. Pass <profile> or set BAJACLAW_PROFILE.");
-    process.exit(2);
-  }
-  return p;
+  return explicit ?? process.env.BAJACLAW_PROFILE ?? DEFAULT_PROFILE_NAME;
 }
 
 const program = new Command();
@@ -47,11 +44,13 @@ program
 
 program
   .command("start [profile]")
-  .description("Run one cycle")
+  .description("Run one cycle (auto-bootstraps the default profile on first run)")
   .option("--task <text>", "override task")
   .option("--dry-run", "assemble prompt and print, no exec")
   .action(async (p, opts) => {
-    await runStart({ profile: defaultProfile(p), task: opts.task, dryRun: !!opts.dryRun });
+    const target = defaultProfile(p);
+    if (target === DEFAULT_PROFILE_NAME) await autoBootstrapIfNeeded();
+    await runStart({ profile: target, task: opts.task, dryRun: !!opts.dryRun });
   });
 
 program.command("dry-run [profile]").description("Show assembled prompt without executing")
@@ -130,15 +129,37 @@ program.command("update").description("Check for and install a newer version")
   .option("--yes", "apply without confirmation")
   .action(async (opts) => runUpdate({ check: !!opts.check, yes: !!opts.yes }));
 
+// Setup — idempotent first-run bootstrap. Safe to rerun.
+program.command("setup").description("Idempotent first-run bootstrap (default profile + MCP register + health check)")
+  .option("--profile <name>", "profile name (default: 'default')")
+  .option("--template <t>", "template: outreach|research|support|social|code|custom", "custom")
+  .option("--model <id>", "model id", "claude-sonnet-4-5")
+  .option("--skip-mcp-register", "don't touch desktop MCP config")
+  .option("--silent", "no output")
+  .action(async (opts) => runSetup({
+    profile: opts.profile,
+    template: opts.template,
+    model: opts.model,
+    skipMcpRegister: !!opts.skipMcpRegister,
+    silent: !!opts.silent,
+  }));
+
+// Uninstall — full teardown.
+program.command("uninstall").description("Remove all BajaClaw state (profiles, scheduler, MCP, memory sync)")
+  .option("--yes", "actually perform the teardown")
+  .option("--keep-data", "keep ~/.bajaclaw/ data; only remove integrations")
+  .action(async (opts) => runUninstall({ yes: !!opts.yes, keepData: !!opts.keepData }));
+
 // Banner
 program.command("banner").description("Print the ASCII banner").action(() => {
   printBanner(pkg.version, { force: true });
 });
 
 program.hook("postAction", async () => {
-  // Non-blocking notice at the end of any command. Skipped for update itself.
+  // Non-blocking notice at the end of any command. Skipped for noisy or
+  // self-referential commands.
   const cmd = process.argv[2];
-  if (cmd === "update" || cmd === "banner") return;
+  if (cmd === "update" || cmd === "banner" || cmd === "uninstall" || cmd === "setup") return;
   await maybeNoticeAtExit();
 });
 

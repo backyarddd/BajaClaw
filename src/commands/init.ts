@@ -28,9 +28,14 @@ export async function runInit(opts: InitOptions): Promise<void> {
   if (existsSync(dir) && !opts.force) {
     throw new Error(`Profile ${opts.name} already exists at ${dir}. Use --force to overwrite.`);
   }
-  ensureDir(dir);
 
-  const tplDir = join(__dirname, "..", "..", "..", "templates", template);
+  // Resolve the template dir before touching the filesystem — __dirname is
+  // <repo>/src/commands (tsx) or <repo>/dist/commands (built); both resolve
+  // the repo root with two parent hops.
+  const tplDir = join(__dirname, "..", "..", "templates", template);
+  if (!existsSync(tplDir)) throw new Error(`template missing: ${tplDir}`);
+
+  ensureDir(dir);
   copyTemplateDir(tplDir, dir, { AGENT_NAME: opts.name, TEMPLATE: template });
 
   const cfg: AgentConfig = {
@@ -79,17 +84,21 @@ function render(text: string, vars: Record<string, string>): string {
 }
 
 function defaultTools(template: TemplateName): { allowed?: string[]; disallowed?: string[] } {
+  // Tool restrictions are per-template soft defaults. Agents can edit
+  // config.json afterwards to loosen or tighten. Only `code` keeps tight
+  // restrictions by design — it's an orchestrator that delegates execution
+  // to a sub-agent.
   switch (template) {
-    case "research":
-      return { allowed: ["Read", "Grep", "Glob", "WebSearch", "WebFetch"], disallowed: ["Write", "Edit", "Bash"] };
-    case "outreach":
-    case "support":
-    case "social":
-      return { disallowed: ["Bash"] };
     case "code":
       return { allowed: ["Read", "Grep", "Glob"], disallowed: ["Write", "Edit", "Bash"] };
+    case "outreach":
+    case "research":
+    case "support":
+    case "social":
     case "custom":
     default:
+      // No restrictions: full tool access (Read, Write, Edit, Bash, Grep,
+      // Glob, WebSearch, WebFetch, and any MCP tools the user has configured).
       return {};
   }
 }
