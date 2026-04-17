@@ -45,6 +45,29 @@ Import from a foreign profile directory.
 Options: `--from-yonderclaw <dir>` (required).
 Strips references to unwanted legacy features.
 
+### `bajaclaw model [id] [profile]`
+Show the configured model for a profile (with no id, lists known models
+with the current one marked). Set the model with an id.
+
+Known ids: `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`.
+Any string is accepted — the backend validates against your subscription.
+
+### `bajaclaw effort [level] [profile]`
+Show or set the effort level. Values: `low`, `medium`, `high`. Default:
+`medium`.
+
+### `bajaclaw guide [topic]`
+Print a built-in setup walkthrough (e.g. `bajaclaw guide telegram`). With
+no topic, lists every available guide. Guides are skills whose name starts
+with `setup-` or `configure-`.
+
+Options:
+- `--profile <name>` — use the given profile's skill scopes when looking up the guide.
+
+Built-in guide topics: `telegram`, `discord`, `heartbeat`, `daemon`,
+`dashboard`, `mcp-port`, `memory-sync`, `profile`, `self-update`,
+`uninstall`, `model`, `effort`, `tools`.
+
 ### `bajaclaw update`
 Check for and install a newer version.
 

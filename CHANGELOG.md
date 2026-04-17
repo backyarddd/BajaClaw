@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0
+
+- **Self-knowledge skills**: BajaClaw now ships 13 built-in skills that
+  document how to configure BajaClaw itself. Ask your agent "help me
+  setup telegram" (or discord, heartbeat, daemon, dashboard, memory sync,
+  etc.) and the matching skill fires — the agent knows the procedure
+  without you writing one.
+  - `setup-telegram`, `setup-discord`, `setup-heartbeat`, `setup-daemon`,
+    `setup-dashboard`, `setup-mcp-port`, `setup-memory-sync`,
+    `setup-profile`, `setup-self-update`, `setup-uninstall`
+  - `configure-model`, `configure-effort`, `configure-tools`
+- **`bajaclaw model [id] [profile]`**: show current model + known list
+  (`claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`) with no
+  args; set the model for a profile with an id. Any string is accepted
+  — the backend validates against the subscription.
+- **`bajaclaw effort [level] [profile]`**: show or set effort level
+  (`low` / `medium` / `high`) per profile. Defaults to `medium`.
+- **`bajaclaw guide [topic]`**: print a self-setup walkthrough or list
+  all available guides. Lists any skill whose name starts with `setup-`
+  or `configure-`.
+- README + docs updated to surface these new commands and the
+  self-knowledge pattern.
+
 ## 0.4.0
 
 - **Skill isolation**: BajaClaw no longer reads `~/.claude/skills/` or

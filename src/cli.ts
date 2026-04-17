@@ -13,6 +13,9 @@ import { runUpdate, maybeNoticeAtExit } from "./commands/update.js";
 import { runSetup, autoBootstrapIfNeeded, DEFAULT_PROFILE_NAME } from "./commands/setup.js";
 import { runUninstall } from "./commands/uninstall.js";
 import { cmdSkillPort, cmdMcpPort, listDesktopServers } from "./commands/port.js";
+import { runModel } from "./commands/model.js";
+import { runEffort } from "./commands/effort.js";
+import { runGuide } from "./commands/guide.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
@@ -185,6 +188,22 @@ program.command("uninstall").description("Remove all BajaClaw state (profiles, s
   .option("--yes", "actually perform the teardown")
   .option("--keep-data", "keep ~/.bajaclaw/ data; only remove integrations")
   .action(async (opts) => runUninstall({ yes: !!opts.yes, keepData: !!opts.keepData }));
+
+// Model — show or set per profile
+program.command("model [value] [profile]")
+  .description("Show or set the model for a profile (no value: lists known models)")
+  .action(async (value, p) => runModel(value, { profile: p }));
+
+// Effort — show or set per profile
+program.command("effort [value] [profile]")
+  .description("Show or set the effort level (low/medium/high) for a profile")
+  .action(async (value, p) => runEffort(value, { profile: p }));
+
+// Guide — print a self-setup walkthrough
+program.command("guide [topic]")
+  .description("Print a self-setup walkthrough, or list available guides")
+  .option("--profile <name>", "profile to use for skill lookup")
+  .action(async (topic, opts) => runGuide(topic, { profile: opts.profile }));
 
 // Banner
 program.command("banner").description("Print the ASCII banner").action(() => {

@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.4.0
+          autonomous agents on your terms  ·  MIT  ·  v0.5.0
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -120,6 +120,34 @@ When BajaClaw matches skills for a cycle, scoring is:
 
 Top 3 (where score > 0) are injected into the system prompt as `# Active
 Skills`. See [`docs/skills.md`](docs/skills.md).
+
+### Self-knowledge (built-in guides)
+
+BajaClaw knows how to configure itself. Ship 13 built-in skills describe
+the procedure for every integration — ask your agent in plain language:
+
+> "Help me set up Telegram."
+> "Walk me through connecting Discord."
+> "Switch to Opus for this profile."
+> "Turn on memory sync."
+
+The matching skill (`setup-telegram`, `setup-discord`, `configure-model`,
+`setup-memory-sync`, …) fires, the agent sees the full procedure with
+Quick Reference / Procedure / Pitfalls / Verification sections, and walks
+you through it (running the right `bajaclaw` subcommands via Bash when
+useful).
+
+Run them directly from the CLI too:
+
+```
+bajaclaw guide                    # list all guides
+bajaclaw guide telegram           # print the telegram setup walkthrough
+bajaclaw guide mcp-port           # print the MCP port walkthrough
+```
+
+Built-in guides cover: `telegram`, `discord`, `heartbeat`, `daemon`,
+`dashboard`, `mcp-port`, `memory-sync`, `profile`, `self-update`,
+`uninstall`, `model`, `effort`, `tools`.
 
 ### Auto-generated skills
 
@@ -460,6 +488,9 @@ Full detail in [`docs/commands.md`](docs/commands.md). Summary:
 | `channel` | add/remove/list telegram + discord bridges |
 | `trigger [profile] <event>` | enqueue a task |
 | `migrate [profile]` | import from a foreign profile dir |
+| `model [id] [profile]` | show/set the model (lists known if no id) |
+| `effort [level] [profile]` | show/set effort (low/medium/high) |
+| `guide [topic]` | print a built-in setup walkthrough |
 | `update` | check for / install a newer version |
 | `banner` | print the ASCII banner |
 

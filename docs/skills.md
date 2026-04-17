@@ -177,8 +177,41 @@ Nothing will notice.
 
 ## Built-ins
 
-Shipped in this repo under `skills/`:
+Shipped in this repo under `skills/`.
+
+### General-purpose
 
 - `daily-briefing` — morning briefing covering schedule, priorities, open threads
 - `email-triage` — classify inbox; draft replies for routine items
 - `web-research` — search + synthesize with inline citations
+
+### Self-knowledge (configure BajaClaw)
+
+These skills teach the agent how to configure BajaClaw itself. When the
+user types "help me setup telegram" or "switch to Opus", the matching
+skill fires and the agent runs the procedure.
+
+| skill | what it knows |
+|---|---|
+| `setup-telegram` | connect a Telegram bot, allowlist, gateway |
+| `setup-discord` | connect a Discord bot with channel + intents |
+| `setup-heartbeat` | schedule recurring cycles via the OS scheduler |
+| `setup-daemon` | start/stop/install the heartbeat supervisor |
+| `setup-dashboard` | launch and configure the local dashboard |
+| `setup-mcp-port` | port MCP servers from the desktop config |
+| `setup-memory-sync` | enable two-way sync with `~/.claude/memory/` |
+| `setup-profile` | create an additional named profile |
+| `setup-self-update` | check for and apply updates |
+| `setup-uninstall` | teardown with or without data retention |
+| `configure-model` | change the backend model for a profile |
+| `configure-effort` | change the effort level for a profile |
+| `configure-tools` | edit the allowed/disallowed tool list |
+
+Read any of them directly:
+```
+bajaclaw guide                  # list all
+bajaclaw guide telegram         # print the telegram walkthrough
+```
+
+Or talk to your agent in natural language — the skill matcher does the
+routing.
