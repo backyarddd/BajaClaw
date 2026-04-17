@@ -36,6 +36,21 @@ config paths. Prints the banner.
 ### `bajaclaw dashboard [profile]`
 Serve the local dashboard on the port from `config.json` (default 7337).
 
+### `bajaclaw serve`
+Expose BajaClaw as an OpenAI-compatible HTTP endpoint.
+
+Options:
+- `--host <host>` — bind host (default `127.0.0.1`)
+- `--port <n>` — bind port (default `8765`)
+- `--api-key <key>` — require bearer auth; required for non-localhost binds
+- `--expose <names...>` — allowlist of profile names; default exposes all
+- `--stream-delay <ms>` — delay per pseudo-streamed chunk (default 20)
+
+Persistent config: `~/.bajaclaw/api.json`. CLI flags override.
+Endpoints: `GET /health`, `GET /v1/models`, `POST /v1/chat/completions`,
+`POST /v1/bajaclaw/cycle`, `POST /v1/bajaclaw/tasks`. Full reference in
+`docs/api.md`.
+
 ### `bajaclaw trigger [profile] <event>`
 Enqueue a task on the given profile.
 Options: `--body <text>` to set the task body (default: the event name).
