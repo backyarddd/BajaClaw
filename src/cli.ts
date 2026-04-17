@@ -12,6 +12,7 @@ import { runTrigger } from "./commands/trigger.js";
 import { runUpdate, maybeNoticeAtExit } from "./commands/update.js";
 import { runSetup, autoBootstrapIfNeeded, DEFAULT_PROFILE_NAME } from "./commands/setup.js";
 import { runUninstall } from "./commands/uninstall.js";
+import { cmdSkillPort, cmdMcpPort, listDesktopServers } from "./commands/port.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
@@ -89,6 +90,20 @@ mcpCmd.command("remove [profile]").argument("<name>").action(async (p, name) => 
 mcpCmd.command("serve").option("--stdio").option("--port <n>").option("--profile <name>")
   .action(async (opts) => mcp.cmdServe({ profile: opts.profile, port: opts.port ? Number(opts.port) : undefined, stdio: !!opts.stdio }));
 mcpCmd.command("register [profile]").action(async (p) => mcp.cmdRegister(p));
+mcpCmd.command("port")
+  .description("Port MCP servers from the desktop config into BajaClaw's user MCP config")
+  .option("--names <names...>", "specific server name(s) (default: all non-self)")
+  .option("--force", "overwrite existing entries")
+  .option("--list", "list available desktop servers without porting")
+  .action(async (opts) => {
+    if (opts.list) {
+      const names = listDesktopServers();
+      if (names.length === 0) console.log("(none)");
+      else for (const n of names) console.log(n);
+      return;
+    }
+    await cmdMcpPort({ names: opts.names, force: !!opts.force });
+  });
 
 // Skills group
 const skillCmd = program.command("skill").description("Skills across scopes");
@@ -98,6 +113,27 @@ skillCmd.command("new").argument("<name>").option("--profile <p>").option("--sco
 skillCmd.command("install").argument("<source>").option("--scope <s>", "user|profile", "user").option("--profile <p>")
   .action(async (source, opts) => skill.cmdInstall(source, opts.scope, opts.profile));
 skillCmd.command("review").action(skill.cmdReview);
+skillCmd.command("promote")
+  .description("Move an auto-generated skill from review into the user scope")
+  .argument("<name>")
+  .option("--force", "overwrite existing skill with the same name")
+  .action(async (name, opts) => skill.cmdPromote(name, { force: !!opts.force }));
+skillCmd.command("port")
+  .description("Port skills from the desktop CLI scope into BajaClaw's scope")
+  .option("--source <dir>", "source dir (default: ~/.claude/skills)")
+  .option("--scope <s>", "destination scope: user|profile|agent", "user")
+  .option("--profile <p>", "profile name (required for scope=profile|agent)")
+  .option("--link", "symlink instead of copy (live reflects upstream)")
+  .option("--force", "overwrite existing skills")
+  .option("--names <names...>", "specific skill name(s) to port (default: all)")
+  .action(async (opts) => cmdSkillPort({
+    source: opts.source,
+    scope: opts.scope,
+    profile: opts.profile,
+    link: !!opts.link,
+    force: !!opts.force,
+    names: opts.names,
+  }));
 
 // Profile group
 const profCmd = program.command("profile").description("Manage profiles");

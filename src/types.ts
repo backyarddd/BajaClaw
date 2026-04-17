@@ -51,6 +51,16 @@ export interface AgentConfig {
   dashboardPort?: number;
   memorySync?: boolean;
   channels?: ChannelConfig[];
+  // When true, the desktop CLI's MCP config is merged into the cycle
+  // subprocess. Off by default — BajaClaw keeps its own MCP config separate.
+  mergeDesktopMcp?: boolean;
+  // Per-cycle auto-skill synthesis settings (inspired by the "skill after
+  // complex tasks" pattern). Override defaults here per profile.
+  autoSkill?: {
+    enabled?: boolean;
+    minToolUses?: number;
+    maxPerDay?: number;
+  };
 }
 
 export interface ChannelConfig {

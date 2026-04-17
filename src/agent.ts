@@ -27,6 +27,7 @@ import { extract } from "./memory/extract.js";
 import { syncFromClaude } from "./memory/claude-compat.js";
 import { loadAllSkills } from "./skills/loader.js";
 import { matchSkills } from "./skills/matcher.js";
+import { synthesize as synthesizeSkill } from "./skills/auto-skiller.js";
 import { buildMcpConfig } from "./mcp/consumer.js";
 import type { AgentConfig, ClaudeOptions } from "./types.js";
 
@@ -137,6 +138,21 @@ export async function runCycle(input: CycleInput): Promise<CycleOutput> {
     if (!result.dryRun && result.text.length > 50) {
       try { await extract(db, cycleId, task, result.text, cfg); }
       catch (e) { log.warn("memory.extract.fail", { error: (e as Error).message }); }
+
+      // Step 13b: auto-skill synthesis. Triggers only when the cycle used
+      // enough tools to suggest a real procedure. Throttled per-day.
+      try {
+        const as = await synthesizeSkill({
+          cycleId,
+          task,
+          response: result.text,
+          events: result.events,
+          cfg: cfg.autoSkill,
+        }, log);
+        if (as.wrote) log.info("auto-skill.wrote", { path: as.wrote, cycleId });
+      } catch (e) {
+        log.warn("auto-skill.fail", { error: (e as Error).message });
+      }
     }
 
     log.info("cycle.ok", { cycleId, costUsd: result.costUsd, turns: result.turns });

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.0
+
+- **Skill isolation**: BajaClaw no longer reads `~/.claude/skills/` or
+  `.claude/skills/` automatically. Skill scopes are now BajaClaw-only
+  (agent, profile, user-global, built-in). Prevents cross-tool skill
+  collisions.
+- **MCP isolation**: BajaClaw no longer auto-merges the desktop CLI's
+  MCP config on every cycle. It uses `~/.bajaclaw/mcp-config.json` instead.
+  Opt back in with `"mergeDesktopMcp": true` in a profile's config.json.
+- **`bajaclaw skill port`**: copy or symlink skills from `~/.claude/skills/`
+  (or any source) into BajaClaw's scope. Per-skill or all-at-once, into
+  user / profile / agent scope.
+- **`bajaclaw mcp port`**: copy MCP servers from the desktop CLI config
+  into `~/.bajaclaw/mcp-config.json`. BajaClaw's own entry is skipped.
+- **Auto-skill synthesis**: after any cycle that uses 5+ tools (configurable),
+  BajaClaw analyzes the task + tool sequence + response and — if the
+  procedure is reusable — writes a structured `SKILL.md` with When-to-use /
+  Quick-reference / Procedure / Pitfalls / Verification sections to
+  `~/.bajaclaw/skills/auto/<name>/`. Frontmatter is marked
+  `auto_generated: true` with a `source_cycle_id`. Configure via
+  `autoSkill` in profile config.
+- **`bajaclaw skill promote <name>`**: move an auto-generated candidate
+  from `~/.bajaclaw/skills/auto/<name>/` into `~/.bajaclaw/skills/<name>/`.
+- Docs: expanded `docs/skills.md` and `docs/integration.md` to cover the
+  new isolation model, port commands, and auto-skill workflow.
+
 ## 0.3.0
 
 - **Packaged install**: `npm install -g create-bajaclaw` auto-runs `bajaclaw

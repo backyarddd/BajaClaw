@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
 import { loadAllSkills, parseSkill } from "../skills/loader.js";
@@ -80,12 +80,41 @@ export async function cmdInstall(source: string, scope: "user" | "profile" = "us
 export async function cmdReview(): Promise<void> {
   const auto = join(bajaclawHome(), "skills", "auto");
   if (!existsSync(auto)) { console.log(chalk.dim("no auto-generated skills to review.")); return; }
-  for (const name of readdirSync(auto)) {
+  const names = readdirSync(auto).filter((n) => {
+    try { return statSync(join(auto, n, "SKILL.md")).isFile(); } catch { return false; }
+  });
+  if (names.length === 0) { console.log(chalk.dim("no auto-generated skills to review.")); return; }
+  for (const name of names) {
     const path = join(auto, name, "SKILL.md");
-    if (!existsSync(path)) continue;
     console.log(chalk.bold(`── ${name} ──`));
     console.log(readFileSync(path, "utf8").slice(0, 3000));
     console.log("");
   }
-  console.log(chalk.dim(`Move approved skills from ${auto}/<name>/ to ~/.bajaclaw/skills/<name>/`));
+  console.log(chalk.dim(`To promote: bajaclaw skill promote <name>`));
+  console.log(chalk.dim(`To discard: rm -rf ${auto}/<name>`));
+}
+
+export async function cmdPromote(name: string, opts: { force?: boolean } = {}): Promise<void> {
+  const from = join(bajaclawHome(), "skills", "auto", name);
+  const to = join(bajaclawHome(), "skills", name);
+  if (!existsSync(from)) throw new Error(`no auto-skill named ${name} (looked in ${from})`);
+  if (existsSync(to) && !opts.force) throw new Error(`user skill ${name} already exists. Use --force to overwrite.`);
+  if (existsSync(to) && opts.force) {
+    // Replace the existing directory.
+    removeRecursive(to);
+  }
+  renameSync(from, to);
+  console.log(chalk.green(`✓ promoted ${name} -> ${to}`));
+}
+
+function removeRecursive(path: string): void {
+  try {
+    const s = statSync(path);
+    if (s.isDirectory()) {
+      for (const entry of readdirSync(path)) removeRecursive(join(path, entry));
+      try { require("node:fs").rmdirSync(path); } catch { /* ignore */ }
+    } else {
+      require("node:fs").unlinkSync(path);
+    }
+  } catch { /* swallow */ }
 }
