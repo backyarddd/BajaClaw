@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.14.7
+
+**CLI chat: rule-sandwich layout.** Matches the Claude Code welcome
+screen style - each turn's input lives between two horizontal rules,
+with the model/duration/cost/turns line rendered directly under the
+bottom rule instead of lumped with the next prompt.
+
+### Per-turn layout
+
+```
+──────────────────── (top rule, terminal width, capped 120 cols)
+ › user input
+──────────────────── (bottom rule)
+ · haiku · 4.2s · $0.0012 · 2 turns · #42
+
+ emily › response text
+
+────────────────────  (next turn's top rule)
+ › 
+```
+
+- `writeHRule()` prints `chalk.dim("─".repeat(min(cols, 120)))`.
+- The "thinking…" line under the bottom rule is swapped in place
+  (`\x1b[1A\x1b[2K`) for the real stats once the cycle returns.
+- Meta line ends at the last token (no trailing bullet).
+- Empty enter leaves an adjacent double-rule - accepted visual
+  glitch over adding cursor-manipulation complexity.
+
+HANDOFF.md rewritten to capture everything that shipped in 0.13.x +
+0.14.x: gateway lifecycle, dashboard internals, channel conversation
+memory, the em-dash ban, the no-Co-Authored-By rule, and the Node >=22
+engine floor.
+
 ## 0.14.6
 
 **Raise Node engine to >=22, drop 20 from CI.** The test suite imports
