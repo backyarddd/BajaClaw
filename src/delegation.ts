@@ -11,8 +11,9 @@ export interface DelegateOptions extends ClaudeOptions {
 export async function delegateCoding(task: string, opts: DelegateOptions): Promise<ClaudeResult> {
   const merged: ClaudeOptions = {
     model: opts.model ?? "claude-opus-4-7",
-    effort: opts.effort ?? "high",
-    maxTurns: opts.maxTurns ?? 40,
+    // Use max effort by default for delegated coding — these are the
+    // heavy-lift tasks that burn through turns.
+    effort: opts.effort ?? "max",
     allowedTools: opts.allowedTools ?? ["Read", "Edit", "Write", "Bash", "Grep", "Glob"],
     disallowedTools: opts.disallowedTools,
     mcpConfig: opts.mcpConfig,

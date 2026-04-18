@@ -157,18 +157,20 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       reason: picked.reason,
     });
 
-    // maxTurns is the min of the budget and the user's configured cap.
-    const effectiveMaxTurns = Math.min(cfg.maxTurns ?? 10, budget.maxTurns);
-
+    // claude's --effort level is the real knob for "how much runway
+    // does the agent get". No --max-turns flag exists in claude CLI;
+    // `effort: "max"` gives the biggest internal turn budget.
     const opts: ClaudeOptions & { dryRun?: boolean } = {
       model: picked.model,
       effort: cfg.effort,
-      maxTurns: effectiveMaxTurns,
       allowedTools: cfg.allowedTools,
       disallowedTools: cfg.disallowedTools,
       mcpConfig,
       workdir: profileDir(input.profile),
       printMode: true,
+      betas: cfg.betas,
+      context1M: cfg.contextWindow === "1m",
+      maxBudgetUsd: cfg.maxBudgetUsd,
       dryRun: input.dryRun,
     };
 

@@ -50,11 +50,32 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   const args: string[] = [];
   if (opts.printMode !== false) args.push("-p", prompt);
   if (opts.model) args.push("--model", opts.model);
-  if (opts.maxTurns !== undefined) args.push("--max-turns", String(opts.maxTurns));
+  // --effort is the real knob for "how much runway does the agent get".
+  // Levels: low < medium < high < xhigh < max. Higher = more turns
+  // + more tokens + higher cost. claude's internal turn budget is
+  // tied to this level — there is no `--max-turns` flag.
+  if (opts.effort) args.push("--effort", opts.effort);
   if (opts.allowedTools?.length) args.push("--allowedTools", opts.allowedTools.join(","));
   if (opts.disallowedTools?.length) args.push("--disallowedTools", opts.disallowedTools.join(","));
   if (opts.mcpConfig) args.push("--mcp-config", opts.mcpConfig);
   if (opts.systemPrompt) args.push("--system-prompt", opts.systemPrompt);
+
+  // Beta flags. `context1M: true` is shorthand for adding the
+  // `context-1m-2025-08-07` beta. API-key-only — the CLI warns and
+  // falls back to 200k for subscription auth.
+  const betas = [...(opts.betas ?? [])];
+  if (opts.context1M && !betas.includes("context-1m-2025-08-07")) {
+    betas.push("context-1m-2025-08-07");
+  }
+  if (betas.length > 0) args.push("--betas", ...betas);
+
+  // Per-cycle cost ceiling. Safer than a turn cap because agent
+  // complexity varies wildly — this caps the actual spend, not a
+  // proxy for it.
+  if (opts.maxBudgetUsd !== undefined) {
+    args.push("--max-budget-usd", String(opts.maxBudgetUsd));
+  }
+
   // Skip interactive permission prompts. BajaClaw spawns claude with
   // stdin closed, so the interactive prompt would hang / auto-deny.
   // The agent is trusted within the user's account; if they want

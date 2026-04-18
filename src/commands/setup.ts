@@ -236,7 +236,7 @@ function ensureAgentDescriptor(profile: string): void {
   const cfgPath = join(profileDir(profile), "config.json");
   if (!existsSync(cfgPath)) return;
   const cfg = JSON.parse(readFileSync(cfgPath, "utf8")) as {
-    name: string; template: string; model: string; effort: string; maxTurns: number;
+    name: string; template: string; model: string; effort: string;
     disallowedTools?: string[];
   };
   const body = `---
@@ -244,7 +244,6 @@ name: ${cfg.name}
 description: BajaClaw agent (${cfg.template}) — autonomous, runs on heartbeat
 model: ${cfg.model}
 effort: ${cfg.effort}
-maxTurns: ${cfg.maxTurns}
 ${cfg.disallowedTools?.length ? `disallowedTools: [${cfg.disallowedTools.join(", ")}]\n` : ""}isolation: worktree
 background: true
 ---

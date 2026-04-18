@@ -73,22 +73,21 @@ export interface ContextBudget {
   memoryCount: number;
   memoryCharsEach: number;
   skillCount: number;
-  maxTurns: number;
 }
 
-// Context budgets per model tier. Generous turn caps so real work
-// (multi-command setups, code refactors, research) doesn't truncate
-// mid-task. Memory and skill counts are still tight to keep per-cycle
-// prompts lean.
+// Per-tier prompt budgets. These only shape the prompt BajaClaw
+// assembles (how many memories / skills to pack in) — the number of
+// turns and tokens the agent can actually run is controlled by claude's
+// `--effort` level, not by us.
 export function budgetFor(tier: PickResult["tier"]): ContextBudget {
   switch (tier) {
     case "haiku":
-      return { memoryCount: 3, memoryCharsEach: 180, skillCount: 1, maxTurns: 8 };
+      return { memoryCount: 3, memoryCharsEach: 180, skillCount: 1 };
     case "opus":
-      return { memoryCount: 7, memoryCharsEach: 280, skillCount: 3, maxTurns: 30 };
+      return { memoryCount: 7, memoryCharsEach: 280, skillCount: 3 };
     case "sonnet":
     default:
-      return { memoryCount: 5, memoryCharsEach: 220, skillCount: 2, maxTurns: 20 };
+      return { memoryCount: 5, memoryCharsEach: 220, skillCount: 2 };
   }
 }
 

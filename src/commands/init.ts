@@ -43,10 +43,10 @@ export async function runInit(opts: InitOptions): Promise<void> {
     profile: opts.name,
     template,
     model: opts.model ?? "auto",
-    effort: opts.effort ?? "medium",
-    maxTurns: 20,
+    effort: opts.effort ?? "high",
     dashboardPort: 7337,
     memorySync: false,
+    contextWindow: "200k",
     allowedTools: defaultTools(template).allowed,
     disallowedTools: defaultTools(template).disallowed,
   };
@@ -114,7 +114,6 @@ name: ${cfg.name}
 description: BajaClaw agent (${cfg.template}) — autonomous, runs on heartbeat
 model: ${cfg.model}
 effort: ${cfg.effort}
-maxTurns: ${cfg.maxTurns}
 ${cfg.disallowedTools ? `disallowedTools: [${cfg.disallowedTools.join(", ")}]\n` : ""}isolation: worktree
 background: true
 ---

@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.12.0
+
+**Unleash the agent: no more artificial turn limits.** Turns out
+`--max-turns` isn't a real claude CLI flag — it's been silently
+ignored. The real "runway" knob is `--effort`. Ripped out the
+phantom turn budget and wired up the flags that actually exist.
+
+### What changed
+
+1. **Removed `--max-turns` from `buildCommand`**. It never worked.
+   `error_max_turns` came from claude's internal effort-based
+   budget, not our code. All `maxTurns` fields (ClaudeOptions,
+   AgentConfig, ContextBudget, tests) scrubbed. `cfg.maxTurns` is
+   now deprecated: silently ignored, left in the type for
+   back-compat so old configs don't break.
+
+2. **Effort levels expanded**: `low | medium | high | xhigh | max`.
+   claude's CLI added `xhigh` and `max` — the latter gives the
+   agent the biggest turn / token budget before termination.
+
+3. **Default `effort` bumped to `high`** (was `medium`). Every
+   cycle now starts with real runway. Delegation (coding
+   sub-sessions) defaults to `max`. `/effort max` in chat for
+   monster tasks; `/effort low` to save when triaging.
+
+4. **`--effort` is now actually passed to claude**. It wasn't
+   before — `buildCommand` had no `--effort` arg. So the
+   profile's `effort` setting had no effect. Now it does.
+
+5. **1M context window support**:
+   - New config field `contextWindow: "200k" | "1m"` (default `"200k"`).
+   - New `ClaudeOptions.context1M: boolean` shorthand.
+   - New `ClaudeOptions.betas: string[]` for arbitrary beta flags.
+   - When `contextWindow: "1m"`, BajaClaw passes
+     `--betas context-1m-2025-08-07` to claude.
+   - **API-key auth only**. Subscription users get a warning from
+     the CLI and fall back to 200k (claude handles this).
+
+6. **Per-cycle cost ceiling**: new `cfg.maxBudgetUsd` passes
+   `--max-budget-usd <n>` to claude. More honest than a turn cap
+   because complexity varies — this caps the actual spend.
+   `undefined` = no cap.
+
+7. **`bajaclaw effort`** command and chat `/effort` now accept
+   `xhigh` and `max`. Hints updated.
+
+8. **Chat `/context 200k|1m`** slash command. Writes to
+   `config.json`. Session header shows "1M (beta)" when enabled.
+
+### Why this is a big deal
+
+Before today, asking the agent to do anything non-trivial would
+randomly fail with `error_max_turns` because:
+
+- My bogus `--max-turns` was ignored → claude's internal cap applied.
+- My `effort` config was also ignored (no `--effort` arg passed) →
+  claude defaulted to its lowest internal budget for `-p` mode.
+
+After: the agent actually gets the effort level you set, there's
+no arbitrary turn cap, and `/effort max` gives it the most runway
+claude offers.
+
 ## 0.11.3
 
 **Four chat-session bugs found in live testing.**

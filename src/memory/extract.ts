@@ -29,7 +29,6 @@ export async function extract(
   const r = await runOnce(prompt, {
     model: "claude-haiku-4-5",
     effort: "low",
-    maxTurns: 1,
     printMode: true,
     disallowedTools: ["Bash", "Write", "Edit", "Read", "Grep", "Glob", "WebSearch", "WebFetch"],
   });
