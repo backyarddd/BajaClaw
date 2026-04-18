@@ -1,54 +1,102 @@
 ---
 name: setup-discord
-description: Walk the user through adding a Discord bot adapter to BajaClaw
-version: 0.1.0
+description: Wire up a bidirectional Discord chat bridge between the user and the agent
+version: 0.2.0
 tools: [Bash, Read, Write, Edit]
-triggers: ["setup discord", "help me with discord", "connect discord", "discord bot", "add discord", "discord setup"]
+triggers: ["setup discord", "help me with discord", "connect discord", "discord bot", "add discord", "discord setup", "discord chat", "talk to you on discord"]
 effort: medium
 ---
 
-## When to use
-The user asks you to connect Discord, wire up a Discord bot, route messages
-from a channel into BajaClaw, or reply from BajaClaw back to Discord.
+## Default intent — do NOT ask clarifying questions
 
-## Quick reference
-- Adapter: `src/channels/gateway.ts`, uses `discord.js` (optional dep)
-- Token source: Discord Developer Portal → Applications → New Application →
-  Bot → Reset Token
-- Required bot intents: Guilds, GuildMessages, MessageContent, DirectMessages
-- Channel id: right-click a channel in Discord (Developer Mode on) →
-  "Copy Channel ID"
+When the user says any form of "set up discord", "connect discord",
+"talk to you on discord", etc. the default intent is **a two-way chat
+bridge**: the user posts to a Discord channel where the bot lives, the
+bot forwards the message to BajaClaw as a task, and the agent's reply
+is posted back in the same channel (or the user's DM channel).
 
-## Procedure
-1. Ask if the user already has a Discord bot token + invited the bot to
-   their server.
-   - If not: walk them to https://discord.com/developers/applications. Steps:
-     New Application → Bot tab → Reset Token → copy. Under "Privileged Gateway
-     Intents", enable "MESSAGE CONTENT INTENT". Under OAuth2 → URL Generator,
-     tick `bot` + `applications.commands`, plus the message permissions,
-     and visit the generated URL to add the bot to their server.
-2. Ask for the channel id where the bot should listen (Discord Developer
-   Mode must be on: Settings → Advanced → Developer Mode).
-3. Ask for the user's numeric Discord user id (right-click own avatar →
-   Copy User ID). This goes in the allowlist.
-4. Run: `bajaclaw channel add <profile> discord --token <TOKEN> --channel-id <CHANNEL_ID>`
-5. Edit `~/.bajaclaw/profiles/<profile>/config.json` and add the numeric
-   user id to `channels[].allowlist` for the discord entry: `[<USER_ID>]`.
-6. Start the gateway: `bajaclaw daemon start <profile>`.
-7. Send a test message in the channel; expect it to appear as a task.
+Don't ask "what do you want to use it for?" or present alternatives.
+Just execute the setup below. If the user later clarifies they want
+something different, adjust then.
 
-## Pitfalls
-- `npm install discord.js` if the dep is missing (optional).
-- The bot must be added to the server BEFORE it can read messages — OAuth2
-  URL step is not optional.
-- Without the MessageContent intent enabled in the Developer Portal AND in
-  the code (`discord.js` GatewayIntentBits.MessageContent), message bodies
-  will be empty strings. The adapter already sets the intent; double-check
-  the portal side.
-- DMs: set `channelId` to the user's DM channel id OR remove the
-  `channelId` filter in the config to accept any channel the bot sees.
+## Execution plan
 
-## Verification
-- `bajaclaw channel list <profile>` shows the discord entry.
-- Logs contain `gateway.discord.msg` entries after test messages.
-- `bajaclaw status <profile>` shows incremented pending-tasks count.
+You have `Bash`, `Read`, `Write`, `Edit` tools. Permission prompts are
+auto-approved. Do the work.
+
+### Step 1 — Collect credentials from the user
+
+Tell the user exactly three things:
+
+```
+To wire up a Discord chat with me, I need three things. Steps:
+
+  1) Go to https://discord.com/developers/applications
+     → New Application → name it → create → "Bot" tab → Reset Token → copy.
+     Under "Privileged Gateway Intents", enable "MESSAGE CONTENT INTENT".
+
+  2) In OAuth2 → URL Generator, tick `bot` + `applications.commands`
+     plus "Send Messages" + "Read Message History". Visit the generated
+     URL to add the bot to your server.
+
+  3) In Discord, Settings → Advanced → Developer Mode ON.
+     Then right-click the channel you want the bot in → Copy Channel ID.
+     And right-click your own avatar → Copy User ID.
+
+Paste the three values: bot token, channel id, your user id.
+```
+
+Wait for all three. Don't proceed partial.
+
+### Step 2 — Wire the channel
+
+```bash
+bajaclaw channel add <profile> discord --token <TOKEN> --channel-id <CHANNEL_ID>
+```
+
+Then add the user id to the allowlist by editing
+`~/.bajaclaw/profiles/<profile>/config.json`. Find the discord entry
+under `channels[]` and set `allowlist: [<USER_ID>]` (as a number).
+
+Verify:
+
+```bash
+bajaclaw channel list <profile>
+```
+
+### Step 3 — Ensure the dep is present
+
+```bash
+npm install -g discord.js
+```
+
+### Step 4 — Start the gateway
+
+```bash
+bajaclaw daemon start <profile>
+```
+
+### Step 5 — Confirm and invite a test message
+
+Say: "Done. Go to the channel you added me to and send any message —
+I'll reply there."
+
+## Verification checklist
+
+- `bajaclaw channel list <profile>` shows a `discord` entry with the
+  token masked and the allowlist containing the user id.
+- `bajaclaw daemon status <profile>` shows `running`.
+- A test message in the channel appears as `gateway.discord.msg` in
+  `bajaclaw daemon logs <profile> --lines 30`.
+- The user sees the bot reply within ~10s.
+
+## Pitfalls (to anticipate, not pre-ask)
+
+- If MESSAGE CONTENT INTENT is off in the portal, message bodies are
+  empty and the bot can't respond to content. Ask them to re-check
+  only if they report it's "not picking up messages."
+- If the bot isn't in the server, the OAuth2 invite URL step was
+  missed — walk them through it if needed.
+- To include DMs, remove the `channelId` filter from the config or
+  set it to the user's DM channel id.
+- Don't echo the token back after it's in config.json.

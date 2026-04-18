@@ -1,18 +1,22 @@
-// `bajaclaw chat [profile]` — interactive REPL for conversing with an
-// agent turn-by-turn. Each user message runs one BajaClaw cycle.
-// Session history is injected into the next prompt's "Recent Chat"
-// section so the agent remembers within the session.
+// `bajaclaw chat [profile]` — interactive REPL.
 //
-// Uses event-based readline (`on('line')`) rather than the promise
-// `.question()` API because the promise form had a habit of resolving
-// the outer chain in a way that let Node exit unexpectedly between
-// turns. The event-based loop explicitly keeps the interface live
-// until the user types /exit or hits Ctrl-D.
+// Design notes:
+// - Uses `readline/promises` with `.question()` in a `while` loop.
+//   Readline is only "active" while awaiting user input — while the
+//   cycle runs, it's idle, so stdout writes don't fight with its
+//   terminal-mode redraw logic.
+// - No animated spinner. A static "…is thinking…" line is written
+//   once and erased with cursor-up + clear-line (no `\r` writes,
+//   which would trigger readline's prompt-redraw behavior).
+// - Each turn is fully sequential: read input → run cycle → print
+//   response → loop. No concurrent dispatch, no race conditions.
+// - Errors are surfaced with friendly context. Raw `exit 1` is
+//   translated into actionable text.
 
-import { createInterface, type Interface as ReadlineInterface } from "node:readline";
+import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import chalk from "chalk";
-import { runCycle } from "../agent.js";
+import { runCycle, type CycleOutput } from "../agent.js";
 import { loadConfig, saveConfig } from "../config.js";
 import { openDb, type DB } from "../db.js";
 import { tierFor, budgetFor, AUTO, HAIKU, SONNET, OPUS } from "../model-picker.js";
@@ -90,124 +94,123 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   const rl = createInterface({
     input: stdin,
     output: stdout,
-    terminal: true,
-    prompt: chalk.cyan("you › "),
   });
-  rl.prompt();
+  const youLabel = chalk.cyan("you › ");
 
-  // Serial line processing: while a turn is running, incoming "line"
-  // events are ignored (they just print another prompt). Prevents
-  // stomping on an in-flight cycle.
-  let busy = false;
+  // Main loop. One turn at a time, no concurrency.
+  while (true) {
+    let input: string;
+    try {
+      input = (await rl.question(youLabel)).trim();
+    } catch {
+      break; // rl closed (EOF / Ctrl-D)
+    }
 
-  // Wrap the whole REPL in a promise that resolves on rl 'close'.
-  // runChat awaits this promise, which keeps the Node event loop
-  // alive for the duration of the chat session.
-  await new Promise<void>((resolve) => {
-    const handleLine = async (line: string): Promise<void> => {
-      if (busy) {
-        rl.prompt();
-        return;
-      }
-      busy = true;
+    if (!input) continue;
 
-      const input = line.trim();
-      if (!input) {
-        busy = false;
-        rl.prompt();
-        return;
-      }
+    // Slash commands
+    if (input.startsWith("/")) {
+      const action = await handleSlash(input, {
+        profile: opts.profile,
+        cfg,
+        agentName,
+        history,
+        stats,
+        getModel: () => modelOverride,
+        setModel: (m) => { modelOverride = m; },
+      });
+      if (action === "exit") break;
+      continue;
+    }
 
-      try {
-        if (input.startsWith("/")) {
-          const action = await handleSlash(input, {
-            profile: opts.profile,
-            cfg,
-            agentName,
-            history,
-            stats,
-            getModel: () => modelOverride,
-            setModel: (m) => { modelOverride = m; },
-          });
-          if (action === "exit") {
-            rl.close();
-            return;
-          }
-          busy = false;
-          rl.prompt();
-          return;
-        }
+    // Normal turn: run a cycle.
+    history.push({ role: "user", content: input, ts: Date.now() });
+    writeThinkingLine(agentName);
 
-        history.push({ role: "user", content: input, ts: Date.now() });
-        const stopThinking = startThinking(agentName);
+    let r: CycleOutput | null = null;
+    let caughtError: Error | null = null;
+    try {
+      const recent = history.slice(-HISTORY_LIMIT - 1, -1);
+      r = await runCycle({
+        profile: opts.profile,
+        task: input,
+        modelOverride,
+        sessionHistory: recent,
+      });
+    } catch (e) {
+      caughtError = e as Error;
+    }
 
-        let r;
-        try {
-          const recent = history.slice(-HISTORY_LIMIT - 1, -1);
-          r = await runCycle({
-            profile: opts.profile,
-            task: input,
-            modelOverride,
-            sessionHistory: recent,
-          });
-        } finally {
-          stopThinking();
-        }
+    eraseThinkingLine();
 
-        if (!r.ok) {
-          console.log(chalk.red(`${agentName} › `) + chalk.red(r.error ?? "(error)"));
-          console.log("");
-          history.pop();
-        } else {
-          console.log(chalk.green(`${agentName} › `) + r.text);
-          console.log("");
-          history.push({ role: "assistant", content: r.text, ts: Date.now() });
-          stats.turnCount += 1;
-          stats.inputTokens += r.inputTokens ?? 0;
-          stats.outputTokens += r.outputTokens ?? 0;
-          stats.costUsd += r.costUsd ?? 0;
-          printStatusLine(r, cfg);
-        }
-      } catch (e) {
-        console.log(chalk.red("error: ") + (e as Error).message);
-        console.log("");
-      } finally {
-        busy = false;
-        rl.prompt();
-      }
-    };
+    if (caughtError) {
+      console.log(chalk.red(`${agentName} › `) + chalk.red(`error: ${caughtError.message}`));
+      console.log("");
+      history.pop();
+      continue;
+    }
 
-    rl.on("line", (line) => {
-      // fire-and-forget; errors are caught inside handleLine
-      void handleLine(line);
-    });
+    if (!r || !r.ok) {
+      console.log(chalk.red(`${agentName} › `) + chalk.red(formatCycleError(r)));
+      console.log("");
+      history.pop();
+      continue;
+    }
 
-    rl.on("close", () => {
-      printSessionSummary(stats);
-      resolve();
-    });
-  });
+    const responseText = (r.text ?? "").trim() || chalk.dim("(empty response)");
+    console.log(chalk.green(`${agentName} › `) + responseText);
+    console.log("");
+
+    history.push({ role: "assistant", content: r.text ?? "", ts: Date.now() });
+    stats.turnCount += 1;
+    stats.inputTokens += r.inputTokens ?? 0;
+    stats.outputTokens += r.outputTokens ?? 0;
+    stats.costUsd += r.costUsd ?? 0;
+
+    printStatusLine(r, cfg);
+  }
+
+  rl.close();
+  printSessionSummary(stats);
 }
 
 // ───────────────────────────────────────────────────────────────
-// "thinking…" animation — plain-text interval, no ora
+// Thinking indicator — static, erased on response
 // ───────────────────────────────────────────────────────────────
 
-function startThinking(agentName: string): () => void {
-  let dots = 0;
-  const render = () => {
-    // clear line + move cursor to column 0, then write status
-    const bar = ".".repeat((dots % 3) + 1).padEnd(3, " ");
-    stdout.write(`\r\x1b[2K${chalk.dim(`${agentName} is thinking${bar}`)}`);
-    dots += 1;
-  };
-  render();
-  const timer = setInterval(render, 400);
-  return () => {
-    clearInterval(timer);
-    // clear the line so the response starts clean
-    stdout.write("\r\x1b[2K");
-  };
+function writeThinkingLine(agentName: string): void {
+  stdout.write(chalk.dim(`${agentName} is thinking…\n`));
+}
+
+function eraseThinkingLine(): void {
+  // Cursor up one line, erase in line. Avoids `\r` which can trigger
+  // readline's prompt-redraw machinery.
+  stdout.write("\x1b[1A\x1b[2K");
+}
+
+// ───────────────────────────────────────────────────────────────
+// Error formatting
+// ───────────────────────────────────────────────────────────────
+
+function formatCycleError(r: CycleOutput | null): string {
+  if (!r) return "no response from backend";
+  const raw = (r.error ?? "").trim();
+  if (!raw) return "backend returned no output";
+
+  if (/permission|needs write/i.test(raw)) {
+    return `backend wanted to use a tool that needs approval, and BajaClaw closes stdin. Enabled in v0.11.2+ via --dangerously-skip-permissions — if you're seeing this, update: npm install -g bajaclaw@latest`;
+  }
+  if (/rate[- ]?limit/i.test(raw)) {
+    return "rate-limited by Anthropic. Wait a few minutes and retry.";
+  }
+  if (/credit|quota|billing/i.test(raw)) {
+    return `${raw} — check your Anthropic plan at anthropic.com.`;
+  }
+  if (/^exit \d+$/i.test(raw)) {
+    return `backend exited (${raw}) with no error detail. Check \`bajaclaw health ${r.cycleId ? "" : ""}\` and the profile log.`;
+  }
+  // First line + truncate
+  return raw.split("\n")[0]!.slice(0, 400);
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -255,7 +258,7 @@ function printHeader(
   console.log("");
 }
 
-function printStatusLine(r: Awaited<ReturnType<typeof runCycle>>, cfg: AgentConfig): void {
+function printStatusLine(r: CycleOutput, cfg: AgentConfig): void {
   const bits: string[] = [];
   if (r.model) bits.push(chalk.magenta(shortModel(r.model)));
   bits.push(chalk.dim(cfg.effort));

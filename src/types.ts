@@ -18,6 +18,11 @@ export interface ClaudeOptions {
   printMode?: boolean;
   systemPrompt?: string;
   timeout?: number;
+  // Skip claude's interactive permission prompts for tools like Edit/Bash.
+  // Default true: BajaClaw closes stdin when invoking claude, so
+  // interactive prompts would just fail anyway. Set false only when you
+  // explicitly want cycles to abort on sensitive tool use.
+  skipPermissions?: boolean;
 }
 
 export interface ClaudeResult {
