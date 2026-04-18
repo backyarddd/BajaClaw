@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.6
+
+**Raise Node engine to >=22, drop 20 from CI.** The test suite imports
+`.ts` files directly via `await import("../src/foo.ts")`, which relies
+on Node 22.6+'s built-in type stripping (`--experimental-strip-types`,
+enabled by default in 22.7+). Node 20 has no such feature and fails
+every test with `Unknown file extension ".ts"`. Node 20 is EOL as of
+April 2026 anyway, so dropping it from the CI matrix is aligned with
+upstream support. CI now runs on Node 22 + 24 across mac/linux/windows.
+
 ## 0.14.5
 
 **Fix CI on Node 20.** `npm test` was `node --test "tests/**/*.test.js"`
