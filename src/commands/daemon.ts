@@ -8,6 +8,7 @@ import { Logger } from "../logger.js";
 import { pickAdapter } from "../scheduler/index.js";
 import { runCycle } from "../agent.js";
 import { openDb } from "../db.js";
+import { startAllGateways, replyToSource } from "../channels/gateway.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // __dirname is <repo>/src/commands (tsx) or <repo>/dist/commands (built).
@@ -94,14 +95,32 @@ async function runLoop(profile: string): Promise<void> {
   process.on("SIGTERM", () => { log.info("daemon.sigterm"); process.exit(0); });
   process.on("SIGINT", () => { log.info("daemon.sigint"); process.exit(0); });
 
-  // Simple loop: check for due schedules + pending tasks every 30s.
+  // Start channel gateways (telegram/discord) if any are configured.
+  // Adapters run in the background; inbound messages enqueue tasks,
+  // and replyToSource routes cycle outputs back.
+  try { await startAllGateways(profile); }
+  catch (e) { log.error("daemon.gateway.start.err", { error: (e as Error).message }); }
+
+  // Channel-sourced tasks need a shorter poll — 60s would feel like
+  // the bot is asleep. 3s when a gateway is wired, 60s otherwise.
+  const hasChannels = await hasAnyChannel(profile);
+  const pollMs = hasChannels ? 3_000 : 60_000;
+
   while (true) {
     try {
       const db = openDb(profile);
       const pending = db.prepare("SELECT COUNT(*) c FROM tasks WHERE status='pending'").get() as { c: number };
       db.close();
       if (pending.c > 0) {
-        await runCycle({ profile });
+        const out = await runCycle({ profile });
+        if (out.source && out.ok && out.text) {
+          try { await replyToSource(profile, out.source, out.text); }
+          catch (e) { log.warn("daemon.reply.fail", { error: (e as Error).message, source: out.source }); }
+        } else if (out.source && !out.ok) {
+          const msg = `⚠️ cycle failed: ${out.error ?? "unknown error"}`;
+          try { await replyToSource(profile, out.source, msg); }
+          catch { /* ignore — already logged the fail */ }
+        }
       }
       backoff = 1000;
     } catch (e) {
@@ -109,9 +128,16 @@ async function runLoop(profile: string): Promise<void> {
       await sleep(backoff);
       backoff = Math.min(backoff * 2, maxBackoff);
     }
-    // Poll once a minute. Idle daemon = zero backend calls.
-    await sleep(60_000);
+    await sleep(pollMs);
   }
+}
+
+async function hasAnyChannel(profile: string): Promise<boolean> {
+  try {
+    const { loadConfig } = await import("../config.js");
+    const cfg = loadConfig(profile);
+    return (cfg.channels ?? []).length > 0;
+  } catch { return false; }
 }
 
 function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }

@@ -174,8 +174,8 @@ daemonCmd.command("run [profile]").action(async (p) => daemon.cmdRun(defaultProf
 
 // Channel group
 const chanCmd = program.command("channel").description("Messaging channels");
-chanCmd.command("add [profile]").argument("<kind>").requiredOption("--token <t>").option("--channel-id <id>")
-  .action(async (p, kind, o) => channel.cmdAdd(defaultProfile(p), kind as "telegram" | "discord", o.token, o.channelId));
+chanCmd.command("add [profile]").argument("<kind>").requiredOption("--token <t>").option("--channel-id <id>").option("--user-id <id>")
+  .action(async (p, kind, o) => channel.cmdAdd(defaultProfile(p), kind as "telegram" | "discord", o.token, o.channelId, o.userId));
 chanCmd.command("remove [profile]").argument("<kind>").action(async (p, kind) => channel.cmdRemove(defaultProfile(p), kind as "telegram" | "discord"));
 chanCmd.command("list [profile]").action(async (p) => channel.cmdList(defaultProfile(p)));
 

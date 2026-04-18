@@ -64,6 +64,9 @@ export interface CycleOutput {
   prompt: string;
   command?: string[];
   error?: string;
+  // Set when the task came from an inbound channel (telegram/discord).
+  // Format: "<kind>:<id>" — passed to channels/gateway.replyToSource.
+  source?: string;
 }
 
 export async function runCycle(input: CycleInput): Promise<CycleOutput> {
@@ -85,7 +88,8 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     if (!limit.allow) throw new Error(`rate limit exceeded (${limit.used}/hr)`);
 
     const heartbeatDefault = "Heartbeat check. Review state, note anything worth action, and return a brief summary.";
-    const task = input.task ?? popTask(db) ?? heartbeatDefault;
+    const popped = input.task ? null : popTask(db);
+    const task = input.task ?? popped?.body ?? heartbeatDefault;
     const isHeartbeat = task === heartbeatDefault;
 
     if (cfg.memorySync) syncFromClaude(db, log);
@@ -182,6 +186,9 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       db.prepare(
         "UPDATE cycles SET finished_at=?, status=?, error=?, response_preview=? WHERE id=?"
       ).run(finished, "error", result.error ?? "unknown", result.text.slice(0, 500), cycleId);
+      if (popped) {
+        db.prepare("UPDATE tasks SET status='error', cycle_id=? WHERE id=?").run(cycleId, popped.id);
+      }
       log.error("cycle.fail", { cycleId, error: result.error });
       return {
         cycleId,
@@ -193,6 +200,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
         prompt,
         command: result.command,
         error: result.error,
+        source: popped?.source,
       };
     }
 
@@ -209,6 +217,9 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       result.turns ?? null,
       cycleId,
     );
+    if (popped) {
+      db.prepare("UPDATE tasks SET status='done', cycle_id=? WHERE id=?").run(cycleId, popped.id);
+    }
 
     // Post-cycle memory extraction + auto-skill synthesis. Both are extra
     // backend calls — skip them on cheap (Haiku) cycles and on trivially
@@ -248,6 +259,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       dryRun: result.dryRun,
       prompt,
       command: result.command,
+      source: popped?.source,
     };
   } finally {
     db.close();
@@ -264,13 +276,13 @@ function formatRecentChat(history?: ChatTurn[]): string {
     .join("\n\n");
 }
 
-function popTask(db: import("./db.js").DB): string | null {
+function popTask(db: import("./db.js").DB): { id: number; body: string; source?: string } | null {
   const row = db.prepare(
-    "SELECT id, body FROM tasks WHERE status='pending' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, created_at ASC LIMIT 1"
-  ).get() as { id: number; body: string } | undefined;
+    "SELECT id, body, source FROM tasks WHERE status='pending' ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END, created_at ASC LIMIT 1"
+  ).get() as { id: number; body: string; source: string | null } | undefined;
   if (!row) return null;
   db.prepare("UPDATE tasks SET status='running' WHERE id=?").run(row.id);
-  return row.body;
+  return { id: row.id, body: row.body, source: row.source ?? undefined };
 }
 
 function insertCycle(db: import("./db.js").DB, c: {

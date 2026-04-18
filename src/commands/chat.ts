@@ -14,6 +14,7 @@
 //   translated into actionable text.
 
 import { createInterface } from "node:readline/promises";
+import { PassThrough } from "node:stream";
 import { stdin, stdout } from "node:process";
 import chalk from "chalk";
 import { runCycle, type CycleOutput } from "../agent.js";
@@ -92,17 +93,25 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
   printHeader(opts.profile, cfg, agentName, modelOverride);
 
-  const rl = createInterface({
-    input: stdin,
-    output: stdout,
-  });
+  // Bracketed-paste shim. Terminals that support bracketed paste
+  // (xterm, iTerm, Terminal.app, etc.) wrap pasted content in
+  // \x1b[200~ ... \x1b[201~. Inside those markers, newlines should
+  // be treated as literal text — not as "submit this line".
+  //
+  // We intercept stdin, replace in-paste \r and \n with a marker
+  // (\x16 SYN — non-printing, very unlikely in real input), feed
+  // the rewritten stream to readline, then swap the marker back to
+  // a real newline when rl.question() resolves.
+  const paste = installPasteShim();
+  const rl = createInterface({ input: paste.input, output: stdout });
   const youLabel = chalk.cyan("you › ");
 
   // Main loop. One turn at a time, no concurrency.
   while (true) {
     let input: string;
     try {
-      input = (await rl.question(youLabel)).trim();
+      const raw = await rl.question(youLabel);
+      input = raw.replace(/\x16/g, "\n").trim();
     } catch {
       break; // rl closed (EOF / Ctrl-D)
     }
@@ -172,7 +181,85 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   }
 
   rl.close();
+  paste.dispose();
   printSessionSummary(stats);
+}
+
+// ───────────────────────────────────────────────────────────────
+// Bracketed-paste shim
+// ───────────────────────────────────────────────────────────────
+
+interface PasteShim {
+  input: NodeJS.ReadStream;
+  dispose: () => void;
+}
+
+function installPasteShim(): PasteShim {
+  const proxy = new PassThrough() as unknown as NodeJS.ReadStream & { setRawMode?: (v: boolean) => NodeJS.ReadStream };
+  (proxy as { isTTY?: boolean }).isTTY = true;
+  (proxy as { isRaw?: boolean }).isRaw = false;
+  // Readline calls setRawMode on its input when it's a TTY. Forward
+  // to the real stdin so keypresses arrive one-at-a-time.
+  (proxy as { setRawMode: (v: boolean) => NodeJS.ReadStream }).setRawMode = (v: boolean) => {
+    if (stdin.isTTY) stdin.setRawMode(v);
+    (proxy as { isRaw?: boolean }).isRaw = v;
+    return proxy;
+  };
+  // Propagate window size so readline can re-wrap prompts correctly.
+  Object.defineProperty(proxy, "columns", { get: () => stdout.columns });
+  Object.defineProperty(proxy, "rows", { get: () => stdout.rows });
+
+  // Enable bracketed paste on the terminal. Disabled in dispose().
+  stdout.write("\x1b[?2004h");
+
+  const PASTE_BEGIN = "\x1b[200~";
+  const PASTE_END = "\x1b[201~";
+  const NL_MARKER = "\x16"; // SYN
+  let inPaste = false;
+  // Leftover bytes when a paste marker sits across chunk boundaries.
+  let tail = "";
+
+  const onData = (chunk: Buffer): void => {
+    const s = tail + chunk.toString("utf8");
+    tail = "";
+    let out = "";
+    let i = 0;
+    while (i < s.length) {
+      // Could a paste marker start here? If ESC and we don't have
+      // enough bytes yet to decide, stash the rest for the next chunk.
+      if (s.charCodeAt(i) === 0x1b && i + PASTE_BEGIN.length > s.length) {
+        tail = s.slice(i);
+        break;
+      }
+      if (!inPaste && s.startsWith(PASTE_BEGIN, i)) {
+        inPaste = true;
+        i += PASTE_BEGIN.length;
+        continue;
+      }
+      if (inPaste && s.startsWith(PASTE_END, i)) {
+        inPaste = false;
+        i += PASTE_END.length;
+        continue;
+      }
+      const ch = s[i]!;
+      if (inPaste && (ch === "\n" || ch === "\r")) {
+        out += NL_MARKER;
+      } else {
+        out += ch;
+      }
+      i++;
+    }
+    if (out) (proxy as unknown as PassThrough).write(out);
+  };
+
+  stdin.on("data", onData);
+
+  const dispose = (): void => {
+    stdin.removeListener("data", onData);
+    try { stdout.write("\x1b[?2004l"); } catch { /* ignore */ }
+  };
+
+  return { input: proxy, dispose };
 }
 
 // ───────────────────────────────────────────────────────────────

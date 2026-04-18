@@ -58,11 +58,13 @@ messages will route through.
 Once you have both values, run:
 
 ```bash
-bajaclaw channel add <profile> telegram --token <TOKEN> --channel-id <USER_ID>
+bajaclaw channel add <profile> telegram --token <TOKEN> --user-id <USER_ID>
 ```
 
 Where `<profile>` is the currently active profile (default: `default`
 unless BAJACLAW_PROFILE is set to something else in the environment).
+The `--user-id` gets added to the telegram allowlist so only messages
+from that sender are routed to the agent.
 
 Then verify:
 
