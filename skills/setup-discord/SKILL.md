@@ -56,12 +56,11 @@ Wait for all three. Don't proceed partial.
 ### Step 2 — Wire the channel
 
 ```bash
-bajaclaw channel add <profile> discord --token <TOKEN> --channel-id <CHANNEL_ID>
+bajaclaw channel add <profile> discord --token <TOKEN> --channel-id <CHANNEL_ID> --user-id <USER_ID>
 ```
 
-Then add the user id to the allowlist by editing
-`~/.bajaclaw/profiles/<profile>/config.json`. Find the discord entry
-under `channels[]` and set `allowlist: [<USER_ID>]` (as a number).
+The `--user-id` gets added to the allowlist so only messages from
+that sender are routed to the agent.
 
 Verify:
 

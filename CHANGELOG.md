@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.12.1
+
+**Telegram + Discord actually work now.** The skills were shipping users
+through a setup flow that led nowhere — the daemon never started the
+channel gateway, and no code path sent agent replies back to the
+channel. Two half-built features behaving like one broken one. Fixed.
+
+Also: pasting multi-line text into `bajaclaw chat` no longer auto-submits
+on every embedded newline.
+
+### What changed
+
+1. **Daemon starts channel gateways on boot**. `startAllGateways(profile)`
+   is called from `daemon.runLoop` before the poll loop. Adapters
+   (`node-telegram-bot-api`, `discord.js`) stay alive for the lifetime
+   of the daemon process. Log events `gateway.start`,
+   `gateway.telegram.ready`, `gateway.discord.ready` confirm.
+2. **Reply routing**. `runCycle` now returns `source` on its output
+   (e.g. `"telegram:1415409977"`). After every cycle the daemon calls
+   `replyToSource(profile, source, text)` which hands the string to the
+   right adapter's `sendMessage`. One-way pipe is now bidirectional.
+3. **Task lifecycle**. `tasks` rows get `status='done'|'error'` and
+   `cycle_id` stamped when a cycle completes — previously they were
+   stuck in `running` forever.
+4. **`channel add` takes `--user-id`**. Telegram: `--user-id` goes into
+   the allowlist (previously required hand-editing `config.json`).
+   Discord: `--user-id` is optional allowlist entry, `--channel-id` still
+   scopes to a channel. Skills updated.
+5. **Gateway adapter polling**. When channels are configured, the daemon
+   polls pending tasks every 3s instead of 60s — otherwise the bot felt
+   asleep between messages.
+6. **Bracketed paste in chat REPL**. `bajaclaw chat` now enables
+   `\x1b[?2004h` and proxies stdin through a transform: newlines inside
+   paste markers become `\x16` (SYN) so readline doesn't treat them as
+   line submissions, then get swapped back to real newlines on Enter.
+   Paste → edit → Enter. No more accidental half-prompt sends.
+
+### Landmines (for next session)
+
+- `runGateway(profile)` still exists as a backwards-compat blocking
+  entry point but is unused — the daemon uses `startAllGateways` and
+  keeps its own event loop. Don't reintroduce it.
+- `daemon stop` only kills the pid in `daemon.pid`. Stale daemons from
+  crashed sessions can pile up. If you see multiple `daemon run default`
+  processes in `ps`, kill them by hand before starting a fresh one.
+- Bracketed paste requires terminal support (xterm/iTerm/Terminal.app
+  — all modern ones). Ancient terminals send paste as raw keystrokes
+  without markers; the shim is a no-op there, so behavior degrades to
+  pre-0.12.1 (submits on newline).
+
 ## 0.12.0
 
 **Unleash the agent: no more artificial turn limits.** Turns out
