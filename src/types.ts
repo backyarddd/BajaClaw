@@ -67,6 +67,28 @@ export interface AgentConfig {
   // orchestrator.
   parent?: string;
   subAgents?: string[];
+  // Memory-compaction policy. Keeps the memory pool lean so recall stays
+  // sharp and DB size stays bounded as the agent learns over time.
+  compaction?: CompactionConfig;
+}
+
+export interface CompactionConfig {
+  enabled?: boolean;
+  // Fraction of the reference context window (200k tokens ≈ 800k chars)
+  // that the memory pool can fill before threshold compaction fires.
+  threshold?: number;
+  // "threshold": only when the pool is oversized.
+  // "daily": only at the daily UTC time.
+  // "both": either trigger.
+  // "off": disable entirely (same as enabled=false).
+  schedule?: "threshold" | "daily" | "both" | "off";
+  // HH:MM (24h, UTC) for the daily trigger.
+  dailyAtUtc?: string;
+  // How many newest memories per kind to keep verbatim. Older ones in a
+  // kind are eligible for summary compression.
+  keepRecentPerKind?: number;
+  // Drop cycle log rows older than this (days). 0 disables pruning.
+  pruneCycleDays?: number;
 }
 
 export interface ChannelConfig {

@@ -18,6 +18,7 @@ import { runEffort } from "./commands/effort.js";
 import { runGuide } from "./commands/guide.js";
 import { runServe } from "./commands/serve.js";
 import { runPersonaCmd } from "./commands/persona.js";
+import { runCompact } from "./commands/compact.js";
 import * as subagent from "./commands/subagent.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
@@ -190,6 +191,35 @@ program.command("setup").description("Idempotent first-run bootstrap (profile, M
     interactive: !!opts.interactive,
     nonInteractive: !!opts.nonInteractive,
   }));
+
+// Compact — run memory compaction (or show what would run)
+program.command("compact [profile]")
+  .description("Compact memory (summarize old entries, prune stale cycle rows)")
+  .option("--dry-run", "show trigger state and policy without running")
+  .option("--force", "run even if no trigger fired")
+  .option("--schedule <mode>", "set schedule mode: threshold|daily|both|off")
+  .option("--threshold <frac>", "set threshold fraction (0-1), e.g. 0.75")
+  .option("--daily-at <HH:MM>", "set daily UTC time, e.g. 00:00")
+  .option("--keep <n>", "set keepRecentPerKind (int)")
+  .option("--prune-days <n>", "set pruneCycleDays (int, 0 disables)")
+  .option("--enable", "enable compaction")
+  .option("--disable", "disable compaction")
+  .action(async (p, opts) => {
+    const set: Record<string, unknown> = {};
+    if (opts.schedule) set.schedule = opts.schedule;
+    if (opts.threshold) set.threshold = Number(opts.threshold);
+    if (opts.dailyAt) set.dailyAtUtc = String(opts.dailyAt);
+    if (opts.keep) set.keepRecentPerKind = Number(opts.keep);
+    if (opts.pruneDays) set.pruneCycleDays = Number(opts.pruneDays);
+    if (opts.enable) set.enabled = true;
+    if (opts.disable) set.enabled = false;
+    await runCompact({
+      profile: defaultProfile(p),
+      force: !!opts.force,
+      dryRun: !!opts.dryRun,
+      set: Object.keys(set).length > 0 ? (set as never) : undefined,
+    });
+  });
 
 // Persona — view or re-run the wizard
 program.command("persona [profile]")

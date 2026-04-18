@@ -22,6 +22,9 @@ import { cmdRegister } from "./mcp.js";
 import { ask, askChoice, askList, detectTimezone, isInteractive } from "../prompt.js";
 import { loadPersona, savePersona } from "../persona-io.js";
 import { TONE_OPTIONS, type Persona } from "../persona.js";
+import { loadConfig, saveConfig } from "../config.js";
+import { mergeCompactionDefaults } from "../memory/compact.js";
+import type { CompactionConfig } from "../types.js";
 
 export const DEFAULT_PROFILE_NAME =
   process.env.BAJACLAW_DEFAULT_PROFILE ?? "default";
@@ -75,6 +78,18 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
     }
   } else if (!opts.silent && loadPersona(name)) {
     console.log(chalk.dim(`✓ persona already set — run \`bajaclaw persona\` to change`));
+  }
+
+  if (wantWizard) {
+    try {
+      const comp = await promptCompaction(name);
+      const cfg = loadConfig(name);
+      cfg.compaction = comp;
+      saveConfig(cfg);
+      console.log(chalk.green(`✓ compaction policy saved`));
+    } catch (e) {
+      if (!opts.silent) console.log(chalk.yellow(`(skipped compaction setup: ${(e as Error).message})`));
+    }
   }
 
   if (!opts.skipMcpRegister) {
@@ -155,6 +170,62 @@ async function promptPersona(profile: string): Promise<Persona> {
     interests: interests.length > 0 ? interests : (existing?.interests ?? undefined),
     doNots: doNots.length > 0 ? doNots : (existing?.doNots ?? undefined),
     createdAt: existing?.createdAt ?? new Date().toISOString(),
+  };
+}
+
+async function promptCompaction(profile: string): Promise<CompactionConfig> {
+  const existing = (() => {
+    try { return loadConfig(profile).compaction; }
+    catch { return undefined; }
+  })();
+  const base = mergeCompactionDefaults(existing);
+
+  console.log("");
+  console.log(chalk.dim("Agents learn over time. BajaClaw auto-compacts the memory pool so recall stays sharp."));
+  console.log(chalk.dim("Default: when memory hits 75% of the 200k-token reference context, or daily at 00:00 UTC."));
+  console.log("");
+
+  const schedule = (await askChoice(
+    chalk.bold("When should it compact?"),
+    ["both (threshold + daily) — recommended", "threshold only", "daily only", "off"],
+    "both (threshold + daily) — recommended",
+  ));
+  const mode: CompactionConfig["schedule"] =
+    schedule.startsWith("both") ? "both"
+    : schedule.startsWith("threshold") ? "threshold"
+    : schedule.startsWith("daily") ? "daily"
+    : "off";
+
+  if (mode === "off") {
+    return { ...base, enabled: false, schedule: "off" };
+  }
+
+  let threshold = base.threshold!;
+  if (mode === "threshold" || mode === "both") {
+    const raw = await ask(
+      chalk.bold("Trigger at what fraction of context window? (0.5–0.95)"),
+      String(base.threshold),
+    );
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0.1 && n <= 0.99) threshold = n;
+  }
+
+  let dailyAtUtc = base.dailyAtUtc!;
+  if (mode === "daily" || mode === "both") {
+    const raw = await ask(
+      chalk.bold("Daily time in UTC (HH:MM)?"),
+      base.dailyAtUtc,
+    );
+    if (/^\d{2}:\d{2}$/.test(raw)) dailyAtUtc = raw;
+  }
+
+  return {
+    enabled: true,
+    schedule: mode,
+    threshold,
+    dailyAtUtc,
+    keepRecentPerKind: base.keepRecentPerKind,
+    pruneCycleDays: base.pruneCycleDays,
   };
 }
 

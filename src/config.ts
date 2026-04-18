@@ -14,6 +14,14 @@ const DEFAULT: Partial<AgentConfig> = {
   maxTurns: 10,
   dashboardPort: 7337,
   memorySync: false,
+  compaction: {
+    enabled: true,
+    threshold: 0.75,
+    schedule: "both",
+    dailyAtUtc: "00:00",
+    keepRecentPerKind: 25,
+    pruneCycleDays: 30,
+  },
 };
 
 export function configPath(profile: string): string {
