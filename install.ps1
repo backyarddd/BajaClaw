@@ -10,4 +10,4 @@ if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
   Write-Host "BajaClaw drives it as a subprocess - install it first, then rerun."
   exit 1
 }
-npx create-bajaclaw @args
+npm install -g bajaclaw @args

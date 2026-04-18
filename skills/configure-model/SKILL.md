@@ -13,7 +13,8 @@ Haiku for fast heartbeat triage, Sonnet as a balanced default.
 
 ## Quick reference
 - Stored in `~/.bajaclaw/profiles/<profile>/config.json` → `"model"`.
-- Known ids: `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`.
+- Special value: `auto` routes per-task (haiku / sonnet / opus).
+- Known ids: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`.
   Any string is accepted — the backend CLI validates against your
   subscription.
 - Tradeoffs: Opus > Sonnet > Haiku in capability; Haiku > Sonnet > Opus in
@@ -22,7 +23,8 @@ Haiku for fast heartbeat triage, Sonnet as a balanced default.
 ## Procedure
 1. Show current: `bajaclaw model <profile>` (prints current + known models).
 2. Set: `bajaclaw model <new-model> <profile>`.
-   - Examples: `bajaclaw model claude-opus-4-5`,
+   - Examples: `bajaclaw model auto`,
+     `bajaclaw model claude-opus-4-7`,
      `bajaclaw model claude-haiku-4-5 researcher`.
 3. Or edit `~/.bajaclaw/profiles/<profile>/config.json` directly and set
    `"model": "<id>"`.

@@ -67,7 +67,7 @@ export async function check(opts: { force?: boolean } = {}): Promise<UpdateInfo 
 
 async function fetchLatest(): Promise<{ version: string; channel: "npm" | "github"; url: string } | null> {
   const pkg = readPkg();
-  const npmName = String(pkg.name ?? "create-bajaclaw");
+  const npmName = String(pkg.name ?? "bajaclaw");
   const cfg = (pkg as { bajaclaw?: { updateUrl?: string; npmName?: string } }).bajaclaw ?? {};
   const overrideUrl = cfg.updateUrl;
 
@@ -152,7 +152,7 @@ export function detectInstall(): InstallLocation {
   if (existsSync(join(root, ".git"))) return { kind: "git", path: root };
   // Heuristic: npm global usually has parent that is node_modules + .bin
   const rootUp = join(root, "..", "..");
-  if (/node_modules[/\\]create-bajaclaw/.test(root) || existsSync(join(rootUp, ".package-lock.json"))) {
+  if (/node_modules[/\\](bajaclaw|create-bajaclaw)/.test(root) || existsSync(join(rootUp, ".package-lock.json"))) {
     return { kind: "npm-global", path: root };
   }
   return { kind: "unknown", path: root };
@@ -180,7 +180,7 @@ export async function performUpdate(info: UpdateInfo | null): Promise<UpdateResu
   }
   // npm path
   const pkg = readPkg();
-  const npmName = String((pkg as { bajaclaw?: { npmName?: string } }).bajaclaw?.npmName ?? pkg.name ?? "create-bajaclaw");
+  const npmName = String((pkg as { bajaclaw?: { npmName?: string } }).bajaclaw?.npmName ?? pkg.name ?? "bajaclaw");
   const install = spawnSync("npm", ["install", "-g", `${npmName}@latest`], { encoding: "utf8" });
   return {
     ok: install.status === 0,

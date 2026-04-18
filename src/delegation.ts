@@ -10,7 +10,7 @@ export interface DelegateOptions extends ClaudeOptions {
 
 export async function delegateCoding(task: string, opts: DelegateOptions): Promise<ClaudeResult> {
   const merged: ClaudeOptions = {
-    model: opts.model ?? "claude-sonnet-4-5",
+    model: opts.model ?? "claude-opus-4-7",
     effort: opts.effort ?? "high",
     maxTurns: opts.maxTurns ?? 40,
     allowedTools: opts.allowedTools ?? ["Read", "Edit", "Write", "Bash", "Grep", "Glob"],

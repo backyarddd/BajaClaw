@@ -4,16 +4,19 @@
 //
 // Tiers:
 //   claude-haiku-4-5   trivial / triage / heartbeat
-//   claude-sonnet-4-5  default — most normal work
-//   claude-opus-4-5    planning, coding, deep research, reflection
+//   claude-sonnet-4-6  default — most normal work
+//   claude-opus-4-7    planning, coding, deep research, reflection
 
 import type { Model } from "./types.js";
 
 export const AUTO = "auto";
 
+// Default to the most recent model IDs. Users can override per profile
+// via `bajaclaw model <id>`; any string is accepted, the backend CLI
+// validates against subscription entitlement.
 export const HAIKU = "claude-haiku-4-5";
-export const SONNET = "claude-sonnet-4-5";
-export const OPUS = "claude-opus-4-5";
+export const SONNET = "claude-sonnet-4-6";
+export const OPUS = "claude-opus-4-7";
 
 export interface PickContext {
   /** The literal model field from the profile config. */

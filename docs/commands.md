@@ -9,7 +9,7 @@ Scaffold a new profile and agent descriptor.
 
 Options:
 - `--template <name>` — `outreach` / `research` / `support` / `social` / `code` / `custom` (default: `custom`)
-- `--model <id>` — model identifier (default: `claude-sonnet-4-5`)
+- `--model <id>` — model identifier (default: `auto` — routes per task)
 - `--effort <level>` — `low` / `medium` / `high` (default: `medium`)
 - `--force` — overwrite an existing profile
 
@@ -64,8 +64,9 @@ Strips references to unwanted legacy features.
 Show the configured model for a profile (with no id, lists known models
 with the current one marked). Set the model with an id.
 
-Known ids: `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`.
-Any string is accepted — the backend validates against your subscription.
+Known ids: `auto`, `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`.
+`auto` routes per-task (haiku/sonnet/opus). Any other string is passed
+through to the backend, which validates against your subscription.
 
 ### `bajaclaw effort [level] [profile]`
 Show or set the effort level. Values: `low`, `medium`, `high`. Default:

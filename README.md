@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.7.0
+          autonomous agents on your terms  ·  MIT  ·  v0.8.0
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -22,7 +22,7 @@ You install it once. It sets itself up. You run `bajaclaw start`. It goes.
 ## Install
 
 ```
-npm install -g create-bajaclaw
+npm install -g bajaclaw
 ```
 
 That's it. The post-install runs `bajaclaw setup` automatically, which:
@@ -39,7 +39,7 @@ that CLI uses is what BajaClaw uses. BajaClaw itself never sees credentials.
 First run, end-to-end:
 
 ```
-npm install -g create-bajaclaw       # installs + auto-setup
+npm install -g bajaclaw       # installs + auto-setup
 bajaclaw start                        # runs a cycle on the default profile
 ```
 
@@ -269,9 +269,9 @@ To tighten it later, edit `~/.bajaclaw/profiles/default/config.json`:
 {
   "name": "default",
   "template": "custom",
-  "model": "claude-sonnet-4-5",
+  "model": "auto",
   "effort": "medium",
-  "maxTurns": 20,
+  "maxTurns": 10,
   "allowedTools": ["Read", "Write", "Edit", "Bash"],
   "disallowedTools": []
 }
@@ -329,7 +329,7 @@ Override per profile:
 ```
 bajaclaw model                     # show current + list
 bajaclaw model auto                # (default) route per task
-bajaclaw model claude-opus-4-5     # pin to a single model
+bajaclaw model claude-opus-4-7     # pin to a single model
 ```
 
 ## Use BajaClaw as an OpenAI-compatible HTTP endpoint
@@ -391,7 +391,7 @@ bajaclaw update --check        # print delta, don't install
 bajaclaw update --yes          # install immediately
 ```
 
-On a global npm install, update runs `npm install -g create-bajaclaw@latest`.
+On a global npm install, update runs `npm install -g bajaclaw@latest`.
 On a git clone, it runs `git pull && npm install && npm run build`. Silence
 the notice with `BAJACLAW_NO_UPDATE_NOTICE=1`.
 

@@ -38,7 +38,7 @@ program
   .command("init [name]")
   .description("Scaffold a new agent profile")
   .option("--template <name>", "outreach|research|support|social|code|custom", "custom")
-  .option("--model <id>", "claude-opus-4-5|claude-sonnet-4-5|claude-haiku-4-5", "claude-sonnet-4-5")
+  .option("--model <id>", "auto|claude-opus-4-7|claude-sonnet-4-6|claude-haiku-4-5", "auto")
   .option("--effort <level>", "low|medium|high", "medium")
   .option("--force", "overwrite existing profile")
   .action(async (name, opts) => {
@@ -173,7 +173,7 @@ program.command("update").description("Check for and install a newer version")
 program.command("setup").description("Idempotent first-run bootstrap (default profile + MCP register + health check)")
   .option("--profile <name>", "profile name (default: 'default')")
   .option("--template <t>", "template: outreach|research|support|social|code|custom", "custom")
-  .option("--model <id>", "model id", "claude-sonnet-4-5")
+  .option("--model <id>", "model id (default: auto)", "auto")
   .option("--skip-mcp-register", "don't touch desktop MCP config")
   .option("--silent", "no output")
   .action(async (opts) => runSetup({

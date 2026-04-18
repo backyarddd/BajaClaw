@@ -12,7 +12,7 @@ Every call BajaClaw makes to the backend goes through `src/claude.ts` as
 | flag | purpose |
 |---|---|
 | `-p "<prompt>"` | one-shot prompt |
-| `--model <id>` | `claude-opus-4-5` / `claude-sonnet-4-5` / `claude-haiku-4-5` |
+| `--model <id>` | `claude-opus-4-7` / `claude-sonnet-4-6` / `claude-haiku-4-5` (resolved from `auto`) |
 | `--max-turns <n>` | tool-call budget |
 | `--allowedTools "..."` | comma-separated allowlist |
 | `--disallowedTools "..."` | comma-separated denylist |
