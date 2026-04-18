@@ -18,11 +18,18 @@ tasks.
 - Data: read directly from the profile's SQLite DB via `/api/*` routes.
 
 ## Procedure
-1. Run: `bajaclaw dashboard <profile>` (profile defaults to `default`).
+1. Start in the background so the shell returns to the agent:
+   `nohup bajaclaw dashboard <profile> >/tmp/bajaclaw-dashboard.log 2>&1 &`
+   (profile defaults to `default`). **Never run it in the foreground
+   from an agent cycle** — `bajaclaw dashboard` is a long-lived HTTP
+   server, so a blocking call would hang the Bash tool until timeout
+   and leave a child process holding stdout, which confuses the
+   backend exit-code handling.
 2. Open http://localhost:7337/ in a browser.
 3. To change the port: edit
    `~/.bajaclaw/profiles/<profile>/config.json` and set
-   `"dashboardPort": <N>`. Restart the command.
+   `"dashboardPort": <N>`. Kill the running server (`pkill -f
+   "bajaclaw dashboard"`) and re-run the backgrounded command above.
 
 ## Pitfalls
 - If port 7337 is taken, the server will fail to bind. Change the port or

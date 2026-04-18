@@ -167,6 +167,13 @@ function parseResult(
     command,
   };
 
+  // True when the JSON result block explicitly reported success. When
+  // it's set, trust the JSON over a non-zero exit code — claude can
+  // exit non-zero if a child process it spawned (e.g. a long-running
+  // dashboard server) leaves stdout/stderr pipes open past the
+  // parent's timeout, even though the turn itself completed cleanly.
+  let jsonReportedSuccess = false;
+
   // Try JSON parse regardless of exit code — claude sometimes emits
   // useful error detail in JSON even when exiting non-zero.
   if (jsonMode) {
@@ -212,6 +219,8 @@ function parseResult(
           base.error = obj.message as string;
           base.ok = false;
           base.text = "";
+        } else if (obj.subtype === "success" && obj.is_error === false) {
+          jsonReportedSuccess = true;
         } else if (obj.is_error === true) {
           const subtype = typeof obj.subtype === "string" ? obj.subtype : "";
           const numTurns = typeof obj.num_turns === "number" ? obj.num_turns : undefined;
@@ -239,7 +248,7 @@ function parseResult(
     }
   }
 
-  if (exitCode !== 0 && !base.error) {
+  if (exitCode !== 0 && !base.error && !jsonReportedSuccess) {
     // Prefer stderr, then stdout first-line fallback. Never echo the
     // entire stdout into the error field — it may be a multi-KB JSON.
     const trimmedStderr = stderr.trim();
@@ -250,6 +259,13 @@ function parseResult(
 
   // If we determined an error from JSON but exit was 0, still mark not-ok.
   if (base.error && base.ok) base.ok = false;
+
+  // Conversely: JSON explicitly said success. Honor that — ignore a
+  // non-zero exit caused by lingering child processes.
+  if (jsonReportedSuccess) {
+    base.ok = true;
+    base.error = undefined;
+  }
 
   return base;
 }

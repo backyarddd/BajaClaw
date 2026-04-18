@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { writeFileSync, readFileSync, existsSync, unlinkSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,6 +31,32 @@ export async function cmdStart(profile: string, foreground = false): Promise<voi
     }
     unlinkSync(pidFile);
   }
+
+  // Sweep unreferenced stale daemons — processes running `daemon run
+  // <profile>` that our pidfile doesn't point to. A daemon can orphan
+  // if the previous `daemon stop` killed the pidfile's launcher but
+  // not the detached child, or if the process was SIGKILLed without
+  // cleanup. Left alone, they all poll the same DB and (worse) all
+  // long-poll the telegram/discord gateways, causing duplicate replies.
+  const stale = findStaleDaemons(profile);
+  if (stale.length > 0) {
+    console.log(chalk.yellow(`sweeping ${stale.length} stale daemon process(es): ${stale.join(", ")}`));
+    for (const pid of stale) {
+      try { process.kill(pid, "SIGTERM"); } catch { /* already gone */ }
+    }
+    // Give them ~1s to exit cleanly, then SIGKILL anything still alive.
+    const deadline = Date.now() + 1000;
+    while (Date.now() < deadline) {
+      if (stale.every((p) => !isRunning(p))) break;
+      spawnSync("sleep", ["0.1"]);
+    }
+    for (const pid of stale) {
+      if (isRunning(pid)) {
+        try { process.kill(pid, "SIGKILL"); } catch { /* gone */ }
+      }
+    }
+  }
+
   ensureDir(profileDir(profile));
 
   if (foreground) return runLoop(profile);
@@ -145,4 +171,36 @@ function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout
 function isRunning(pid: number): boolean {
   if (!pid) return false;
   try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+// Find running processes whose command line contains `daemon run <profile>`.
+// Skip our own pid and any pid stored in the pidfile (stop before
+// calling this if you want to sweep the referenced daemon too).
+function findStaleDaemons(profile: string): number[] {
+  if (process.platform === "win32") return []; // `ps` unavailable
+  const needle = `daemon run ${profile}`;
+  const r = spawnSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
+  if (r.status !== 0 || !r.stdout) return [];
+  const ownPid = process.pid;
+  const referenced = readReferencedPid(profile);
+  const out: number[] = [];
+  for (const line of r.stdout.split("\n")) {
+    if (!line.includes(needle)) continue;
+    const m = line.match(/^\s*(\d+)\s/);
+    if (!m) continue;
+    const pid = Number(m[1]);
+    if (!pid || pid === ownPid || pid === referenced) continue;
+    // Exclude our own `ps` and anything not actually a bajaclaw daemon
+    // (e.g. a grep someone typed). Require "bajaclaw" to appear too.
+    if (!/bajaclaw/.test(line)) continue;
+    out.push(pid);
+  }
+  return out;
+}
+
+function readReferencedPid(profile: string): number {
+  try {
+    const p = Number(readFileSync(pidPath(profile), "utf8").trim());
+    return Number.isFinite(p) ? p : 0;
+  } catch { return 0; }
 }
