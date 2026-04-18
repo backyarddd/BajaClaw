@@ -61,13 +61,12 @@ Anything that satisfies that shape can replace the default. Forks welcome.
 
 ### How do auto-updates work?
 
-Once per 24h, `src/updater.ts` checks the npm registry for the current
-published version; if that 404s (as it currently does — BajaClaw isn't
-on the npm registry yet), it falls back to the GitHub raw
-`package.json` URL from the `bajaclaw.updateUrl` field. If a newer
-version is available, a one-line notice appears after your next
-command. `bajaclaw update` runs either
-`npm install -g github:backyarddd/BajaClaw` (if installed that way) or
+Once per 24h, `src/updater.ts` hits `https://registry.npmjs.org/bajaclaw/latest`
+for the current published version (falling back to the GitHub raw
+`package.json` URL in `bajaclaw.updateUrl` if the registry is
+unreachable). If a newer version is available, a one-line notice
+appears after your next command. `bajaclaw update` runs either
+`npm install -g bajaclaw@latest` (if installed via npm) or
 `git pull + npm install + npm run build` (if installed from a clone).
 
 Set `BAJACLAW_NO_UPDATE_NOTICE=1` to silence the notice. The check itself
