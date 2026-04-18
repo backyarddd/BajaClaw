@@ -8,7 +8,7 @@ import { Logger } from "../logger.js";
 import { pickAdapter } from "../scheduler/index.js";
 import { runCycle } from "../agent.js";
 import { openDb } from "../db.js";
-import { startAllGateways, replyToSource } from "../channels/gateway.js";
+import { startAllGateways, replyToSource, endTyping } from "../channels/gateway.js";
 import { startDashboardInProcess } from "./dashboard.js";
 import { loadConfig } from "../config.js";
 
@@ -151,13 +151,22 @@ async function runLoop(profile: string): Promise<void> {
       db.close();
       if (pending.c > 0) {
         const out = await runCycle({ profile });
-        if (out.source && out.ok && out.text) {
-          try { await replyToSource(profile, out.source, out.text); }
-          catch (e) { log.warn("daemon.reply.fail", { error: (e as Error).message, source: out.source }); }
-        } else if (out.source && !out.ok) {
-          const msg = `⚠️ cycle failed: ${out.error ?? "unknown error"}`;
-          try { await replyToSource(profile, out.source, msg); }
-          catch { /* ignore — already logged the fail */ }
+        if (out.source) {
+          // Always clear the typing indicator, even on the empty-text
+          // path — the gateway started one when the inbound message
+          // arrived and expects someone to end it.
+          try {
+            if (out.ok && out.text) {
+              await replyToSource(profile, out.source, out.text);
+            } else if (!out.ok) {
+              await replyToSource(profile, out.source, `⚠️ cycle failed: ${out.error ?? "unknown error"}`);
+            } else {
+              endTyping(out.source);
+            }
+          } catch (e) {
+            endTyping(out.source);
+            log.warn("daemon.reply.fail", { error: (e as Error).message, source: out.source });
+          }
         }
       }
       backoff = 1000;
