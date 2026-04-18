@@ -22,7 +22,9 @@ update-available notice.
 ## Procedure
 1. Check delta without installing: `bajaclaw update --check`
 2. Apply: `bajaclaw update --yes`
-   - Installed via npm `-g`: runs `npm install -g bajaclaw@latest`.
+   - Installed via npm `-g github:backyarddd/BajaClaw`: runs
+     `npm install -g github:backyarddd/BajaClaw` (reinstalls from HEAD
+     of main, which includes `prepare` → fresh `dist/`).
    - Installed from a git clone: runs `git pull && npm install && npm run build`.
 3. Silence the post-command notice (e.g. in scripts):
    export `BAJACLAW_NO_UPDATE_NOTICE=1` in the shell config.
