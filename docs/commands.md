@@ -13,6 +13,19 @@ Options:
 - `--effort <level>` — `low` / `medium` / `high` (default: `medium`)
 - `--force` — overwrite an existing profile
 
+### `bajaclaw chat [profile]`
+Interactive REPL for conversing with the agent. Each user message
+runs one BajaClaw cycle. Shows model / effort / context / 5h / weekly
+usage in the header; per-turn status line after each response.
+
+Options:
+- `--model <id>` — model or alias for the session. Doesn't write
+  `config.json`. Aliases: `auto`, `haiku`, `sonnet`, `opus`.
+
+Slash commands inside the REPL: `/help`, `/exit`, `/clear`, `/stats`,
+`/context`, `/model`, `/effort`, `/compact`, `/history`. See
+`docs/chat.md`.
+
 ### `bajaclaw start [profile]`
 Run a single cycle.
 

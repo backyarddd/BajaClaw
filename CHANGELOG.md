@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.11.0
+
+**`bajaclaw chat` — interactive REPL.** Drops you into a turn-by-turn
+conversation with the agent. Each user message runs one BajaClaw
+cycle; the last 10 turns are injected into the next prompt's `# Recent
+Chat` section so the agent remembers the conversation within the
+session. Post-cycle extraction still writes durable facts to the
+memory DB for persistence across sessions.
+
+Launch with `bajaclaw chat` or `bajaclaw chat <profile>`. Optional
+`--model auto|haiku|sonnet|opus|<full-id>` overrides the model for
+the session only (doesn't write to `config.json`).
+
+**Status header** on session start:
+
+```
+╭─ BajaClaw chat · default · v0.11.0 ─────────────────────────╮
+  agent      <persona name>
+  model      auto (routes haiku/sonnet/opus per task)
+  effort     medium
+  context    200k tokens · 8-turn cap
+
+  5h usage   3 cycles · 1.2k tokens · $0.012
+  week       28 cycles · 18k tokens · $0.142
+  (advisory counts from your local cycle log)
+
+  /help for commands · /exit or Ctrl-D to quit
+╰──────────────────────────────────────────────────────────────╯
+```
+
+**Per-turn status line** after every response:
+
+```
+· sonnet · medium · 1.2k in / 456 out · 3.2s · $0.003 · #42 ·
+```
+
+Fields: actual model used (auto-resolved), effort, input/output
+tokens, wall-clock duration, cost, cycle id.
+
+**Slash commands**:
+
+| command | purpose |
+|---|---|
+| `/help` | list commands |
+| `/exit` / `/quit` / `/q` | end session (or Ctrl-D) |
+| `/clear` | clear session history (durable memory untouched) |
+| `/stats` | session totals + 5h / 24h / 7d usage |
+| `/context` or `/ctx` | context window + per-cycle budget |
+| `/model [id\|alias]` | set session model (no config write) |
+| `/effort [low\|medium\|high]` | set effort (persists) |
+| `/compact` | run memory compaction now |
+| `/history` | dump this session's turns |
+
+**5h / weekly rate-limit usage** is tracked locally from the `cycles`
+table. BajaClaw can't see Anthropic's server-side subscription
+accounting — the displayed numbers are your local cycle counts and
+token totals, which you can compare to your plan on anthropic.com.
+
+**Underlying agent API changes** (useful if you embed `runCycle`):
+
+- `CycleInput.sessionHistory?: ChatTurn[]` — prior turns, injected as
+  `# Recent Chat`.
+- `CycleOutput.inputTokens`, `outputTokens`, `turns`, `model`, `tier`
+  are now populated from the backend JSON response.
+
+New docs: `docs/chat.md`, updated `docs/commands.md`.
+
 ## 0.10.3
 
 **Two install-time fixes.**

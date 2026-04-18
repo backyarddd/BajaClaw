@@ -32,7 +32,7 @@ import { synthesize as synthesizeSkill } from "./skills/auto-skiller.js";
 import { buildMcpConfig } from "./mcp/consumer.js";
 import { pickModel, budgetFor } from "./model-picker.js";
 import { serialize } from "./concurrency.js";
-import type { AgentConfig, ClaudeOptions } from "./types.js";
+import type { AgentConfig, ClaudeOptions, ChatTurn } from "./types.js";
 
 export interface CycleInput {
   profile: string;
@@ -42,6 +42,11 @@ export interface CycleInput {
   // Use "auto" to force auto-routing; any other string is passed verbatim
   // to the backend. Used by the HTTP API to support per-request model.
   modelOverride?: string;
+  // Optional. When provided, the prior turns are rendered into a
+  // "Recent Chat" section of the prompt so interactive chat preserves
+  // context within a session without waiting on the post-cycle
+  // extractor to populate durable memory. Newest turn last.
+  sessionHistory?: ChatTurn[];
 }
 
 export interface CycleOutput {
@@ -49,6 +54,11 @@ export interface CycleOutput {
   ok: boolean;
   text: string;
   costUsd?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  turns?: number;
+  model?: string;
+  tier?: "haiku" | "sonnet" | "opus";
   durationMs: number;
   dryRun?: boolean;
   prompt: string;
@@ -129,6 +139,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       skills: matched
         .map((s) => `## Skill: ${s.name}\n${s.body}`)
         .join("\n\n"),
+      recentChat: formatRecentChat(input.sessionHistory),
     });
 
     const cycleId = insertCycle(db, {
@@ -175,6 +186,8 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
         ok: false,
         text: result.text,
         durationMs: result.durationMs,
+        model: picked.model,
+        tier: picked.tier,
         prompt,
         command: result.command,
         error: result.error,
@@ -224,6 +237,11 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       ok: true,
       text: result.text,
       costUsd: result.costUsd,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      turns: result.turns,
+      model: picked.model,
+      tier: picked.tier,
       durationMs: result.durationMs,
       dryRun: result.dryRun,
       prompt,
@@ -232,6 +250,16 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
   } finally {
     db.close();
   }
+}
+
+function formatRecentChat(history?: ChatTurn[]): string {
+  if (!history || history.length === 0) return "";
+  return history
+    .map((t) => {
+      const role = t.role === "user" ? "User" : "Assistant";
+      return `**${role}**: ${t.content.slice(0, 1200)}`;
+    })
+    .join("\n\n");
 }
 
 function popTask(db: import("./db.js").DB): string | null {
@@ -275,6 +303,7 @@ interface AssembleInput {
   soulMd: string;
   heartbeat: string;
   skills: string;
+  recentChat?: string;
 }
 
 export function assemblePrompt(input: AssembleInput): string {
@@ -284,6 +313,7 @@ export function assemblePrompt(input: AssembleInput): string {
   if (input.heartbeat.trim()) sections.push(`# Heartbeat Schedule\n${input.heartbeat.trim()}`);
   if (input.memories.trim()) sections.push(`# Recalled Memories\n${input.memories.trim()}`);
   if (input.skills.trim()) sections.push(`# Active Skills\n${input.skills.trim()}`);
+  if (input.recentChat?.trim()) sections.push(`# Recent Chat\n${input.recentChat.trim()}`);
   sections.push(`# Current Task\n${input.task.trim()}`);
   return sections.join("\n\n---\n\n");
 }
