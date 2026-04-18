@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.11.2
+
+**Bulletproof chat + real cycle fixes.** Four issues from 0.11.1:
+
+1. **Display corruption — every line prefixed with `you ›`**.
+   The animated "thinking" indicator wrote `\r\x1b[2K` every 400ms.
+   readline in terminal mode interpreted each `\r` as a cursor move
+   and redrew its prompt, which interleaved with cycle output. Ripped
+   the animation out entirely. Now writes `<name> is thinking…` once
+   (static), then erases with cursor-up + clear-line (`\x1b[1A\x1b[2K`,
+   never `\r`). Zero interference with readline.
+
+2. **`bajaclaw chat` using event-based `rl.on('line', ...)`** had
+   subtle concurrency issues. Reverted to `readline/promises` with
+   `await rl.question(...)` in a `while` loop. Now that 0.11.1 fixed
+   the top-level `await parseAsync`, the loop stays alive across
+   turns. One turn at a time, sequential, no race conditions.
+
+3. **`[error] cycle.fail {"error":"exit 1"}`** when the agent tried
+   to use Edit/Bash/Write. BajaClaw spawns `claude` with `stdin:
+   ignore`, so claude's interactive permission prompts never got a
+   response and the subprocess bailed with exit 1. Fix: pass
+   `--dangerously-skip-permissions` by default. The agent runs
+   autonomously under the user's account — interactive approval
+   doesn't make sense in this context. Configurable via
+   `ClaudeOptions.skipPermissions: false` if you want to re-enable
+   prompts (and drive stdin yourself).
+
+4. **`parseResult` only surfaced `exit 1` when stderr was empty**.
+   Now tries to extract `error` / `is_error` / `type:error` fields
+   from the JSON response regardless of exit code, falls back to
+   stderr, then to the first stdout line. The chat REPL additionally
+   translates common error patterns (rate-limit, permission, credit)
+   into actionable messages.
+
+**`setup-telegram` and `setup-discord` skills rewritten (v0.2.0)**
+to explicitly default to **bidirectional chat** when the user asks
+to "set up telegram" / "connect discord" / etc. No more asking
+clarifying questions about use case — BajaClaw just wires up the
+bridge so you can message the agent from your phone and it replies
+from the same thread.
+
+Also bumped underlying tool permission: skills now state the agent
+has `Bash`/`Read`/`Write`/`Edit` and should execute the commands
+directly instead of printing them as instructions.
+
 ## 0.11.1
 
 **Chat REPL: stay-alive fix.** `bajaclaw chat` was exiting back to

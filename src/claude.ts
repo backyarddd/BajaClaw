@@ -55,6 +55,13 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   if (opts.disallowedTools?.length) args.push("--disallowedTools", opts.disallowedTools.join(","));
   if (opts.mcpConfig) args.push("--mcp-config", opts.mcpConfig);
   if (opts.systemPrompt) args.push("--system-prompt", opts.systemPrompt);
+  // Skip interactive permission prompts. BajaClaw spawns claude with
+  // stdin closed, so the interactive prompt would hang / auto-deny.
+  // The agent is trusted within the user's account; if they want
+  // per-tool confirmations they should use `claude` directly.
+  if (opts.skipPermissions !== false) {
+    args.push("--dangerously-skip-permissions");
+  }
   // JSON output always included when the flag is supported. runOnce checks support.
   return args;
 }
@@ -138,28 +145,46 @@ function parseResult(
     durationMs: Date.now() - start,
     command,
   };
-  if (exitCode !== 0) base.error = stderr || `exit ${exitCode}`;
-  if (!jsonMode) return base;
 
-  try {
-    const parsed = JSON.parse(stdout);
-    if (Array.isArray(parsed)) base.events = parsed as ClaudeEvent[];
-    else if (parsed && typeof parsed === "object") {
-      const obj = parsed as Record<string, unknown>;
-      if (Array.isArray(obj.messages)) base.events = obj.messages as ClaudeEvent[];
-      if (typeof obj.result === "string") base.text = obj.result;
-      if (typeof obj.total_cost_usd === "number") base.costUsd = obj.total_cost_usd;
-      else if (typeof obj.cost_usd === "number") base.costUsd = obj.cost_usd;
-      const usage = obj.usage as { input_tokens?: number; output_tokens?: number } | undefined;
-      if (usage) {
-        base.inputTokens = usage.input_tokens;
-        base.outputTokens = usage.output_tokens;
+  // Try JSON parse regardless of exit code — claude sometimes emits
+  // useful error detail in JSON even when exiting non-zero.
+  if (jsonMode) {
+    try {
+      const parsed = JSON.parse(stdout);
+      if (Array.isArray(parsed)) {
+        base.events = parsed as ClaudeEvent[];
+      } else if (parsed && typeof parsed === "object") {
+        const obj = parsed as Record<string, unknown>;
+        if (Array.isArray(obj.messages)) base.events = obj.messages as ClaudeEvent[];
+        if (typeof obj.result === "string") base.text = obj.result;
+        if (typeof obj.total_cost_usd === "number") base.costUsd = obj.total_cost_usd;
+        else if (typeof obj.cost_usd === "number") base.costUsd = obj.cost_usd;
+        const usage = obj.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+        if (usage) {
+          base.inputTokens = usage.input_tokens;
+          base.outputTokens = usage.output_tokens;
+        }
+        if (typeof obj.num_turns === "number") base.turns = obj.num_turns;
+        // Error extraction: fields claude uses across versions.
+        if (typeof obj.error === "string") base.error = obj.error;
+        else if (obj.type === "error" && typeof obj.message === "string") base.error = obj.message as string;
+        else if (obj.is_error === true && typeof obj.result === "string") base.error = obj.result;
       }
-      if (typeof obj.num_turns === "number") base.turns = obj.num_turns;
+    } catch {
+      // Non-JSON stdout. Could be a streaming fragment or a warning.
+      // Leave text as raw stdout.
     }
-  } catch {
-    // Non-JSON stdout; leave text as-is.
   }
+
+  if (exitCode !== 0 && !base.error) {
+    // Prefer stderr, then JSON-embedded hints, then stdout as last resort.
+    const trimmedStderr = stderr.trim();
+    if (trimmedStderr) base.error = trimmedStderr;
+    else if (base.text.trim() && base.text.trim() !== stdout.trim()) base.error = base.text.trim();
+    else if (stdout.trim()) base.error = stdout.trim().split("\n")[0]!.slice(0, 400);
+    else base.error = `backend exited ${exitCode} with no output`;
+  }
+
   return base;
 }
 
