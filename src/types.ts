@@ -135,6 +135,12 @@ export interface ScheduleEntry {
   next_run?: string;
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+  ts?: number;
+}
+
 export interface CycleRow {
   id: number;
   started_at: string;

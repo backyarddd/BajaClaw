@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.10.3
+          autonomous agents on your terms  ·  MIT  ·  v0.11.0
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -40,8 +40,15 @@ First run, end-to-end:
 
 ```
 npm install -g bajaclaw       # installs + auto-setup
-bajaclaw start                # runs a cycle on the default profile
+bajaclaw chat                 # interactive REPL (new in v0.11)
+bajaclaw start                # or run one scheduled cycle
 ```
+
+`bajaclaw chat` drops you into a turn-by-turn conversation with your
+agent. Shows model / effort / context / 5h & weekly usage in the
+header; per-turn status line reports tokens, cost, duration. Slash
+commands: `/help`, `/model`, `/effort`, `/stats`, `/compact`, `/exit`.
+See [docs/chat.md](docs/chat.md).
 
 > Prefer to track the bleeding edge? `npm install -g github:backyarddd/BajaClaw`
 > installs straight from main (runs the `prepare` script to build `dist/`).

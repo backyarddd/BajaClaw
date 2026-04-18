@@ -21,6 +21,7 @@ import { runGuide } from "./commands/guide.js";
 import { runServe } from "./commands/serve.js";
 import { runPersonaCmd } from "./commands/persona.js";
 import { runCompact } from "./commands/compact.js";
+import { runChat } from "./commands/chat.js";
 import * as subagent from "./commands/subagent.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
@@ -50,6 +51,16 @@ program
     const n = name ?? process.env.BAJACLAW_PROFILE;
     if (!n) { console.error("usage: bajaclaw init <name>"); process.exit(2); }
     await runInit({ name: n, template: opts.template, model: opts.model, effort: opts.effort, force: !!opts.force });
+  });
+
+program
+  .command("chat [profile]")
+  .description("Interactive chat REPL — converse with the agent turn-by-turn")
+  .option("--model <id>", "model or alias (auto|haiku|sonnet|opus|<full-id>)")
+  .action(async (p, opts) => {
+    const target = defaultProfile(p);
+    if (target === DEFAULT_PROFILE_NAME) await autoBootstrapIfNeeded();
+    await runChat({ profile: target, model: opts.model });
   });
 
 program
@@ -331,11 +342,13 @@ async function printWelcome(opts: { force?: boolean } = {}): Promise<void> {
     }
   } catch { /* health check optional */ }
 
+  console.log(chalk.bold("Start chatting:"));
+  console.log(`  ${chalk.cyan("bajaclaw chat")}                   ${chalk.dim("# interactive REPL — talk to your agent")}`);
+  console.log("");
   console.log(chalk.bold("First-time setup:"));
   console.log(`  ${chalk.cyan("bajaclaw setup --interactive")}    ${chalk.dim("# name your agent, set tone, topics, don'ts")}`);
   console.log(`  ${chalk.cyan("bajaclaw doctor")}                 ${chalk.dim("# full toolchain check")}`);
-  console.log(`  ${chalk.cyan("bajaclaw start --dry-run")}        ${chalk.dim("# preview the assembled prompt")}`);
-  console.log(`  ${chalk.cyan("bajaclaw start")}                  ${chalk.dim("# run a cycle")}`);
+  console.log(`  ${chalk.cyan("bajaclaw start")}                  ${chalk.dim("# one scheduled cycle (non-interactive)")}`);
   console.log("");
   console.log(chalk.bold("Common commands:"));
   console.log(`  ${chalk.cyan("bajaclaw dashboard")}              ${chalk.dim("# http://localhost:7337")}`);
