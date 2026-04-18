@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.14.10
+
+**Bottom rule actually renders now.** In 0.14.9 the bottom rule was
+drawn separately after the prompt. On every keystroke readline's
+`_refreshLine` calls `clearScreenDown`, which erased the bottom rule
+between each character. So you saw top rule + prompt and nothing
+below.
+
+### Fix
+
+Embed the bottom rule INSIDE the prompt string that `rl.question`
+receives, wrapped in CSI save-cursor (`\x1b[s`) / CSI restore-cursor
+(`\x1b[u`). Now every time readline rewrites the prompt (the initial
+draw and every keystroke), it re-emits the escape sequence + bottom
+rule. The restore pulls the visible cursor back to the prompt line so
+typing lands in the right place.
+
+CSI `\x1b[s`/`\x1b[u` were picked over DECSC/DECRC (`\x1b7`/`\x1b8`)
+because Node's `stripVTControlCharacters` only understands the CSI
+form. Without clean stripping, readline counts the escape bytes as
+visible prompt width and mis-positions the cursor.
+
 ## 0.14.9
 
 **Active prompt wrapped in top + bottom rules.** The 0.14.8 layout

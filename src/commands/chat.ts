@@ -113,31 +113,39 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   //    › user types here     ← cursor inside the sandwich
   //   ───────────────        ← bottom rule (drawn below cursor during typing)
   //
-  // After the user submits, the sandwich is erased (cursor-up + clear-
-  // to-end) and the turn is rendered flat in history:
-  //   › user input           ← plain, no rule around it
-  //   ● agent response...
-  //     haiku · 1.2s · $0.0012 · 2 turns · #42
-  //
-  // Then the loop prints a fresh sandwich for the next turn.
+  // Tricky bit: readline's `_refreshLine` clears the screen below the
+  // prompt on every keystroke. That wipes a separately-printed bottom
+  // rule. Fix: embed the bottom rule INSIDE the prompt string via
+  // DECSC/DECRC (`\x1b7` save / `\x1b8` restore), so readline re-emits
+  // it as part of every refresh.
   while (true) {
-    const sandwich = writeActivePromptSandwich();
+    const width = Math.min(stdout.columns || 80, 120);
+    const rule = chalk.dim("─".repeat(width));
+    stdout.write(rule + "\n");
+    // CSI save-cursor (`\x1b[s`) and CSI restore-cursor (`\x1b[u`)
+    // get stripped cleanly by Node's `stripVTControlCharacters`, so
+    // readline's prompt-width calculation ignores them. That keeps
+    // cursor tracking accurate while the terminal still obeys the
+    // escape sequences to park the visible cursor on the prompt line.
+    const promptWithBottomRule =
+      chalk.cyan(" › ") + "\x1b[s" + "\n" + rule + "\x1b[u";
+
     let input: string;
     try {
-      const raw = await rl.question("");
+      const raw = await rl.question(promptWithBottomRule);
       input = raw.replace(/\x16/g, "\n").trim();
     } catch {
-      eraseActivePromptSandwich(sandwich);
       break; // rl closed (EOF / Ctrl-D)
     }
 
-    // Clear the sandwich (top rule + prompt line + bottom rule). The
-    // clean "› user input" line for history is reprinted below.
-    eraseActivePromptSandwich(sandwich);
+    // Erase the full sandwich (top rule + prompt line + bottom rule).
+    // After rl.question resolves, cursor is on the line below the
+    // bottom rule. Go up 3 rows, back to column 0, clear to end of
+    // screen. Then reprint the user input as plain history.
+    stdout.write("\x1b[3A\r\x1b[0J");
 
     if (!input) continue;
 
-    // Reprint user input as plain history line.
     stdout.write(chalk.cyan(" › ") + input + "\n");
 
     // Slash commands
@@ -283,54 +291,6 @@ function installPasteShim(): PasteShim {
   };
 
   return { input: proxy, dispose };
-}
-
-// ───────────────────────────────────────────────────────────────
-// Active-prompt sandwich
-//
-// Draw: top_rule \n " › " [save cursor] \n bottom_rule [restore cursor]
-//
-// Net result on screen:
-//   ─────────────
-//    › _                    ← cursor parked here, user types
-//   ─────────────
-//
-// Limitation: while typing, if input wraps past terminal width,
-// readline's echo overwrites the bottom-rule line. The erase logic
-// doesn't know how many lines the wrapped input occupied, so the
-// cleanup may leave stray glyphs on very long inputs. For typical
-// chat-length queries this is invisible.
-// ───────────────────────────────────────────────────────────────
-
-interface PromptSandwich {
-  ruleLines: number; // 2 (top + bottom), used for erase math
-}
-
-function writeActivePromptSandwich(): PromptSandwich {
-  const width = Math.min(stdout.columns || 80, 120);
-  const rule = chalk.dim("─".repeat(width));
-  // Top rule + newline, prompt marker (cursor rests here), then save
-  // cursor, write newline + bottom rule, restore cursor.
-  stdout.write(rule + "\n");
-  stdout.write(chalk.cyan(" › "));
-  stdout.write("\x1b[s"); // DECSC: save cursor
-  stdout.write("\n" + rule);
-  stdout.write("\x1b[u"); // DECRC: restore cursor
-  return { ruleLines: 2 };
-}
-
-function eraseActivePromptSandwich(_s: PromptSandwich): void {
-  // When rl.question resolved, readline emitted \n after the user's
-  // input, so the cursor is on the column-0 of the line below the
-  // prompt row (which is the bottom-rule row). We need to clear the
-  // top rule (line above prompt), the prompt+input line, and the
-  // bottom rule line.
-  //
-  // Move cursor up 2 lines (to the top rule), then erase from cursor
-  // down to end of screen. That wipes top rule + input line + bottom
-  // rule in one shot and leaves cursor at the start of a fresh line
-  // ready for history output.
-  stdout.write("\x1b[2A\r\x1b[0J");
 }
 
 // ───────────────────────────────────────────────────────────────
