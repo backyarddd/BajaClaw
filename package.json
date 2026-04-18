@@ -1,6 +1,6 @@
 {
   "name": "bajaclaw",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "BajaClaw — autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {
@@ -26,7 +26,13 @@
     "skills/",
     "templates/"
   ],
-  "keywords": ["claude", "agent", "autonomous", "mcp", "cli"],
+  "keywords": [
+    "claude",
+    "agent",
+    "autonomous",
+    "mcp",
+    "cli"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=20"
@@ -37,7 +43,8 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "execa": "^9.5.0",
-    "ora": "^8.1.0"
+    "ora": "^8.1.0",
+    "yaml": "^2.8.3"
   },
   "optionalDependencies": {
     "discord.js": "^14.16.0",

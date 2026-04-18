@@ -137,6 +137,49 @@ export interface Skill {
   body: string;
   path: string;
   scope: SkillScope;
+
+  // ── Foreign-format compat (OpenClaw + Hermes Agent) ───────────────
+  // `origin` is derived from which metadata block is present in the
+  // frontmatter: `metadata.openclaw`/`clawdbot`/`clawdis` → "openclaw",
+  // `metadata.hermes` → "hermes", otherwise "bajaclaw".
+  origin?: SkillOrigin;
+  // hermes `platforms` or openclaw `os`. Values: "macos" | "linux" |
+  // "windows" | "darwin". Skill is skipped at load time if the current
+  // platform isn't in the list.
+  platforms?: string[];
+  tags?: string[];
+  homepage?: string;
+  emoji?: string;
+  primaryEnv?: string;
+  // env vars the skill expects. Normalized from openclaw
+  // `requires.env` or hermes `required_environment_variables[].name`.
+  requiredEnv?: string[];
+  // openclaw `requires.bins` — all must be on PATH.
+  requiredBins?: string[];
+  // openclaw `requires.anyBins` — at least one must be on PATH.
+  anyBins?: string[];
+  // hermes conditional activation hints.
+  requiresTools?: string[];
+  requiresToolsets?: string[];
+  fallbackForTools?: string[];
+  fallbackForToolsets?: string[];
+  // openclaw install specs.
+  install?: SkillInstallSpec[];
+  // hermes `related_skills`.
+  related?: string[];
+}
+
+export type SkillOrigin = "bajaclaw" | "openclaw" | "hermes";
+
+export interface SkillInstallSpec {
+  kind: "brew" | "node" | "go" | "uv";
+  // Format-dependent identifier. `formula` (brew), `package` (node/uv),
+  // `module` (go). Kept loose because openclaw install specs evolve.
+  formula?: string;
+  package?: string;
+  module?: string;
+  bins?: string[];
+  label?: string;
 }
 
 export type SkillScope =
