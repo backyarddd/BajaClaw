@@ -12,7 +12,7 @@ means for your Anthropic account.
 - BajaClaw never calls Anthropic's API directly.
 - BajaClaw only uses documented `claude` CLI flags.
 - BajaClaw caps its own usage with a rate limit and circuit breaker.
-- BajaClaw serializes cycles per profile — one subprocess at a time.
+- BajaClaw serializes cycles per profile - one subprocess at a time.
 
 Your Anthropic Terms of Service apply to whatever automation you
 configure, the same way they'd apply if you were typing `claude -p`
@@ -36,7 +36,7 @@ claude -p "<prompt>" \
 
 These are all documented, user-facing flags. BajaClaw:
 
-- Finds the binary via `which claude` / `where.exe claude` — no hardcoded paths.
+- Finds the binary via `which claude` / `where.exe claude` - no hardcoded paths.
 - Runs it with `execa`, passing arguments as a JS array with `shell: false`.
   No string-concatenated shell commands.
 - Parses the JSON output format. Falls back to raw text if the flag
@@ -51,7 +51,7 @@ BajaClaw does not:
 - Proxy requests through any Anthropic-facing server.
 - Spoof a different client identity.
 - Use any undocumented CLI flag.
-- Evade rate limits imposed by the backend — when the CLI returns a
+- Evade rate limits imposed by the backend - when the CLI returns a
   rate-limit error, BajaClaw propagates it and trips its own circuit
   breaker.
 
@@ -85,7 +85,7 @@ a cycle **only if there are pending tasks**. An idle daemon makes zero
 backend calls.
 
 The OS-scheduler heartbeat installed by `bajaclaw daemon install` runs
-`*/15 * * * *` by default — four cycles per hour if continuously
+`*/15 * * * *` by default - four cycles per hour if continuously
 active. You can tune the schedule in `HEARTBEAT.md` or by editing the
 scheduler entry directly.
 
@@ -94,13 +94,13 @@ scheduler entry directly.
 When a profile's model is `auto` (the default), BajaClaw routes each
 task to the cheapest capable model:
 
-- **Haiku** — triage, status checks, short answers, heartbeats
-- **Sonnet** — most normal work
-- **Opus** — planning, coding, deep research, reflection
+- **Haiku** - triage, status checks, short answers, heartbeats
+- **Sonnet** - most normal work
+- **Opus** - planning, coding, deep research, reflection
 
 This is a heuristic classifier in
 [`src/model-picker.ts`](../src/model-picker.ts) that runs before the
-backend call — no extra tokens spent on routing. Same-or-lower model
+backend call - no extra tokens spent on routing. Same-or-lower model
 is picked per cycle; you can override per-profile with
 `bajaclaw model <id>`.
 
@@ -119,7 +119,7 @@ cost of most cycles to a single short backend call.
 ## Running the HTTP API
 
 `bajaclaw serve` exposes an OpenAI-compatible endpoint. Each request is
-one full cycle — and the same serialization, rate limiter, and
+one full cycle - and the same serialization, rate limiter, and
 circuit breaker apply. You cannot spawn parallel cycles from the API.
 
 The API refuses to bind a non-localhost address without an API key.
@@ -133,7 +133,7 @@ LAN or the internet.
   all at full throttle.
 - Don't disable the rate limiter and daemon its way through a real
   backlog.
-- Don't bypass the circuit breaker by wrapping cycles in retries —
+- Don't bypass the circuit breaker by wrapping cycles in retries -
   failures are signals, not speed bumps.
 - Don't expose the HTTP API publicly without auth **and** rate-limit
   proxy in front.
@@ -143,7 +143,7 @@ LAN or the internet.
 - Keep `model: auto` unless you have a reason to pin.
 - Keep the default rate limit unless your plan allows more and you need it.
 - Read Anthropic's current ToS and acceptable-use policy for your plan.
-- If you see rate-limit errors, let the breaker cool down — don't
+- If you see rate-limit errors, let the breaker cool down - don't
   force-run cycles during backoff.
 - Treat BajaClaw like any long-running automation you'd wire into a
   production account: observable, bounded, and easy to shut off.

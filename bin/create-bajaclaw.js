@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// npx create-bajaclaw [name] — bootstrap BajaClaw.
+// npx create-bajaclaw [name] - bootstrap BajaClaw.
 // With no args: runs `bajaclaw setup` to create the default profile.
 // With a name: runs `bajaclaw init <name>` to scaffold that specific profile.
 import { spawnSync } from "node:child_process";

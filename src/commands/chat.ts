@@ -1,8 +1,8 @@
-// `bajaclaw chat [profile]` — interactive REPL.
+// `bajaclaw chat [profile]` - interactive REPL.
 //
 // Design notes:
 // - Uses `readline/promises` with `.question()` in a `while` loop.
-//   Readline is only "active" while awaiting user input — while the
+//   Readline is only "active" while awaiting user input - while the
 //   cycle runs, it's idle, so stdout writes don't fight with its
 //   terminal-mode redraw logic.
 // - No animated spinner. A static "…is thinking…" line is written
@@ -96,10 +96,10 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   // Bracketed-paste shim. Terminals that support bracketed paste
   // (xterm, iTerm, Terminal.app, etc.) wrap pasted content in
   // \x1b[200~ ... \x1b[201~. Inside those markers, newlines should
-  // be treated as literal text — not as "submit this line".
+  // be treated as literal text - not as "submit this line".
   //
   // We intercept stdin, replace in-paste \r and \n with a marker
-  // (\x16 SYN — non-printing, very unlikely in real input), feed
+  // (\x16 SYN - non-printing, very unlikely in real input), feed
   // the rewritten stream to readline, then swap the marker back to
   // a real newline when rl.question() resolves.
   const paste = installPasteShim();
@@ -263,7 +263,7 @@ function installPasteShim(): PasteShim {
 }
 
 // ───────────────────────────────────────────────────────────────
-// Thinking indicator — static, erased on response
+// Thinking indicator - static, erased on response
 // ───────────────────────────────────────────────────────────────
 
 function writeThinkingLine(agentName: string): void {
@@ -285,11 +285,11 @@ function formatCycleError(r: CycleOutput | null): string {
   const raw = (r.error ?? "").trim();
   if (!raw) return "backend returned no output";
 
-  // Max turns — translate claude.ts sentinel into a chat-friendly tip.
+  // Max turns - translate claude.ts sentinel into a chat-friendly tip.
   const maxTurnsMatch = raw.match(/^max_turns_hit:(\d+|\?)/);
   if (maxTurnsMatch) {
     const used = maxTurnsMatch[1];
-    return `ran out of turns (${used} used this cycle). The task needed more tool calls than the per-cycle budget. Try: (a) break it into smaller asks, (b) "/model opus" for a higher cap, or (c) just send the request again — the agent often finishes on retry.`;
+    return `ran out of turns (${used} used this cycle). The task needed more tool calls than the per-cycle budget. Try: (a) break it into smaller asks, (b) "/model opus" for a higher cap, or (c) just send the request again - the agent often finishes on retry.`;
   }
 
   if (/permission|needs write/i.test(raw)) {
@@ -299,7 +299,7 @@ function formatCycleError(r: CycleOutput | null): string {
     return "rate-limited by Anthropic. Wait a few minutes and retry.";
   }
   if (/credit|quota|billing/i.test(raw)) {
-    return `${raw} — check your Anthropic plan at anthropic.com.`;
+    return `${raw} - check your Anthropic plan at anthropic.com.`;
   }
   if (/^exit \d+$/i.test(raw)) {
     return `backend exited (${raw}) with no detail. Check the profile log: bajaclaw daemon logs`;
@@ -351,7 +351,7 @@ function printHeader(
   console.log("");
   console.log(`${chalk.bold("  5h usage  ")} ${formatUsage(fiveH)}`);
   console.log(`${chalk.bold("  week      ")} ${formatUsage(week)}`);
-  console.log(chalk.dim("  (advisory counts from your local cycle log — compare to your plan)"));
+  console.log(chalk.dim("  (advisory counts from your local cycle log - compare to your plan)"));
   console.log("");
   console.log(chalk.dim("  /help for commands · /exit or Ctrl-D to quit"));
   console.log(chalk.bold.cyan("╰" + "─".repeat(58) + "╯"));
@@ -498,7 +498,7 @@ async function handleSlash(input: string, ctx: SlashCtx): Promise<"exit" | "cont
       try {
         const decision = shouldCompact(db, ctx.cfg.compaction);
         if (!decision.yes) {
-          console.log(chalk.dim(`no trigger — ${decision.reason}. Running anyway (--force).`));
+          console.log(chalk.dim(`no trigger - ${decision.reason}. Running anyway (--force).`));
         }
         console.log(chalk.cyan("compacting…"));
         const r = await compact(db, ctx.cfg.compaction);

@@ -8,7 +8,7 @@ effort: low
 ---
 
 ## When to use
-User wants cycles to think longer or finish faster — e.g. bump to `high`
+User wants cycles to think longer or finish faster - e.g. bump to `high`
 for a weekly reflection, drop to `low` for noisy triage heartbeats.
 
 ## Quick reference
@@ -25,7 +25,7 @@ for a weekly reflection, drop to `low` for noisy triage heartbeats.
 4. Change takes effect on the next cycle.
 
 ## Pitfalls
-- Higher effort ≠ better answers for trivial tasks — it just burns more
+- Higher effort ≠ better answers for trivial tasks - it just burns more
   tokens.
 - Triage cycles at `high` slow the entire queue. Keep routine work at
   `low` or `medium`.

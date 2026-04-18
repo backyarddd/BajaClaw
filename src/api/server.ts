@@ -2,10 +2,10 @@
 //
 // Endpoints:
 //   GET  /health
-//   GET  /v1/models                    — lists exposed profiles as models
-//   POST /v1/chat/completions          — OpenAI chat (stream + non-stream)
-//   POST /v1/bajaclaw/cycle            — native: { profile, task } -> full CycleOutput
-//   POST /v1/bajaclaw/tasks            — native: enqueue without waiting
+//   GET  /v1/models                    - lists exposed profiles as models
+//   POST /v1/chat/completions          - OpenAI chat (stream + non-stream)
+//   POST /v1/bajaclaw/cycle            - native: { profile, task } -> full CycleOutput
+//   POST /v1/bajaclaw/tasks            - native: enqueue without waiting
 //
 // Auth: if config.api.apiKey is set, require `Authorization: Bearer <key>`.
 // Bind: defaults to 127.0.0.1 unless config.api.host is explicit.
@@ -184,12 +184,12 @@ function listProfilesAsModels(exposed?: string[]): { id: string; object: "model"
   const now = Math.floor(Date.now() / 1000);
   const out: { id: string; object: "model"; created: number; owned_by: "bajaclaw" }[] = [];
 
-  // Bare profile names — use each profile's configured model.
+  // Bare profile names - use each profile's configured model.
   for (const id of names) {
     out.push({ id, object: "model", created: now, owned_by: "bajaclaw" });
   }
 
-  // profile:model virtual entries — pick any model per request without
+  // profile:model virtual entries - pick any model per request without
   // touching profile config.
   for (const id of names) {
     for (const m of KNOWN_MODELS) {
@@ -197,7 +197,7 @@ function listProfilesAsModels(exposed?: string[]): { id: string; object: "model"
     }
   }
 
-  // Bare model-id shortcuts — apply to the default profile.
+  // Bare model-id shortcuts - apply to the default profile.
   if (names.includes("default")) {
     for (const m of KNOWN_MODELS) {
       out.push({ id: m.id, object: "model", created: now, owned_by: "bajaclaw" });

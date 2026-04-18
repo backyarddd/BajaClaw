@@ -1,8 +1,8 @@
 # HTTP API
 
 BajaClaw can expose itself as an OpenAI-compatible HTTP endpoint. Any
-client that speaks the OpenAI chat API — Cursor, Open WebUI, LibreChat,
-LangChain, LlamaIndex, curl, the `openai` SDKs — can drive BajaClaw as if
+client that speaks the OpenAI chat API - Cursor, Open WebUI, LibreChat,
+LangChain, LlamaIndex, curl, the `openai` SDKs - can drive BajaClaw as if
 it were an LLM. Each request is a full BajaClaw cycle: memory recall,
 skill matching, MCP inheritance, the backend call, post-cycle extract.
 
@@ -63,7 +63,7 @@ Lists exposed BajaClaw profiles as OpenAI-format model entries.
 The endpoint lists the bare profile names, then `<profile>:<model>`
 virtual entries for each known model, and finally bare model-id
 shortcuts (which apply to the `default` profile). Any string you send
-is still parsed — the list is a hint, not a hard whitelist.
+is still parsed - the list is a hint, not a hard whitelist.
 
 ### `POST /v1/chat/completions`
 
@@ -81,15 +81,15 @@ OpenAI ChatCompletion. Non-streaming or SSE streaming.
 }
 ```
 
-**Model field — how it's parsed**
+**Model field - how it's parsed**
 
 BajaClaw supports three forms. Each resolves to a `(profile, modelOverride?)` pair:
 
 | request `model` | profile | model override | meaning |
 |---|---|---|---|
-| `default` | `default` | — | use the profile's configured model (may be `auto`) |
-| `bajaclaw:default` | `default` | — | same, with explicit namespace |
-| `researcher` | `researcher` | — | any profile name works |
+| `default` | `default` | - | use the profile's configured model (may be `auto`) |
+| `bajaclaw:default` | `default` | - | same, with explicit namespace |
+| `researcher` | `researcher` | - | any profile name works |
 | `default:claude-opus-4-7` | `default` | `claude-opus-4-7` | **force Opus for this one request** |
 | `bajaclaw:researcher:claude-sonnet-4-6` | `researcher` | `claude-sonnet-4-6` | same, namespaced |
 | `default:auto` | `default` | `auto` | force auto-routing for this request |
@@ -99,7 +99,7 @@ BajaClaw supports three forms. Each resolves to a `(profile, modelOverride?)` pa
 So: if your profile's configured model is `auto` and you send
 `"model": "default"`, you get auto-routing. If you send
 `"model": "default:claude-opus-4-7"` on the same profile, you force
-Opus for just that request — the profile's config is not modified.
+Opus for just that request - the profile's config is not modified.
 
 **Answer to "does it auto-route to the model BajaClaw is pointed at?"**
 Yes. The request uses the profile's configured model unless you
@@ -149,7 +149,7 @@ data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"mod
 data: [DONE]
 ```
 
-Note: pseudo-streamed in v0.6 — the full cycle runs, then the response is
+Note: pseudo-streamed in v0.6 - the full cycle runs, then the response is
 chunked out. True token-streaming is on the roadmap.
 
 ### `POST /v1/bajaclaw/cycle`
@@ -180,7 +180,7 @@ Native endpoint. Runs a cycle, returns the full `CycleOutput`.
 }
 ```
 
-Use this when you want the cycle id, cost, and assembled prompt — not
+Use this when you want the cycle id, cost, and assembled prompt - not
 just the chat-shaped reply.
 
 ### `POST /v1/bajaclaw/tasks`
@@ -208,7 +208,7 @@ If `apiKey` is set in config or via `--api-key`, every request (except
 `401`.
 
 Non-localhost binds (`--host 0.0.0.0` or a real interface) require an API
-key — the server refuses to start without one.
+key - the server refuses to start without one.
 
 ## CORS
 
@@ -267,7 +267,7 @@ curl -N http://localhost:8765/v1/chat/completions \
 
 Point the tool's "OpenAI-compatible" settings at
 `http://localhost:8765/v1`. Use any exposed profile name as the "model".
-If the tool requires an API key field, put any string — BajaClaw ignores
+If the tool requires an API key field, put any string - BajaClaw ignores
 it unless you've enabled auth.
 
 ## Running under a supervisor
@@ -275,7 +275,7 @@ it unless you've enabled auth.
 `bajaclaw serve` is a long-running foreground process. Options:
 
 - **launchd/systemd/pm2**: wrap it so it auto-starts and restarts on
-  crash. BajaClaw's own daemon (`bajaclaw daemon`) is separate — it
+  crash. BajaClaw's own daemon (`bajaclaw daemon`) is separate - it
   handles the heartbeat loop, not the HTTP API.
 - **nginx/Caddy reverse proxy**: put TLS in front, add rate limits, map
   to a subdomain. BajaClaw only needs an inbound HTTP connection.
@@ -285,7 +285,7 @@ it unless you've enabled auth.
 - Every request = one full cycle = one backend call. Rate-limit in front
   if you expose the API broadly.
 - BajaClaw's memory, skills, and MCP servers apply to every API request.
-  Callers are not fresh sessions — prior memory shapes responses. For a
+  Callers are not fresh sessions - prior memory shapes responses. For a
   stateless service, use a profile with `memorySync: false` and prune
   the memories table periodically.
 - No function/tool calling in the ChatCompletion contract yet. The agent

@@ -11,7 +11,7 @@ npm test
 ```
 
 Node 20+. `better-sqlite3` ships prebuilt binaries for the common
-platforms — if yours is exotic, you may need a toolchain.
+platforms - if yours is exotic, you may need a toolchain.
 
 ## Running from source
 
@@ -26,12 +26,12 @@ The launcher at `bin/bajaclaw.js` uses `tsx` to run `src/cli.ts` in dev, or
 
 ## Layout
 
-- `src/` — TypeScript, strict mode
-- `templates/<template>/` — starter files copied on `bajaclaw init`
-- `skills/` — built-in SKILL.md bundles
-- `docs/` — user + dev documentation
-- `tests/` — `node --test` smoke tests
-- `bin/` — node launchers
+- `src/` - TypeScript, strict mode
+- `templates/<template>/` - starter files copied on `bajaclaw init`
+- `skills/` - built-in SKILL.md bundles
+- `docs/` - user + dev documentation
+- `tests/` - `node --test` smoke tests
+- `bin/` - node launchers
 
 ## Style
 
@@ -55,7 +55,7 @@ The launcher at `bin/bajaclaw.js` uses `tsx` to run `src/cli.ts` in dev, or
 - Run `npm run lint && npm test` before opening.
 - Add/update tests for behaviour changes.
 - Update `CHANGELOG.md` under the current unreleased section.
-- Don't bump `version` in `package.json` — that's done in release.
+- Don't bump `version` in `package.json` - that's done in release.
 
 ## Release checklist
 
@@ -65,7 +65,7 @@ The launcher at `bin/bajaclaw.js` uses `tsx` to run `src/cli.ts` in dev, or
 4. `git push && git push --tags`
 5. `npm publish`
 
-BajaClaw's auto-update checks the npm registry — once you `npm publish`, all
+BajaClaw's auto-update checks the npm registry - once you `npm publish`, all
 installed clients see the update notice within 24h.
 
 ## License

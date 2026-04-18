@@ -8,10 +8,10 @@ Full command reference. Every command accepts `--help`.
 Scaffold a new profile and agent descriptor.
 
 Options:
-- `--template <name>` — `outreach` / `research` / `support` / `social` / `code` / `custom` (default: `custom`)
-- `--model <id>` — model identifier (default: `auto` — routes per task)
-- `--effort <level>` — `low` / `medium` / `high` (default: `medium`)
-- `--force` — overwrite an existing profile
+- `--template <name>` - `outreach` / `research` / `support` / `social` / `code` / `custom` (default: `custom`)
+- `--model <id>` - model identifier (default: `auto` - routes per task)
+- `--effort <level>` - `low` / `medium` / `high` (default: `medium`)
+- `--force` - overwrite an existing profile
 
 ### `bajaclaw chat [profile]`
 Interactive REPL for conversing with the agent. Each user message
@@ -19,7 +19,7 @@ runs one BajaClaw cycle. Shows model / effort / context / 5h / weekly
 usage in the header; per-turn status line after each response.
 
 Options:
-- `--model <id>` — model or alias for the session. Doesn't write
+- `--model <id>` - model or alias for the session. Doesn't write
   `config.json`. Aliases: `auto`, `haiku`, `sonnet`, `opus`.
 
 Slash commands inside the REPL: `/help`, `/exit`, `/clear`, `/stats`,
@@ -30,8 +30,8 @@ Slash commands inside the REPL: `/help`, `/exit`, `/clear`, `/stats`,
 Run a single cycle.
 
 Options:
-- `--task <text>` — override the task (otherwise: pull from tasks queue, or emit a heartbeat prompt)
-- `--dry-run` — assemble the prompt, print the argv, skip exec
+- `--task <text>` - override the task (otherwise: pull from tasks queue, or emit a heartbeat prompt)
+- `--dry-run` - assemble the prompt, print the argv, skip exec
 
 ### `bajaclaw dry-run [profile]`
 Shortcut for `start --dry-run`.
@@ -53,11 +53,11 @@ Serve the local dashboard on the port from `config.json` (default 7337).
 Expose BajaClaw as an OpenAI-compatible HTTP endpoint.
 
 Options:
-- `--host <host>` — bind host (default `127.0.0.1`)
-- `--port <n>` — bind port (default `8765`)
-- `--api-key <key>` — require bearer auth; required for non-localhost binds
-- `--expose <names...>` — allowlist of profile names; default exposes all
-- `--stream-delay <ms>` — delay per pseudo-streamed chunk (default 20)
+- `--host <host>` - bind host (default `127.0.0.1`)
+- `--port <n>` - bind port (default `8765`)
+- `--api-key <key>` - require bearer auth; required for non-localhost binds
+- `--expose <names...>` - allowlist of profile names; default exposes all
+- `--stream-delay <ms>` - delay per pseudo-streamed chunk (default 20)
 
 Persistent config: `~/.bajaclaw/api.json`. CLI flags override.
 Endpoints: `GET /health`, `GET /v1/models`, `POST /v1/chat/completions`,
@@ -88,17 +88,17 @@ the agent keeps learning without the DB growing unbounded. See
 `docs/compaction.md`.
 
 Options:
-- `--dry-run` — show pool size, trigger state, and policy; don't run.
-- `--force` — run even if no trigger fired.
-- `--schedule <mode>` — `threshold` / `daily` / `both` / `off`.
-- `--threshold <frac>` — 0.1–0.99; default 0.75 of a 200k-token
+- `--dry-run` - show pool size, trigger state, and policy; don't run.
+- `--force` - run even if no trigger fired.
+- `--schedule <mode>` - `threshold` / `daily` / `both` / `off`.
+- `--threshold <frac>` - 0.1–0.99; default 0.75 of a 200k-token
   reference context window.
-- `--daily-at <HH:MM>` — UTC time of day for the daily trigger
+- `--daily-at <HH:MM>` - UTC time of day for the daily trigger
   (default `00:00`).
-- `--keep <n>` — newest rows per kind kept verbatim (default 25).
-- `--prune-days <n>` — drop cycle-log rows older than N days
+- `--keep <n>` - newest rows per kind kept verbatim (default 25).
+- `--prune-days <n>` - drop cycle-log rows older than N days
   (default 30, 0 disables).
-- `--enable` / `--disable` — master switch.
+- `--enable` / `--disable` - master switch.
 
 ### `bajaclaw effort [level] [profile]`
 Show or set the effort level. Values: `low`, `medium`, `high`. Default:
@@ -110,7 +110,7 @@ no topic, lists every available guide. Guides are skills whose name starts
 with `setup-` or `configure-`.
 
 Options:
-- `--profile <name>` — use the given profile's skill scopes when looking up the guide.
+- `--profile <name>` - use the given profile's skill scopes when looking up the guide.
 
 Built-in guide topics: `telegram`, `discord`, `heartbeat`, `daemon`,
 `dashboard`, `mcp-port`, `memory-sync`, `compaction`, `profile`,
@@ -121,8 +121,8 @@ Built-in guide topics: `telegram`, `discord`, `heartbeat`, `daemon`,
 Check for and install a newer version.
 
 Options:
-- `--check` — print delta but do not install
-- `--yes` — skip the confirmation prompt
+- `--check` - print delta but do not install
+- `--yes` - skip the confirmation prompt
 
 ### `bajaclaw banner`
 Print the ASCII banner.

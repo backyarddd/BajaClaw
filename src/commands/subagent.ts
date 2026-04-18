@@ -4,7 +4,7 @@
 // Each has its own config, tools, memory, and skill scopes. Permissions
 // isolate naturally: if the orchestrator doesn't have the Read tool on
 // the emails MCP but its `mail` sub-agent does, the orchestrator
-// physically cannot read emails — it must delegate.
+// physically cannot read emails - it must delegate.
 //
 // Wiring:
 //   - The parent profile's config.json gets `subAgents: ["mail", ...]`

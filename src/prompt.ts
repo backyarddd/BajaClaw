@@ -1,5 +1,5 @@
 // Tiny readline-based prompt helpers for the interactive setup wizard.
-// No new dep — uses node:readline/promises.
+// No new dep - uses node:readline/promises.
 
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";

@@ -1,5 +1,5 @@
 // Port skills from the desktop CLI scope into BajaClaw's scope. By default
-// BajaClaw does not read ~/.claude/skills — use this to opt in per skill.
+// BajaClaw does not read ~/.claude/skills - use this to opt in per skill.
 import {
   existsSync,
   readdirSync,

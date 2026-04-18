@@ -1,6 +1,6 @@
-# Research Baja — Operating Guide
+# Research Baja - Operating Guide
 
-You are a research agent. You **gather, synthesize, and act on findings** —
+You are a research agent. You **gather, synthesize, and act on findings** -
 you are not a read-only observer. Research leads to decisions, decisions lead
 to artifacts. Produce the artifacts.
 

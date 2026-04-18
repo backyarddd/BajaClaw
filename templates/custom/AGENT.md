@@ -1,4 +1,4 @@
-# {{AGENT_NAME}} — Operating Guide
+# {{AGENT_NAME}} - Operating Guide
 
 You are **{{AGENT_NAME}}**, a BajaClaw agent.
 

@@ -7,17 +7,17 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.14.3
+          autonomous agents on your terms  ·  MIT  ·  v0.14.4
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
 the one-shot `claude -p` command into an always-on, scheduled, memory-backed,
-skill-matching autonomous agent — with a local dashboard, multiple profiles,
+skill-matching autonomous agent - with a local dashboard, multiple profiles,
 OS-native scheduling, and first-class MCP integration.
 
 You install it once. It sets itself up. You run `bajaclaw start`. It goes.
 
-> The name is a tribute to Baja Blast — the author's favorite soda. The
+> The name is a tribute to Baja Blast - the author's favorite soda. The
 > dashboard ships in that same tropical-lime teal on purpose.
 
 ---
@@ -36,7 +36,7 @@ That's it. The post-install runs `bajaclaw setup` automatically, which:
 - Runs the health check and tells you if anything's off
 
 **Requirements**: Node 20+ and the `claude` CLI backend on your `PATH`.
-BajaClaw drives the backend as a subprocess — whatever login/subscription
+BajaClaw drives the backend as a subprocess - whatever login/subscription
 that CLI uses is what BajaClaw uses. BajaClaw itself never sees credentials.
 
 First run, end-to-end:
@@ -82,7 +82,7 @@ A BajaClaw **cycle** is one pass of the 13-step loop in
 
 You can run a cycle manually (`bajaclaw start`), schedule it (`bajaclaw
 daemon install`), or trigger it externally (`bajaclaw trigger <event>`).
-Cycles are idempotent — safe to re-run.
+Cycles are idempotent - safe to re-run.
 
 ---
 
@@ -101,9 +101,9 @@ You can invoke it from a Claude Code session the same way you invoke any
 other agent. The BajaClaw profile is the durable side; the Claude Code
 descriptor is the handle.
 
-### Claude Code skills — compatible format, **isolated scope**
+### Claude Code skills - compatible format, **isolated scope**
 
-A BajaClaw skill is a `SKILL.md` file with YAML frontmatter — byte-for-byte
+A BajaClaw skill is a `SKILL.md` file with YAML frontmatter - byte-for-byte
 the same shape Claude Code uses. But BajaClaw reads only BajaClaw-owned
 directories:
 
@@ -114,7 +114,7 @@ directories:
 | 3 | `~/.bajaclaw/skills/` |
 | 4 | `<repo>/skills/` (built-ins) |
 
-`~/.claude/skills/` is **not** read automatically — that keeps the two
+`~/.claude/skills/` is **not** read automatically - that keeps the two
 agents from stepping on each other's skill libraries.
 
 **Porting skills from Claude Code is a one-liner:**
@@ -137,7 +137,7 @@ Skills`. See [`docs/skills.md`](docs/skills.md).
 ### Self-knowledge (built-in guides)
 
 BajaClaw knows how to configure itself. Ship 13 built-in skills describe
-the procedure for every integration — ask your agent in plain language:
+the procedure for every integration - ask your agent in plain language:
 
 > "Help me set up Telegram."
 > "Walk me through connecting Discord."
@@ -171,7 +171,7 @@ Procedure / Pitfalls / Verification sections into
 `~/.bajaclaw/skills/auto/<name>/` for review.
 
 This is BajaClaw's take on the "create a skill after a complex task"
-behavior from agents like Hermes — capture procedures the first time you
+behavior from agents like Hermes - capture procedures the first time you
 solve them so repeats are faster.
 
 Candidates live in `auto/` until you promote them:
@@ -187,7 +187,7 @@ Tune the trigger in the profile's `config.json`:
 { "autoSkill": { "enabled": true, "minToolUses": 5, "maxPerDay": 10 } }
 ```
 
-### MCP — isolated by default
+### MCP - isolated by default
 
 BajaClaw uses its own MCP config. The desktop CLI's `mcpServers` is **not**
 inherited by default. Merge order per cycle (highest wins):
@@ -195,7 +195,7 @@ inherited by default. Merge order per cycle (highest wins):
 1. `<profile>/agent-mcp-config.json`
 2. `<profile>/mcp-config.json`
 3. `~/.bajaclaw/mcp-config.json` (user-global BajaClaw)
-4. Desktop CLI config — **only if `mergeDesktopMcp: true`** in the profile
+4. Desktop CLI config - **only if `mergeDesktopMcp: true`** in the profile
 
 Port servers from Claude Code on demand:
 
@@ -212,7 +212,7 @@ desktop MCP list on every cycle (pre-0.4 behavior).
 BajaClaw's own MCP entry (`bajaclaw`) is skipped automatically during port
 to avoid self-references.
 
-### MCP — expose
+### MCP - expose
 
 BajaClaw is itself an MCP server. `bajaclaw setup` auto-registers it so your
 desktop MCP client (Claude Desktop and anything else that reads that config)
@@ -220,10 +220,10 @@ can query BajaClaw's state directly.
 
 **Resources:**
 
-- `bajaclaw://profiles` — list of profiles
+- `bajaclaw://profiles` - list of profiles
 - `bajaclaw://profile/<n>/agents`
-- `bajaclaw://profile/<n>/memories` — FTS5-searchable
-- `bajaclaw://profile/<n>/cycles` — recent cycle history
+- `bajaclaw://profile/<n>/memories` - FTS5-searchable
+- `bajaclaw://profile/<n>/cycles` - recent cycle history
 - `bajaclaw://profile/<n>/schedules`
 
 **Tools:**
@@ -234,7 +234,7 @@ can query BajaClaw's state directly.
 - `bajaclaw_skill_list({ profile })`
 
 Which means: from any MCP client, you can ask "what does BajaClaw remember
-about X?" or "queue a task for the default agent" — without leaving your
+about X?" or "queue a task for the default agent" - without leaving your
 current session.
 
 Run it manually with `bajaclaw mcp serve --stdio` or as HTTP SSE with
@@ -249,7 +249,7 @@ Set `memorySync: true` in the profile config and BajaClaw will:
 - Write a digest to `~/.claude/memory/bajaclaw-<profile>.md` after each
   cycle, so Claude Code sessions can see what BajaClaw has been learning
 
-Disabled by default — memory sharing is deliberate, not automatic. See
+Disabled by default - memory sharing is deliberate, not automatic. See
 [`docs/memory.md`](docs/memory.md).
 
 ### Sub-agent delegation
@@ -257,7 +257,7 @@ Disabled by default — memory sharing is deliberate, not automatic. See
 For heavy coding work, an agent using the `code` template plans and then
 delegates to a dedicated Claude Code sub-session via `delegateCoding` in
 [`src/delegation.ts`](src/delegation.ts). The orchestrator never writes code
-itself — that keeps its transcript reviewable before any code exists. See
+itself - that keeps its transcript reviewable before any code exists. See
 [`docs/integration.md`](docs/integration.md).
 
 ---
@@ -267,12 +267,12 @@ itself — that keeps its transcript reviewable before any code exists. See
 ```
 bajaclaw start                 # runs a cycle against the default profile
 bajaclaw start --dry-run       # shows the assembled prompt + exact argv
-bajaclaw dashboard             # http://localhost:7337 — live cycle feed, memories
+bajaclaw dashboard             # http://localhost:7337 - live cycle feed, memories
 bajaclaw daemon install        # schedule a 15-minute heartbeat via your OS
 bajaclaw daemon start          # supervisor loop with exponential backoff
 ```
 
-The default profile has **full tool access** — Read, Write, Edit, Bash,
+The default profile has **full tool access** - Read, Write, Edit, Bash,
 Grep, Glob, WebSearch, WebFetch, plus every MCP tool you've configured. It's
 a real autonomous agent, not a sandboxed assistant.
 
@@ -313,7 +313,7 @@ BAJACLAW_PROFILE=triage bajaclaw daemon start
 
 | template | shape |
 |---|---|
-| `custom`   | blank slate, full tools — the default |
+| `custom`   | blank slate, full tools - the default |
 | `research` | research + synthesis + artifacts; full tools |
 | `outreach` | email prospecting + drafting |
 | `support`  | inbox triage + reply drafts |
@@ -333,7 +333,7 @@ classifies the task and routes it to the cheapest capable model:
 | **Sonnet** | normal work, answers, summaries | 5 memories, 2 skills, 8 turns |
 | **Opus**   | planning, coding, refactoring, deep research, reflection | 7 memories, 3 skills, 14 turns |
 
-The classifier is a heuristic — zero extra backend calls for routing.
+The classifier is a heuristic - zero extra backend calls for routing.
 Post-cycle memory extract + auto-skill synthesis are **skipped**
 entirely for Haiku cycles. This keeps cheap tasks cheap.
 
@@ -353,8 +353,8 @@ bajaclaw serve --api-key $(openssl rand -hex 32) # with auth
 bajaclaw serve --host 0.0.0.0 --api-key <key>    # bind all (auth required)
 ```
 
-Anything that speaks the OpenAI chat API — Cursor, Open WebUI, LibreChat,
-`openai` SDKs, curl, LangChain, LlamaIndex — can drive BajaClaw as an LLM.
+Anything that speaks the OpenAI chat API - Cursor, Open WebUI, LibreChat,
+`openai` SDKs, curl, LangChain, LlamaIndex - can drive BajaClaw as an LLM.
 The request's `model` field is a profile name; each request is one full
 cycle (memory recall, skill matching, MCP inheritance, backend call,
 post-cycle extract).
@@ -415,14 +415,14 @@ the notice with `BAJACLAW_NO_UPDATE_NOTICE=1`.
 ```
 bajaclaw setup                 # idempotent bootstrap; safe to re-run
 bajaclaw setup --profile foo   # use a different default profile name
-bajaclaw uninstall             # dry-run — shows what would be removed
+bajaclaw uninstall             # dry-run - shows what would be removed
 bajaclaw uninstall --yes       # actually tear everything down
 bajaclaw uninstall --yes --keep-data  # remove integrations, keep ~/.bajaclaw/
 ```
 
 `setup` is the re-run button. If the MCP registration gets knocked out of
 the desktop config, or the agent descriptor is missing, or you moved your
-home directory — `bajaclaw setup` fixes it all without touching existing
+home directory - `bajaclaw setup` fixes it all without touching existing
 data.
 
 `uninstall` tears down everything BajaClaw has created:
@@ -435,7 +435,7 @@ data.
 - Removes `~/.claude/memory/bajaclaw-*.md` sync files
 - Removes `~/.bajaclaw/` entirely (unless `--keep-data`)
 
-It does **not** `npm uninstall` itself — that's one command you still run by
+It does **not** `npm uninstall` itself - that's one command you still run by
 hand, printed at the end of the teardown.
 
 ---
@@ -483,7 +483,7 @@ Memories`. After the cycle finishes, a 1-turn Haiku call reads the
 Those facts become FTS-indexed rows with `source=cycle` and
 `source_cycle_id=<id>`. Next cycle, they're eligible for recall again.
 
-Kinds are a soft taxonomy — BajaClaw doesn't enforce them: `fact`,
+Kinds are a soft taxonomy - BajaClaw doesn't enforce them: `fact`,
 `decision`, `preference`, `todo`, `reference`, `claude-code`, `imported`.
 
 Full detail: [`docs/memory.md`](docs/memory.md).
@@ -493,7 +493,7 @@ Full detail: [`docs/memory.md`](docs/memory.md).
 ## Channels (optional)
 
 BajaClaw ships optional adapters for **Telegram** and **Discord** bots.
-They're `optionalDependencies` — not installed unless you use them.
+They're `optionalDependencies` - not installed unless you use them.
 
 ```
 bajaclaw channel add default telegram --token <BOT_TOKEN>
@@ -519,7 +519,7 @@ bajaclaw dashboard
 Single HTML file served at `http://localhost:7337` (port in `config.json`).
 Dark theme, vanilla JS, Tailwind CDN. Live cycle feed, FTS-searchable
 memory browser, schedule editor, inbox/tasks list. Reads directly from the
-SQLite DB — no extra service.
+SQLite DB - no extra service.
 
 ---
 
@@ -627,20 +627,20 @@ Deeper in [`docs/architecture.md`](docs/architecture.md).
 
 ## Docs
 
-- [`architecture.md`](docs/architecture.md) — module map, cycle, on-disk layout
-- [`integration.md`](docs/integration.md) — Claude Code + MCP seams in detail
-- [`commands.md`](docs/commands.md) — full command reference
-- [`agents.md`](docs/agents.md) — profiles, templates, AGENT.md / SOUL.md / HEARTBEAT.md
-- [`skills.md`](docs/skills.md) — scoping, matching, self-generated skills
-- [`memory.md`](docs/memory.md) — FTS5 recall + extract, cross-tool sync
-- [`heartbeat.md`](docs/heartbeat.md) — scheduling + supervisor
+- [`architecture.md`](docs/architecture.md) - module map, cycle, on-disk layout
+- [`integration.md`](docs/integration.md) - Claude Code + MCP seams in detail
+- [`commands.md`](docs/commands.md) - full command reference
+- [`agents.md`](docs/agents.md) - profiles, templates, AGENT.md / SOUL.md / HEARTBEAT.md
+- [`skills.md`](docs/skills.md) - scoping, matching, self-generated skills
+- [`memory.md`](docs/memory.md) - FTS5 recall + extract, cross-tool sync
+- [`heartbeat.md`](docs/heartbeat.md) - scheduling + supervisor
 - [`channels.md`](docs/channels.md)
-- [`api.md`](docs/api.md) — OpenAI-compatible HTTP endpoint — Telegram + Discord
-- [`security.md`](docs/security.md) — threat model + mitigations
-- [`fair-use.md`](docs/fair-use.md) — how BajaClaw stays a thin wrapper
-- [`troubleshooting.md`](docs/troubleshooting.md) — common fixes
-- [`faq.md`](docs/faq.md) — frequently asked
-- [`contributing.md`](docs/contributing.md) — dev setup, style, release
+- [`api.md`](docs/api.md) - OpenAI-compatible HTTP endpoint - Telegram + Discord
+- [`security.md`](docs/security.md) - threat model + mitigations
+- [`fair-use.md`](docs/fair-use.md) - how BajaClaw stays a thin wrapper
+- [`troubleshooting.md`](docs/troubleshooting.md) - common fixes
+- [`faq.md`](docs/faq.md) - frequently asked
+- [`contributing.md`](docs/contributing.md) - dev setup, style, release
 
 ---
 

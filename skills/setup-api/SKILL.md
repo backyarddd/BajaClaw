@@ -9,18 +9,18 @@ effort: medium
 
 ## When to use
 The user wants to call BajaClaw from anything that speaks the OpenAI chat
-API — Cursor, Open WebUI, LangChain, LlamaIndex, curl, a python script, a
+API - Cursor, Open WebUI, LangChain, LlamaIndex, curl, a python script, a
 web app. They'll point the client at `http://localhost:8765/v1` and
 treat BajaClaw as an LLM.
 
 ## Quick reference
 - Start: `bajaclaw serve` (binds 127.0.0.1:8765 by default)
 - Endpoints:
-  - `GET /v1/models` — lists BajaClaw profiles as model ids
-  - `POST /v1/chat/completions` — OpenAI chat (stream + non-stream)
-  - `POST /v1/bajaclaw/cycle` — native full CycleOutput
-  - `POST /v1/bajaclaw/tasks` — enqueue a task without waiting
-  - `GET /health` — liveness
+  - `GET /v1/models` - lists BajaClaw profiles as model ids
+  - `POST /v1/chat/completions` - OpenAI chat (stream + non-stream)
+  - `POST /v1/bajaclaw/cycle` - native full CycleOutput
+  - `POST /v1/bajaclaw/tasks` - enqueue a task without waiting
+  - `GET /health` - liveness
 - Auth: optional bearer token via `--api-key <secret>` or
   `api.apiKey` in `~/.bajaclaw/api.json`.
 - Non-localhost bind requires an API key (refuses otherwise).
@@ -67,8 +67,8 @@ and use any profile name as the "model".
 Add `"stream": true` to the request. The server runs the cycle to
 completion, then streams the response as OpenAI-format SSE
 `chat.completion.chunk` events (word-grouped, small inter-chunk delay).
-Each request is a full cycle — memory recall, skill matching, MCP
-inheritance, post-cycle extract — then the result is chunked out.
+Each request is a full cycle - memory recall, skill matching, MCP
+inheritance, post-cycle extract - then the result is chunked out.
 
 ### 4. Persist the config (optional)
 Instead of CLI flags, put defaults in `~/.bajaclaw/api.json`:
@@ -91,7 +91,7 @@ restarts. It's a long-running foreground process.
 ## Pitfalls
 - **Non-localhost binds require an API key.** The server refuses to
   bind 0.0.0.0 or a real interface without one. This is the default
-  protection — don't disable it.
+  protection - don't disable it.
 - Each API request = one full cycle = one backend call. That bills
   against the `claude` CLI's subscription/credits. Consider rate
   limiting in front (an nginx/caddy proxy is easy).
@@ -102,7 +102,7 @@ restarts. It's a long-running foreground process.
   first chunk is emitted. Clients won't see real token-by-token
   streaming in this release.
 - BajaClaw's memory, skills, and MCP servers apply to every API
-  request — they're not a "fresh" chat. If a caller expects stateless
+  request - they're not a "fresh" chat. If a caller expects stateless
   completions, their results will still be influenced by BajaClaw's
   accumulated memory. This is a feature, not a bug.
 

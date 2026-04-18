@@ -65,7 +65,7 @@ export interface CycleOutput {
   command?: string[];
   error?: string;
   // Set when the task came from an inbound channel (telegram/discord).
-  // Format: "<kind>:<id>" — passed to channels/gateway.replyToSource.
+  // Format: "<kind>:<id>" - passed to channels/gateway.replyToSource.
   source?: string;
 }
 
@@ -214,7 +214,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
 
     recordSuccess(db);
     // Store up to 8k chars of the response. Needed for conversational
-    // history on channel-sourced cycles — the old 300-char cap made
+    // history on channel-sourced cycles - the old 300-char cap made
     // every prior turn look like a stub. 8k ≈ 2k tokens; beyond that
     // we rely on memory extraction to preserve context.
     db.prepare(
@@ -234,7 +234,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     }
 
     // Post-cycle memory extraction + auto-skill synthesis. Both are extra
-    // backend calls — skip them on cheap (Haiku) cycles and on trivially
+    // backend calls - skip them on cheap (Haiku) cycles and on trivially
     // short responses to keep token usage tight.
     const shouldDoPostWork = !result.dryRun && result.text.length >= 120 && picked.tier !== "haiku";
     if (shouldDoPostWork) {

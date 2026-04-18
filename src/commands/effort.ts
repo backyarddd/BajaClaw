@@ -22,11 +22,11 @@ export async function runEffort(
     console.log(chalk.bold("levels:"));
     for (const l of EFFORT_LEVELS) {
       const mark = l === cfg.effort ? chalk.green("*") : " ";
-      const hint = l === "low" ? "(fast, cheap — triage)"
+      const hint = l === "low" ? "(fast, cheap - triage)"
         : l === "medium" ? "(balanced)"
-        : l === "high" ? "(default — ample runway for most work)"
-        : l === "xhigh" ? "(more turns + tokens — complex multi-step tasks)"
-        : "(maximum — unleash the agent, highest cost)";
+        : l === "high" ? "(default - ample runway for most work)"
+        : l === "xhigh" ? "(more turns + tokens - complex multi-step tasks)"
+        : "(maximum - unleash the agent, highest cost)";
       console.log(`  ${mark} ${l.padEnd(8)} ${chalk.dim(hint)}`);
     }
     console.log("");

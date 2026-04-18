@@ -61,12 +61,12 @@ export interface InstallOptions {
 const CLAWHUB_DEFAULT = "https://clawhub.ai";
 
 // Install from one of:
-//   - clawhub:<slug>[@version]        — fetch from ClawHub registry
-//   - <slug>                          — shorthand for clawhub:<slug>
-//   - https?://...(.zip|.tar.gz)      — download archive + extract
-//   - https?://.../SKILL.md           — single-file skill
-//   - <local-dir>                     — copy directory
-//   - <local-SKILL.md>                — single-file skill
+//   - clawhub:<slug>[@version]        - fetch from ClawHub registry
+//   - <slug>                          - shorthand for clawhub:<slug>
+//   - https?://...(.zip|.tar.gz)      - download archive + extract
+//   - https?://.../SKILL.md           - single-file skill
+//   - <local-dir>                     - copy directory
+//   - <local-SKILL.md>                - single-file skill
 export async function cmdInstall(source: string, opts: InstallOptions = {}): Promise<void> {
   const dest = installRoot(opts);
   const src = parseSource(source);
@@ -214,7 +214,7 @@ async function installFromLocalDir(
 
   const raw = readFileSync(skillFile, "utf8");
   const parsed = parseSkill(raw, skillFile, "bajaclaw-user");
-  if (!parsed) throw new Error("could not parse SKILL.md — missing frontmatter or name");
+  if (!parsed) throw new Error("could not parse SKILL.md - missing frontmatter or name");
 
   printPreview(parsed, raw, overrides);
   if (!opts.yes && process.env.BAJACLAW_CONFIRM !== "yes") {
@@ -233,7 +233,7 @@ async function installFromLocalDir(
 
 async function installSingleFile(raw: string, srcPath: string, dest: string, opts: InstallOptions): Promise<void> {
   const parsed = parseSkill(raw, srcPath, "bajaclaw-user");
-  if (!parsed) throw new Error("could not parse SKILL.md — missing frontmatter or name");
+  if (!parsed) throw new Error("could not parse SKILL.md - missing frontmatter or name");
   printPreview(parsed, raw, {});
   if (!opts.yes && process.env.BAJACLAW_CONFIRM !== "yes") {
     console.log("");

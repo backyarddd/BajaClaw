@@ -28,14 +28,14 @@ sessions (and vice versa), without manual copy/paste.
    - Write a digest to `~/.claude/memory/bajaclaw-<profile>.md` so desktop
      sessions see what BajaClaw has been learning.
 3. Verify:
-   - `bajaclaw dashboard <profile>` — Memories panel will include entries
+   - `bajaclaw dashboard <profile>` - Memories panel will include entries
      with kind `claude-code`.
    - Check `~/.claude/memory/bajaclaw-<profile>.md` for the digest file.
 
 ## Pitfalls
 - Sync is deliberate, not automatic. Only profiles with `memorySync: true`
   participate.
-- The digest file overwrites on each sync — it's a snapshot, not an
+- The digest file overwrites on each sync - it's a snapshot, not an
   append-log. Don't hand-edit it.
 - Large `~/.claude/memory/` directories slow down cycles. If you have
   thousands of files there, consider pruning before enabling sync.

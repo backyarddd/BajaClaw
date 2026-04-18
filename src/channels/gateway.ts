@@ -63,7 +63,7 @@ export async function runGateway(profile: string): Promise<void> {
 }
 
 /** Send an agent reply back to whatever channel originated a task.
- *  `source` is formatted as "telegram:<id>" or "discord:<id>" — the
+ *  `source` is formatted as "telegram:<id>" or "discord:<id>" - the
  *  same string written into tasks.source by the inbound handlers.
  *  Also ends any typing indicator associated with that source. */
 export async function replyToSource(profile: string, source: string, text: string): Promise<void> {
@@ -81,7 +81,7 @@ export async function replyToSource(profile: string, source: string, text: strin
 /** Show the platform's "typing…" indicator for the given source. The
  *  adapter internally refreshes on the platform's cadence (Telegram
  *  indicator lasts ~5s, Discord ~10s) until `endTyping(source)` is
- *  called. Safe to call multiple times — a second call replaces the
+ *  called. Safe to call multiple times - a second call replaces the
  *  first. No-ops if the adapter isn't loaded. */
 export function beginTyping(profile: string, source: string): void {
   const colon = source.indexOf(":");
@@ -96,7 +96,7 @@ export function beginTyping(profile: string, source: string): void {
   try {
     const stop = a.startTyping(id);
     activeTyping.set(source, stop);
-  } catch { /* ignore — typing is best-effort */ }
+  } catch { /* ignore - typing is best-effort */ }
 }
 
 export function endTyping(source: string): void {
@@ -143,7 +143,7 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
     startTyping: (chatId) => {
       // Telegram's typing indicator auto-clears after 5s, so re-send
       // every 4s until stopped. `sendChatAction` errors are swallowed
-      // — they'd be noise (bot blocked, etc.) and the agent still has
+      // - they'd be noise (bot blocked, etc.) and the agent still has
       // a reply path via the eventual send.
       const send = (): void => {
         bot.sendChatAction(Number(chatId), "typing").catch(() => undefined);

@@ -1,9 +1,9 @@
 // In-process cycle serialization. Ensures at most one cycle runs per
 // profile within the same node process. Prevents the HTTP API from
-// spawning parallel `claude` subprocesses under load — which would
+// spawning parallel `claude` subprocesses under load - which would
 // inflate backend usage and look a lot like automation abuse.
 //
-// Cross-process coordination (daemon vs manual CLI) is not done here —
+// Cross-process coordination (daemon vs manual CLI) is not done here -
 // that would require a filesystem lock. In practice the daemon polls
 // every 60s, CLI runs are rare, and the rate limiter is the backstop.
 

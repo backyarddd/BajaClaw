@@ -10,13 +10,13 @@ test("translator: resolveProfile", async () => {
   assert.equal(resolveProfile("bajaclaw:triage"), "triage");
 });
 
-test("translator: taskFromMessages — single user message", async () => {
+test("translator: taskFromMessages - single user message", async () => {
   const { taskFromMessages } = await import("../src/api/translate.ts");
   const task = taskFromMessages([{ role: "user", content: "hello" }]);
   assert.equal(task, "hello");
 });
 
-test("translator: taskFromMessages — renders prior transcript", async () => {
+test("translator: taskFromMessages - renders prior transcript", async () => {
   const { taskFromMessages } = await import("../src/api/translate.ts");
   const task = taskFromMessages([
     { role: "user", content: "first" },

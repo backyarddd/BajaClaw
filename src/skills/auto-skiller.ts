@@ -42,14 +42,14 @@ export interface AutoSkillResult {
 
 const SYNTH_PROMPT = `You just watched an agent complete a task through tool use. Your job is to
 decide whether the procedure it used is worth saving as a reusable skill. A
-good skill captures a repeatable procedure — not a one-off answer.
+good skill captures a repeatable procedure - not a one-off answer.
 
 If it is worth saving, output a SKILL.md file as plain markdown, starting
 with a YAML frontmatter block. Use this exact shape:
 
 ---
 name: <kebab-case-name>
-description: <one sentence — what this skill accomplishes>
+description: <one sentence - what this skill accomplishes>
 version: 0.1.0
 tools: [<inferred tool list>]
 triggers: [<1-3 phrases that should trigger this skill>]

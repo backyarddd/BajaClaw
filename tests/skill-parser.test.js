@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Light smoke: ensure built-in skills parse — all three include triggers/description.
+// Light smoke: ensure built-in skills parse - all three include triggers/description.
 test("built-in skill frontmatters parse", async () => {
   const skillsDir = join(__dirname, "..", "skills");
   const { readdirSync, readFileSync, statSync } = await import("node:fs");

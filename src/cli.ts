@@ -38,7 +38,7 @@ function defaultProfile(explicit?: string): string {
 }
 
 const program = new Command();
-program.name(pkg.name).description("BajaClaw — autonomous agents on your terms").version(pkg.version);
+program.name(pkg.name).description("BajaClaw - autonomous agents on your terms").version(pkg.version);
 
 program
   .command("init [name]")
@@ -55,7 +55,7 @@ program
 
 program
   .command("chat [profile]")
-  .description("Interactive chat REPL — converse with the agent turn-by-turn")
+  .description("Interactive chat REPL - converse with the agent turn-by-turn")
   .option("--model <id>", "model or alias (auto|haiku|sonnet|opus|<full-id>)")
   .action(async (p, opts) => {
     const target = defaultProfile(p);
@@ -196,7 +196,7 @@ program.command("update").description("Check for and install a newer version")
   .option("--yes", "apply without confirmation")
   .action(async (opts) => runUpdate({ check: !!opts.check, yes: !!opts.yes }));
 
-// Setup — idempotent first-run bootstrap. Safe to rerun. Interactive
+// Setup - idempotent first-run bootstrap. Safe to rerun. Interactive
 // persona wizard on a TTY the first time; non-interactive otherwise.
 program.command("setup").description("Idempotent first-run bootstrap (profile, MCP register, persona wizard, health check)")
   .option("--profile <name>", "profile name (default: 'default')")
@@ -216,7 +216,7 @@ program.command("setup").description("Idempotent first-run bootstrap (profile, M
     nonInteractive: !!opts.nonInteractive,
   }));
 
-// Compact — run memory compaction (or show what would run)
+// Compact - run memory compaction (or show what would run)
 program.command("compact [profile]")
   .description("Compact memory (summarize old entries, prune stale cycle rows)")
   .option("--dry-run", "show trigger state and policy without running")
@@ -245,7 +245,7 @@ program.command("compact [profile]")
     });
   });
 
-// Persona — view or re-run the wizard
+// Persona - view or re-run the wizard
 program.command("persona [profile]")
   .description("Show or edit the agent's persona (name, tone, user name, focus)")
   .option("--edit", "re-run the interactive wizard")
@@ -275,35 +275,35 @@ subCmd.command("list [parent]")
   .description("List sub-agents under a parent (or the whole tree if omitted)")
   .action(async (p) => subagent.cmdList(p));
 
-// Delegate — orchestrators call this via Bash to hand off a task
+// Delegate - orchestrators call this via Bash to hand off a task
 program.command("delegate <subagent> <task>")
   .description("Run one cycle on a sub-agent and stream its response text to stdout")
   .option("--json", "output full CycleOutput JSON instead of just text")
   .action(async (sub, task, opts) => subagent.cmdDelegate(sub, task, { json: !!opts.json }));
 
-// Uninstall — full teardown.
+// Uninstall - full teardown.
 program.command("uninstall").description("Remove all BajaClaw state (profiles, scheduler, MCP, memory sync)")
   .option("--yes", "actually perform the teardown")
   .option("--keep-data", "keep ~/.bajaclaw/ data; only remove integrations")
   .action(async (opts) => runUninstall({ yes: !!opts.yes, keepData: !!opts.keepData }));
 
-// Model — show or set per profile
+// Model - show or set per profile
 program.command("model [value] [profile]")
   .description("Show or set the model for a profile (no value: lists known models)")
   .action(async (value, p) => runModel(value, { profile: p }));
 
-// Effort — show or set per profile
+// Effort - show or set per profile
 program.command("effort [value] [profile]")
   .description("Show or set the effort level (low/medium/high) for a profile")
   .action(async (value, p) => runEffort(value, { profile: p }));
 
-// Guide — print a self-setup walkthrough
+// Guide - print a self-setup walkthrough
 program.command("guide [topic]")
   .description("Print a self-setup walkthrough, or list available guides")
   .option("--profile <name>", "profile to use for skill lookup")
   .action(async (topic, opts) => runGuide(topic, { profile: opts.profile }));
 
-// Serve — OpenAI-compatible HTTP endpoint
+// Serve - OpenAI-compatible HTTP endpoint
 program.command("serve")
   .description("Serve BajaClaw over an OpenAI-compatible HTTP API")
   .option("--host <host>", "bind host (default 127.0.0.1)")
@@ -324,7 +324,7 @@ program.command("banner").description("Print the ASCII banner").action(() => {
   printBanner(pkg.version, { force: true });
 });
 
-// Welcome — first-run greeting; also callable anytime
+// Welcome - first-run greeting; also callable anytime
 program.command("welcome").description("Print the welcome banner + next steps")
   .action(async () => {
     await printWelcome({ force: true });
@@ -354,7 +354,7 @@ async function printWelcome(opts: { force?: boolean } = {}): Promise<void> {
   } catch { /* health check optional */ }
 
   console.log(chalk.bold("Start chatting:"));
-  console.log(`  ${chalk.cyan("bajaclaw chat")}                   ${chalk.dim("# interactive REPL — talk to your agent")}`);
+  console.log(`  ${chalk.cyan("bajaclaw chat")}                   ${chalk.dim("# interactive REPL - talk to your agent")}`);
   console.log("");
   console.log(chalk.bold("First-time setup:"));
   console.log(`  ${chalk.cyan("bajaclaw setup --interactive")}    ${chalk.dim("# name your agent, set tone, topics, don'ts")}`);
@@ -381,7 +381,7 @@ async function maybeShowWelcome(): Promise<void> {
   if (!isFirstRun()) return;
   // Only show when stdout is a TTY. npm captures postinstall output,
   // so firing the welcome during `npm install` prints to the void and
-  // then marks done — defeating the point. Non-TTY: silent no-op, don't
+  // then marks done - defeating the point. Non-TTY: silent no-op, don't
   // even mark done, so the next interactive run still gets the welcome.
   if (!process.stdout.isTTY) return;
   const cmd = process.argv[2];
@@ -402,7 +402,7 @@ program.hook("postAction", async () => {
   await maybeNoticeAtExit();
 });
 
-// Run the first-run welcome before command dispatch. Non-blocking —
+// Run the first-run welcome before command dispatch. Non-blocking -
 // a failure here should never prevent the user's command from running.
 await maybeShowWelcome().catch(() => { /* silent */ });
 

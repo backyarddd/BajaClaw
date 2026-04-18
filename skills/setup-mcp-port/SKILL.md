@@ -29,7 +29,7 @@ Slack, Google Drive, etc.) and wants BajaClaw cycles to use them too.
 4. To overwrite existing BajaClaw entries:
    `bajaclaw mcp port --force`
 5. Confirm the result:
-   `bajaclaw mcp list <profile>` — shows the merged view for that profile.
+   `bajaclaw mcp list <profile>` - shows the merged view for that profile.
 
 ## Alternative: permanent auto-inherit
 If the user wants every desktop MCP server auto-inherited on every cycle
@@ -40,7 +40,7 @@ If the user wants every desktop MCP server auto-inherited on every cycle
 This reverts to the pre-0.4 behavior, per profile.
 
 ## Pitfalls
-- BajaClaw's own `bajaclaw` MCP entry is always skipped during port — no
+- BajaClaw's own `bajaclaw` MCP entry is always skipped during port - no
   self-references.
 - Port copies the server entry verbatim, including `env` vars. If a desktop
   entry has env secrets, those travel with the port. Review before sharing

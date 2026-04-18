@@ -8,11 +8,11 @@ effort: low
 ---
 
 ## When to use
-The user wants BajaClaw to run on its own — daily briefing, periodic inbox
-triage, background research — without them typing `bajaclaw start`.
+The user wants BajaClaw to run on its own - daily briefing, periodic inbox
+triage, background research - without them typing `bajaclaw start`.
 
 ## Quick reference
-- Adapters: `src/scheduler/` — launchd (macOS), systemd-user or crontab
+- Adapters: `src/scheduler/` - launchd (macOS), systemd-user or crontab
   (Linux), schtasks (Windows). `pickAdapter()` auto-selects.
 - Entry: `bajaclaw daemon install <profile>` creates a `*/15 * * * *`
   heartbeat by default.
@@ -30,7 +30,7 @@ triage, background research — without them typing `bajaclaw start`.
 3. Open `~/.bajaclaw/profiles/<profile>/HEARTBEAT.md` and add a line like:
    `0 9 * * * | Run the daily briefing and surface anything urgent.`
 4. Run `bajaclaw daemon install <profile>` to register the OS scheduler
-   entry. (This uses `*/15 * * * *` — adjust via the adapter's install call
+   entry. (This uses `*/15 * * * *` - adjust via the adapter's install call
    or by installing a custom cron entry manually.)
 5. Run `bajaclaw daemon start <profile>` to start the supervisor loop. It
    auto-restarts with exponential backoff on crash.

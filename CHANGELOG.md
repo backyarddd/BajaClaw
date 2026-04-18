@@ -1,17 +1,37 @@
 # Changelog
 
+## 0.14.4
+
+**Purge em dashes + bake a persona rule against them.** 517 em dashes
+swept from every source, doc, and test file in the repo (swapped for
+regular hyphens). Every built-in SOUL.md template grows a new "Hard
+style rules" section that forbids the agent from emitting U+2014 in
+any output: chat replies, Telegram, Discord, commit messages, code
+comments, file contents. The default profile's SOUL.md on the
+author's machine was updated in place.
+
+### What changed
+
+1. `perl -CSD -Mutf8 -pe 's/\x{2014}/-/g'` across every tracked .ts,
+   .md, .html, .js, .json in the repo. 89 files touched, 0 em dashes
+   remaining. Existing semantic meaning is preserved since em dashes
+   almost always appeared as ` - ` equivalents.
+2. `templates/*/SOUL.md` grow a "Hard style rules" block. New
+   profiles inherit the ban.
+3. No logic changes. All 40 tests still pass.
+
 ## 0.14.3
 
 **Agent remembers the conversation in Telegram + Discord.** Every
 channel message used to run as a brand-new cycle with no memory of
-the prior back-and-forth — the agent would reply "what did you mean
+the prior back-and-forth - the agent would reply "what did you mean
 by 'it'?" to messages that clearly referred to the last turn. Fixed:
 channel-sourced cycles now auto-load the last 8 turns for that source
 and render them into the "Recent Chat" section of the prompt.
 
 ### What changed
 
-1. **`loadSourceHistory(db, source, currentTaskId, limit)`** — joins
+1. **`loadSourceHistory(db, source, currentTaskId, limit)`** - joins
    `tasks` → `cycles` for a given `source` (e.g. `telegram:14154…`),
    skips the currently-running task, returns the last N user/agent
    pairs as `ChatTurn[]` in chronological order. Only completed
@@ -21,7 +41,7 @@ and render them into the "Recent Chat" section of the prompt.
    passed. The chat REPL and `/api/chat` keep their explicit-history
    path; the channel gateway no longer has a cold-start problem.
 3. **Response storage widened 300 → 8000 chars**. The old cap made
-   every historical turn look like a truncated stub. 8k ≈ 2k tokens —
+   every historical turn look like a truncated stub. 8k ≈ 2k tokens -
    enough to preserve real conversational content without bloating
    the DB on pathological responses.
 
@@ -30,7 +50,7 @@ and render them into the "Recent Chat" section of the prompt.
 - Historical rows stored before this release have 300-char stubs.
   They'll appear in the prompt as partial context until they age out
   of the 8-turn window. Can't retroactively recover the full text.
-- `loadSourceHistory` is called on every channel cycle — the join
+- `loadSourceHistory` is called on every channel cycle - the join
   is indexed by `source` via `idx_tasks_priority`? No, there's no
   index on `tasks.source` yet. For a user with thousands of messages
   from one telegram chat, the scan is O(n). Fine for now; add
@@ -53,7 +73,7 @@ whether the bot is alive.
    5s). Discord re-sends `channel.sendTyping()` every 8s (auto-clears
    at 10s). Both return a cleanup function the gateway stores.
 2. **Lifecycle**: gateway `message`/`messageCreate` handlers call
-   `beginTyping(profile, source)` right after enqueuing the task —
+   `beginTyping(profile, source)` right after enqueuing the task -
    the indicator starts before the daemon picks up the task. When the
    daemon calls `replyToSource`, it implicitly calls `endTyping` so
    the indicator stops the same instant the reply lands.
@@ -66,7 +86,7 @@ whether the bot is alive.
 **Recolor the dashboard to Baja Blast teal.** The Orbit palette's
 orange accent is gone; everything accent-colored is now the tropical
 lime teal the project is named after (#14D6CE). Focus rings, button
-fills, active sidebar item, user chat bubble, openclaw skill badges —
+fills, active sidebar item, user chat bubble, openclaw skill badges -
 all swapped. No structural changes.
 
 Also: README now notes the name is a tribute to the author's favorite
@@ -76,27 +96,27 @@ soda.
 
 **New dashboard.** Orbit design system, sidebar navigation, in-browser
 chat with the agent, live config editor. The old dashboard was a
-four-pane readonly dump — this one is a workbench. Directly inspired
+four-pane readonly dump - this one is a workbench. Directly inspired
 by what Hermes Agent's web dashboard does well (config form, sessions
 view), stitched onto BajaClaw's existing cycle/memory/task data model.
 
 ### Views
 
-1. **Overview** — four stat cards (cycles today/week, spend, tokens,
+1. **Overview** - four stat cards (cycles today/week, spend, tokens,
    memories + pending tasks) and live-refreshed recent-cycles +
    pending-tasks panels.
-2. **Chat** — send a message, the dashboard calls `/api/chat` which
+2. **Chat** - send a message, the dashboard calls `/api/chat` which
    invokes `runCycle` in-process, blocks for the reply, streams it
    back. Per-reply meta line shows model tier, duration, cost, turn
    count. History is stashed in localStorage; cleared across browsers.
-3. **Cycles / Memory / Tasks / Schedules** — same data as before,
+3. **Cycles / Memory / Tasks / Schedules** - same data as before,
    restyled. Memory gets a live client-side filter.
-4. **Skills** — every active + inactive skill, color-coded by origin
+4. **Skills** - every active + inactive skill, color-coded by origin
    (bajaclaw / openclaw / hermes). Inactive skills show the reason
    (missing bin, wrong platform).
-5. **Channels** — telegram / discord entries with masked tokens and
+5. **Channels** - telegram / discord entries with masked tokens and
    allowlist; Remove button wired to `DELETE /api/channels/:kind`.
-6. **Settings** — form editor for model, effort, context window,
+6. **Settings** - form editor for model, effort, context window,
    dashboard port, dashboard autostart, memory sync, per-cycle budget
    cap. Writes to `~/.bajaclaw/profiles/<p>/config.json` via
    whitelisted `PUT /api/config`; other fields (channels, tools) are
@@ -104,25 +124,25 @@ view), stitched onto BajaClaw's existing cycle/memory/task data model.
 
 ### Backend endpoints added
 
-- `GET /api/status` — profile, version, pid, uptime.
-- `POST /api/chat` — `{ message } → runCycle(...)` → `{ ok, text,
+- `GET /api/status` - profile, version, pid, uptime.
+- `POST /api/chat` - `{ message } → runCycle(...)` → `{ ok, text,
   cycleId, costUsd, turns, model, ... }`. Blocks on the cycle.
-- `GET /api/config` / `PUT /api/config` — whitelisted subset of the
+- `GET /api/config` / `PUT /api/config` - whitelisted subset of the
   profile config. Unknown fields are silently dropped; fields like
   `allowedTools` and `channels` are not exposed.
-- `GET /api/channels` — configured channels with tokens masked.
-- `DELETE /api/channels/:kind` — remove a configured channel.
-- `GET /api/skills` — parsed skills across all origins with
+- `GET /api/channels` - configured channels with tokens masked.
+- `DELETE /api/channels/:kind` - remove a configured channel.
+- `GET /api/skills` - parsed skills across all origins with
   active/inactive state.
-- `GET /api/summary` — now returns day/week stats and token totals.
+- `GET /api/summary` - now returns day/week stats and token totals.
 
 ### Design
 
-- Orbit-inspired dark theme — warm grays (#09090B, #0F0F12, #17171C),
+- Orbit-inspired dark theme - warm grays (#09090B, #0F0F12, #17171C),
   orange accent (#F97316), Inter + JetBrains Mono typography, subtle
   rgba borders, sticky backdrop-blurred topbar, 4-tier text hierarchy.
 - Sidebar collapses to a horizontal scroller on narrow viewports.
-- No JS framework — vanilla DOM, one single-file HTML, auto-refresh
+- No JS framework - vanilla DOM, one single-file HTML, auto-refresh
   every 5s (paused on chat + settings views to avoid clobbering
   in-flight work).
 
@@ -134,7 +154,7 @@ view), stitched onto BajaClaw's existing cycle/memory/task data model.
   probably SSE.
 - `PUT /api/config` for `dashboardPort` / `dashboardAutostart` only
   takes effect on daemon restart. The save banner says so. Don't
-  auto-restart on save — the dashboard is inside the process it would
+  auto-restart on save - the dashboard is inside the process it would
   be killing.
 - Skills view calls `loadAllSkillsRaw` on every hit (every 5s while
   the tab is open). For users with hundreds of skills this scans
@@ -143,7 +163,7 @@ view), stitched onto BajaClaw's existing cycle/memory/task data model.
 ## 0.13.2
 
 **Daemon auto-starts the dashboard.** The dashboard was a separate
-long-lived command you had to remember to run — and remember to
+long-lived command you had to remember to run - and remember to
 background so it didn't hang an agent cycle. Now the daemon owns
 it. `bajaclaw daemon start` → gateway, dashboard, cycle poller all
 come up together. Stop the daemon → everything goes down cleanly.
@@ -154,7 +174,7 @@ come up together. Stop the daemon → everything goes down cleanly.
    Port-in-use is non-fatal: logged as `daemon.dashboard.skip` and
    the daemon keeps going.
 2. **`dashboardAutostart: boolean`** config field (default `true`).
-   Set to `false` to opt out — e.g. if you're running the dashboard
+   Set to `false` to opt out - e.g. if you're running the dashboard
    elsewhere or don't want port 7337 bound.
 3. **`bajaclaw dashboard <profile>` still works.** Useful when the
    daemon is down and you only want the read-only view. It just
@@ -185,7 +205,7 @@ telegram message.
    before spawning a fresh one. Fixes the duplicate-reply cascade on
    Telegram when three copies of the daemon were all polling.
 3. **`setup-dashboard` skill tells the agent to background.** The old
-   text said "run `bajaclaw dashboard <profile>`" — which hangs a
+   text said "run `bajaclaw dashboard <profile>`" - which hangs a
    Bash tool call forever. Now: `nohup … >log 2>&1 &`, with a pitfall
    note explaining why. The parse fix masks the symptom; backgrounding
    is the actual correct call.
@@ -194,7 +214,7 @@ telegram message.
 
 **Load skills from OpenClaw (ClawHub) and Hermes Agent.** BajaClaw used
 to parse one format: its own flavour of `SKILL.md`. Now the loader
-reads all three — the two external formats share the same file shape,
+reads all three - the two external formats share the same file shape,
 with extra metadata blocks that declare platform, env, and tool
 requirements. A skill from ClawHub or the Hermes skills hub drops into
 `~/.bajaclaw/skills/` and Just Works.
@@ -203,7 +223,7 @@ requirements. A skill from ClawHub or the Hermes skills hub drops into
 
 1. **Real YAML parser** (`yaml` dep). Replaced the hand-rolled
    frontmatter parser. Handles nested maps, inline-flow objects,
-   quotes, multiline strings — everything the two foreign formats
+   quotes, multiline strings - everything the two foreign formats
    need. Existing bajaclaw skills continue to parse identically.
 2. **`origin` field on every skill**. Derived from the frontmatter:
    `metadata.hermes` → "hermes", `metadata.openclaw` (or legacy
@@ -222,10 +242,10 @@ requirements. A skill from ClawHub or the Hermes skills hub drops into
    without explicit `triggers` but always have `tags`; those now
    score alongside triggers so the matcher picks them up.
 6. **`bajaclaw skill install` grew teeth**. New source schemes:
-   - `clawhub:<slug>[@version]` — resolve + download + extract from
+   - `clawhub:<slug>[@version]` - resolve + download + extract from
      the ClawHub registry via their public API.
-   - bare slug — shorthand for `clawhub:<slug>`.
-   - `https://…/file.zip` or `.tar.gz` — download + extract.
+   - bare slug - shorthand for `clawhub:<slug>`.
+   - `https://…/file.zip` or `.tar.gz` - download + extract.
    - `https://…/SKILL.md` and local paths still work as before.
 7. **`bajaclaw skill search <query>`**. Hits ClawHub's search API.
    Pipe to grep/fzf for interactive browsing.
@@ -238,7 +258,7 @@ bajaclaw skill install clawhub:sonoscli  # drop a skill into ~/.bajaclaw/skills/
 bajaclaw skill list default              # see active vs inactive
 ```
 
-Hermes-format skills don't have a dedicated registry URL scheme yet —
+Hermes-format skills don't have a dedicated registry URL scheme yet -
 clone or download them by hand (they're regular folders with a
 `SKILL.md`) and `bajaclaw skill install <path>` picks them up.
 
@@ -256,14 +276,14 @@ clone or download them by hand (they're regular folders with a
   ignored, and an entirely unknown `metadata.<vendor>` block just
   leaves origin as "bajaclaw". If a new vendor format appears, it'll
   silently degrade rather than crash.
-- `skill install` uses system `unzip`/`tar` for extraction — zero JS
+- `skill install` uses system `unzip`/`tar` for extraction - zero JS
   deps but Windows users with a bare shell may not have them. macOS
   + Linux both have them in `/usr/bin`.
 
 ## 0.12.1
 
 **Telegram + Discord actually work now.** The skills were shipping users
-through a setup flow that led nowhere — the daemon never started the
+through a setup flow that led nowhere - the daemon never started the
 channel gateway, and no code path sent agent replies back to the
 channel. Two half-built features behaving like one broken one. Fixed.
 
@@ -282,14 +302,14 @@ on every embedded newline.
    `replyToSource(profile, source, text)` which hands the string to the
    right adapter's `sendMessage`. One-way pipe is now bidirectional.
 3. **Task lifecycle**. `tasks` rows get `status='done'|'error'` and
-   `cycle_id` stamped when a cycle completes — previously they were
+   `cycle_id` stamped when a cycle completes - previously they were
    stuck in `running` forever.
 4. **`channel add` takes `--user-id`**. Telegram: `--user-id` goes into
    the allowlist (previously required hand-editing `config.json`).
    Discord: `--user-id` is optional allowlist entry, `--channel-id` still
    scopes to a channel. Skills updated.
 5. **Gateway adapter polling**. When channels are configured, the daemon
-   polls pending tasks every 3s instead of 60s — otherwise the bot felt
+   polls pending tasks every 3s instead of 60s - otherwise the bot felt
    asleep between messages.
 6. **Bracketed paste in chat REPL**. `bajaclaw chat` now enables
    `\x1b[?2004h` and proxies stdin through a transform: newlines inside
@@ -300,20 +320,20 @@ on every embedded newline.
 ### Landmines (for next session)
 
 - `runGateway(profile)` still exists as a backwards-compat blocking
-  entry point but is unused — the daemon uses `startAllGateways` and
+  entry point but is unused - the daemon uses `startAllGateways` and
   keeps its own event loop. Don't reintroduce it.
 - `daemon stop` only kills the pid in `daemon.pid`. Stale daemons from
   crashed sessions can pile up. If you see multiple `daemon run default`
   processes in `ps`, kill them by hand before starting a fresh one.
 - Bracketed paste requires terminal support (xterm/iTerm/Terminal.app
-  — all modern ones). Ancient terminals send paste as raw keystrokes
+  - all modern ones). Ancient terminals send paste as raw keystrokes
   without markers; the shim is a no-op there, so behavior degrades to
   pre-0.12.1 (submits on newline).
 
 ## 0.12.0
 
 **Unleash the agent: no more artificial turn limits.** Turns out
-`--max-turns` isn't a real claude CLI flag — it's been silently
+`--max-turns` isn't a real claude CLI flag - it's been silently
 ignored. The real "runway" knob is `--effort`. Ripped out the
 phantom turn budget and wired up the flags that actually exist.
 
@@ -327,7 +347,7 @@ phantom turn budget and wired up the flags that actually exist.
    back-compat so old configs don't break.
 
 2. **Effort levels expanded**: `low | medium | high | xhigh | max`.
-   claude's CLI added `xhigh` and `max` — the latter gives the
+   claude's CLI added `xhigh` and `max` - the latter gives the
    agent the biggest turn / token budget before termination.
 
 3. **Default `effort` bumped to `high`** (was `medium`). Every
@@ -336,7 +356,7 @@ phantom turn budget and wired up the flags that actually exist.
    monster tasks; `/effort low` to save when triaging.
 
 4. **`--effort` is now actually passed to claude**. It wasn't
-   before — `buildCommand` had no `--effort` arg. So the
+   before - `buildCommand` had no `--effort` arg. So the
    profile's `effort` setting had no effect. Now it does.
 
 5. **1M context window support**:
@@ -350,7 +370,7 @@ phantom turn budget and wired up the flags that actually exist.
 
 6. **Per-cycle cost ceiling**: new `cfg.maxBudgetUsd` passes
    `--max-budget-usd <n>` to claude. More honest than a turn cap
-   because complexity varies — this caps the actual spend.
+   because complexity varies - this caps the actual spend.
    `undefined` = no cap.
 
 7. **`bajaclaw effort`** command and chat `/effort` now accept
@@ -380,7 +400,7 @@ claude offers.
    "response"**. When a cycle hit `{"is_error": true, "subtype":
    "error_max_turns"}`, `parseResult` didn't match any of the error-
    extraction branches and fell through to the "first line of
-   stdout" fallback — which was the entire JSON. Now `parseResult`
+   stdout" fallback - which was the entire JSON. Now `parseResult`
    detects `is_error: true` with a `subtype` explicitly, normalizes
    each known subtype (`error_max_turns`, `error_during_execution`,
    etc.) into a sentinel, **clears `base.text`** so the JSON never
@@ -414,14 +434,14 @@ claude offers.
    processed 146k cached tokens**. `parseResult` now sums
    `input_tokens + cache_creation_input_tokens +
    cache_read_input_tokens` for the displayed "in" count, matching
-   the true context size the model saw (cost remains accurate —
+   the true context size the model saw (cost remains accurate -
    cache reads are still cheap).
 
 ## 0.11.2
 
 **Bulletproof chat + real cycle fixes.** Four issues from 0.11.1:
 
-1. **Display corruption — every line prefixed with `you ›`**.
+1. **Display corruption - every line prefixed with `you ›`**.
    The animated "thinking" indicator wrote `\r\x1b[2K` every 400ms.
    readline in terminal mode interpreted each `\r` as a cursor move
    and redrew its prompt, which interleaved with cycle output. Ripped
@@ -440,7 +460,7 @@ claude offers.
    ignore`, so claude's interactive permission prompts never got a
    response and the subprocess bailed with exit 1. Fix: pass
    `--dangerously-skip-permissions` by default. The agent runs
-   autonomously under the user's account — interactive approval
+   autonomously under the user's account - interactive approval
    doesn't make sense in this context. Configurable via
    `ClaudeOptions.skipPermissions: false` if you want to re-enable
    prompts (and drive stdin yourself).
@@ -455,7 +475,7 @@ claude offers.
 **`setup-telegram` and `setup-discord` skills rewritten (v0.2.0)**
 to explicitly default to **bidirectional chat** when the user asks
 to "set up telegram" / "connect discord" / etc. No more asking
-clarifying questions about use case — BajaClaw just wires up the
+clarifying questions about use case - BajaClaw just wires up the
 bridge so you can message the agent from your phone and it replies
 from the same thread.
 
@@ -483,13 +503,13 @@ now fixed:
   animation. ora could leave terminal state inconsistent with
   readline in edge cases.
 
-Also removed the custom `SIGINT` handler — Ctrl-C now exits cleanly
+Also removed the custom `SIGINT` handler - Ctrl-C now exits cleanly
 via the default behavior. Use `/exit` for a graceful session end
 with the stats summary.
 
 ## 0.11.0
 
-**`bajaclaw chat` — interactive REPL.** Drops you into a turn-by-turn
+**`bajaclaw chat` - interactive REPL.** Drops you into a turn-by-turn
 conversation with the agent. Each user message runs one BajaClaw
 cycle; the last 10 turns are injected into the next prompt's `# Recent
 Chat` section so the agent remembers the conversation within the
@@ -542,12 +562,12 @@ tokens, wall-clock duration, cost, cycle id.
 
 **5h / weekly rate-limit usage** is tracked locally from the `cycles`
 table. BajaClaw can't see Anthropic's server-side subscription
-accounting — the displayed numbers are your local cycle counts and
+accounting - the displayed numbers are your local cycle counts and
 token totals, which you can compare to your plan on anthropic.com.
 
 **Underlying agent API changes** (useful if you embed `runCycle`):
 
-- `CycleInput.sessionHistory?: ChatTurn[]` — prior turns, injected as
+- `CycleInput.sessionHistory?: ChatTurn[]` - prior turns, injected as
   `# Recent Chat`.
 - `CycleOutput.inputTokens`, `outputTokens`, `turns`, `model`, `tier`
   are now populated from the backend JSON response.
@@ -566,7 +586,7 @@ New docs: `docs/chat.md`, updated `docs/commands.md`.
   sees EOF immediately.
 - **First-run welcome silently consumed by postinstall**. npm v7+
   captures postinstall stdout, so the welcome printed to the void and
-  then marked done — meaning the user's first real `bajaclaw`
+  then marked done - meaning the user's first real `bajaclaw`
   invocation saw no welcome either. Now gated on `process.stdout.isTTY`
   so a non-TTY run (postinstall, pipes, CI) is a true no-op and
   doesn't touch the marker file. The welcome fires on the first
@@ -584,7 +604,7 @@ npm v7+ captures postinstall stdout by default (`foreground-scripts:
 false`), which is why `npm install -g bajaclaw` looked silent even
 though the setup wizard was running. Fixed by:
 
-- **Postinstall is now quiet and fast** — scaffolds the default
+- **Postinstall is now quiet and fast** - scaffolds the default
   profile silently (no wizard mid-install, which could hang), then
   emits a single-line notice to **stderr** (stderr survives npm's
   capture on most configs):
@@ -603,7 +623,7 @@ though the setup wizard was running. Fixed by:
   fires exactly once. Skipped for `--version`, `--help`, `uninstall`,
   `update`, `banner`, `welcome`.
 
-- **`bajaclaw welcome`** — new command. Re-display the banner and
+- **`bajaclaw welcome`** - new command. Re-display the banner and
   next-steps list anytime.
 
 - **Sudo safety**: postinstall under `sudo` without `SUDO_USER` no
@@ -627,10 +647,10 @@ npm install -g bajaclaw
   `package.json` (e.g. `"github:myuser/BajaClaw"`).
 - The github-slug install path (`npm install -g
   github:backyarddd/BajaClaw`) still works for bleeding-edge / HEAD
-  tracking — the `prepare` script added in 0.10.0 means git installs
+  tracking - the `prepare` script added in 0.10.0 means git installs
   build `dist/` on the way in.
 
-No behavior changes to the runtime — this release is install metadata
+No behavior changes to the runtime - this release is install metadata
 only. See 0.10.0 for the memory-compaction feature.
 
 ## 0.10.0
@@ -643,7 +663,7 @@ only. See 0.10.0 for the memory-compaction feature.
   `bin/`, `dist/`, `scripts/`, `skills/`, and `templates/` (and
   excludes `src/`, `tests/`, `docs/`).
 
-**Memory compaction — so the agent keeps learning without slowing
+**Memory compaction - so the agent keeps learning without slowing
 down over time.** BajaClaw's cycles are stateless (each one rebuilds
 the prompt from scratch), so the model's context window never "fills
 up" across cycles. What grows unbounded is the memory database.
@@ -707,7 +727,7 @@ permission isolation.
   use a tool/MCP server it doesn't have; it must delegate.
 - New doc: `docs/subagents.md`.
 
-**HTTP API — precise model routing**. The `model` field in
+**HTTP API - precise model routing**. The `model` field in
 `/v1/chat/completions` now supports overrides:
 
 - `"default"` → profile's configured model (auto-routes if `auto`)
@@ -730,7 +750,7 @@ guides all updated.
 
 - Opus: `claude-opus-4-5` → `claude-opus-4-7`
 - Sonnet: `claude-sonnet-4-5` → `claude-sonnet-4-6`
-- Haiku: `claude-haiku-4-5` (unchanged — still the newest Haiku)
+- Haiku: `claude-haiku-4-5` (unchanged - still the newest Haiku)
 
 `bajaclaw model` lists the new ids. `model: auto` (the default) routes
 to these. Internal sub-calls updated:
@@ -744,7 +764,7 @@ to these. Internal sub-calls updated:
 string now shows the new ids.
 
 Existing profiles' explicit model settings are not rewritten on upgrade
-— their `config.json` still points to whatever you set. Run
+- their `config.json` still points to whatever you set. Run
 `bajaclaw model <new-id>` to bump.
 
 ## 0.7.0
@@ -752,11 +772,11 @@ Existing profiles' explicit model settings are not rewritten on upgrade
 **`model: auto` is the new default.** Before every cycle, a heuristic
 classifier in `src/model-picker.ts` routes the task to a tier:
 
-- Haiku — triage, status checks, heartbeats, very short tasks
-- Sonnet — normal work (default fallback)
-- Opus — planning, coding, refactoring, deep research, reflection
+- Haiku - triage, status checks, heartbeats, very short tasks
+- Sonnet - normal work (default fallback)
+- Opus - planning, coding, refactoring, deep research, reflection
 
-Zero extra backend calls — routing is pure heuristics.
+Zero extra backend calls - routing is pure heuristics.
 
 **Token economy pass**, every cycle trimmed for cost:
 
@@ -779,7 +799,7 @@ Zero extra backend calls — routing is pure heuristics.
 
 **Cycle serialization.** `src/concurrency.ts` adds an in-process
 per-profile queue. The HTTP API can no longer spawn parallel `claude`
-subprocesses — two simultaneous requests for the same profile are
+subprocesses - two simultaneous requests for the same profile are
 processed in order.
 
 **Wrapper story documented.** New `docs/fair-use.md` spells out exactly
@@ -796,23 +816,23 @@ tier is for. Setting `auto` prints a hint about the routing.
 
 - **OpenAI-compatible HTTP endpoint**: `bajaclaw serve` exposes every
   BajaClaw profile behind an OpenAI-style `/v1/chat/completions` API.
-  Anything that speaks the OpenAI chat API — Cursor, Open WebUI, the
-  `openai` SDKs, curl, LangChain, LlamaIndex — can drive BajaClaw as if
+  Anything that speaks the OpenAI chat API - Cursor, Open WebUI, the
+  `openai` SDKs, curl, LangChain, LlamaIndex - can drive BajaClaw as if
   it were an LLM. Each request runs a full cycle (memory recall, skill
   matching, MCP inheritance, backend call, post-cycle extract).
 - Endpoints:
   - `GET /health`
-  - `GET /v1/models` — lists exposed profiles as OpenAI model entries
-  - `POST /v1/chat/completions` — non-streaming and SSE streaming
-  - `POST /v1/bajaclaw/cycle` — native full `CycleOutput`
-  - `POST /v1/bajaclaw/tasks` — enqueue without waiting
+  - `GET /v1/models` - lists exposed profiles as OpenAI model entries
+  - `POST /v1/chat/completions` - non-streaming and SSE streaming
+  - `POST /v1/bajaclaw/cycle` - native full `CycleOutput`
+  - `POST /v1/bajaclaw/tasks` - enqueue without waiting
 - Auth: optional bearer token via `--api-key` or `api.apiKey` in
   `~/.bajaclaw/api.json`. Non-localhost binds without a key are refused.
 - Model name maps to a profile (`"model": "default"` or
   `"model": "bajaclaw:default"`). Multi-message histories render as a
   prior transcript; the last message is the current task.
 - CORS headers on every response; `OPTIONS` preflight handled.
-- New built-in guide skill `setup-api` — ask your agent "help me set up
+- New built-in guide skill `setup-api` - ask your agent "help me set up
   the API" and it walks you through the whole flow.
 - New docs: `docs/api.md` with full endpoint reference and client
   examples (Python SDK, Node SDK, curl streaming, Cursor/Open WebUI).
@@ -822,7 +842,7 @@ tier is for. Setting `auto` prints a hint about the routing.
 - **Self-knowledge skills**: BajaClaw now ships 13 built-in skills that
   document how to configure BajaClaw itself. Ask your agent "help me
   setup telegram" (or discord, heartbeat, daemon, dashboard, memory sync,
-  etc.) and the matching skill fires — the agent knows the procedure
+  etc.) and the matching skill fires - the agent knows the procedure
   without you writing one.
   - `setup-telegram`, `setup-discord`, `setup-heartbeat`, `setup-daemon`,
     `setup-dashboard`, `setup-mcp-port`, `setup-memory-sync`,
@@ -831,7 +851,7 @@ tier is for. Setting `auto` prints a hint about the routing.
 - **`bajaclaw model [id] [profile]`**: show current model + known list
   (`claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5`) with no
   args; set the model for a profile with an id. Any string is accepted
-  — the backend validates against the subscription.
+  - the backend validates against the subscription.
 - **`bajaclaw effort [level] [profile]`**: show or set effort level
   (`low` / `medium` / `high`) per profile. Defaults to `medium`.
 - **`bajaclaw guide [topic]`**: print a self-setup walkthrough or list
@@ -855,8 +875,8 @@ tier is for. Setting `auto` prints a hint about the routing.
 - **`bajaclaw mcp port`**: copy MCP servers from the desktop CLI config
   into `~/.bajaclaw/mcp-config.json`. BajaClaw's own entry is skipped.
 - **Auto-skill synthesis**: after any cycle that uses 5+ tools (configurable),
-  BajaClaw analyzes the task + tool sequence + response and — if the
-  procedure is reusable — writes a structured `SKILL.md` with When-to-use /
+  BajaClaw analyzes the task + tool sequence + response and - if the
+  procedure is reusable - writes a structured `SKILL.md` with When-to-use /
   Quick-reference / Procedure / Pitfalls / Verification sections to
   `~/.bajaclaw/skills/auto/<name>/`. Frontmatter is marked
   `auto_generated: true` with a `source_cycle_id`. Configure via
@@ -882,7 +902,7 @@ tier is for. Setting `auto` prints a hint about the routing.
   `default` profile, auto-bootstrapping it on first use if missing. Override
   with `BAJACLAW_DEFAULT_PROFILE`.
 - **Full tool access**: the `research`, `outreach`, `support`, `social`, and
-  `custom` templates now ship without tool restrictions — agents can Write,
+  `custom` templates now ship without tool restrictions - agents can Write,
   Edit, and run Bash. The `code` template keeps its orchestrator pattern
   (read-only, delegates to sub-agent). Existing profiles are unaffected.
 - **README**: comprehensive rewrite covering what the cycle does, the full
@@ -906,7 +926,7 @@ tier is for. Setting `auto` prints a hint about the routing.
   `contributing.md`. `claude-integration.md` renamed to `integration.md`.
 - `delegateCoding` replaces `delegateToClaudeCode` (old name kept as alias).
 
-## 0.1.0 — initial release
+## 0.1.0 - initial release
 
 - 13-step cycle loop driving the `claude` CLI as a subprocess
 - SQLite + FTS5 memory store with pre-cycle recall and post-cycle extract

@@ -139,7 +139,7 @@ function listProfiles(): string[] {
 function buildPlan(profiles: string[], keepData: boolean): { description: string[] } {
   const desc: string[] = [];
   if (profiles.length === 0) {
-    desc.push(chalk.dim("no profiles found — nothing to tear down"));
+    desc.push(chalk.dim("no profiles found - nothing to tear down"));
   } else {
     desc.push(`${profiles.length} profile(s): ${profiles.join(", ")}`);
     desc.push("  · stop any running daemon");

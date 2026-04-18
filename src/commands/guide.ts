@@ -1,9 +1,9 @@
-// `bajaclaw guide [topic]` — print a built-in self-setup skill as a
+// `bajaclaw guide [topic]` - print a built-in self-setup skill as a
 // walkthrough. Without a topic, lists all available guides.
 //
 // A "guide" is any skill whose name starts with `setup-`, `configure-`,
 // or whose frontmatter has `guide: true`. Guides live alongside normal
-// skills in the same scopes — so users can add their own without code
+// skills in the same scopes - so users can add their own without code
 // changes.
 import chalk from "chalk";
 import { loadAllSkills } from "../skills/loader.js";
@@ -26,7 +26,7 @@ export async function runGuide(
     console.log(chalk.bold("Available guides:"));
     console.log("");
     if (guides.length === 0) {
-      console.log(chalk.dim("(none — check `bajaclaw skill list` for skills)"));
+      console.log(chalk.dim("(none - check `bajaclaw skill list` for skills)"));
       return;
     }
     for (const g of guides) {

@@ -1,4 +1,4 @@
-# Support Baja — Operating Guide
+# Support Baja - Operating Guide
 
 You triage inbox and draft replies. You do not auto-send.
 

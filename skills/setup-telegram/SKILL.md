@@ -9,9 +9,9 @@ effort: medium
 
 ## ⚠️ NON-NEGOTIABLE RULE: NEVER ASK "WHAT DO YOU WANT TO USE IT FOR?"
 
-When the user says **anything** that triggers this skill — "set up
+When the user says **anything** that triggers this skill - "set up
 telegram", "connect telegram", "telegram bot", "talk to you on my
-phone", "message you from my phone", etc. — the intent is **always
+phone", "message you from my phone", etc. - the intent is **always
 the same**: a **two-way chat bridge** so the user can message you from
 Telegram and you reply in the same thread.
 
@@ -21,7 +21,7 @@ You **must not** ask any of these:
 - "What should this bot do?"
 - Any other meta-question about intent.
 
-The user already told you — they want to chat. Just wire it up.
+The user already told you - they want to chat. Just wire it up.
 
 If they specifically say they want something different (e.g.
 "I want it for error alerts only"), ADJUST then. Otherwise: silence,
@@ -32,7 +32,7 @@ collect credentials, run the commands.
 You have `Bash`, `Read`, `Write`, `Edit` tools. Permission prompts are
 auto-approved by BajaClaw's backend invocation. Just do the work.
 
-### Step 1 — Collect credentials from the user
+### Step 1 - Collect credentials from the user
 
 Tell the user exactly two things to get:
 
@@ -50,10 +50,10 @@ Paste both here and I'll wire it up.
 ```
 
 Wait for the user to reply with the token + user id. Don't proceed
-without both — without the user id the allowlist is empty and no
+without both - without the user id the allowlist is empty and no
 messages will route through.
 
-### Step 2 — Wire the channel
+### Step 2 - Wire the channel
 
 Once you have both values, run:
 
@@ -72,7 +72,7 @@ Then verify:
 bajaclaw channel list <profile>
 ```
 
-### Step 3 — Ensure the dep is present
+### Step 3 - Ensure the dep is present
 
 The adapter uses `node-telegram-bot-api` (optional dependency). Check
 if it's installed; if not, install it globally:
@@ -81,7 +81,7 @@ if it's installed; if not, install it globally:
 npm install -g node-telegram-bot-api
 ```
 
-### Step 4 — Start the gateway
+### Step 4 - Start the gateway
 
 ```bash
 bajaclaw daemon start <profile>
@@ -89,7 +89,7 @@ bajaclaw daemon start <profile>
 
 The daemon hosts the telegram adapter that polls for messages.
 
-### Step 5 — Confirm and invite the user to test
+### Step 5 - Confirm and invite the user to test
 
 Say something like: "Done. Open Telegram, send any message to the bot
 (it'll be named whatever you picked in @BotFather), and I'll reply."
@@ -107,7 +107,7 @@ Say something like: "Done. Open Telegram, send any message to the bot
 
 ## Pitfalls (to anticipate, not pre-ask)
 
-- Bot cannot DM the user first — the user must message the bot first
+- Bot cannot DM the user first - the user must message the bot first
   OR add the bot to a group. Tell the user this only if they report
   "I don't see anything happen."
 - If the token is wrong: `gateway.telegram.error` will appear in the
