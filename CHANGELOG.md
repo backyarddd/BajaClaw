@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.10.2
+
+**Install UX: visible welcome, dep health check.**
+
+npm v7+ captures postinstall stdout by default (`foreground-scripts:
+false`), which is why `npm install -g bajaclaw` looked silent even
+though the setup wizard was running. Fixed by:
+
+- **Postinstall is now quiet and fast** — scaffolds the default
+  profile silently (no wizard mid-install, which could hang), then
+  emits a single-line notice to **stderr** (stderr survives npm's
+  capture on most configs):
+
+  ```
+  ✓ BajaClaw v0.10.2 installed. Run `bajaclaw` to finish setup.
+  ```
+
+- **Dep health check**: verifies the `better-sqlite3` native binding
+  loaded, and checks whether the `claude` CLI backend is on PATH.
+  If either is missing, prints a clear warning with the fix command.
+
+- **First-run welcome on the first `bajaclaw` invocation**. Shows
+  the ASCII banner, backend status, first-time-setup commands, and
+  common next steps. Marked via `~/.bajaclaw/.first-run-done` so it
+  fires exactly once. Skipped for `--version`, `--help`, `uninstall`,
+  `update`, `banner`, `welcome`.
+
+- **`bajaclaw welcome`** — new command. Re-display the banner and
+  next-steps list anytime.
+
+- **Sudo safety**: postinstall under `sudo` without `SUDO_USER` no
+  longer creates a root-owned `~/.bajaclaw`. Prints a notice asking
+  the user to run `bajaclaw setup` as themselves instead.
+
 ## 0.10.1
 
 **Published to npm.** BajaClaw is now on the npm registry as
