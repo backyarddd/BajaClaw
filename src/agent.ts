@@ -37,6 +37,10 @@ export interface CycleInput {
   profile: string;
   task?: string;
   dryRun?: boolean;
+  // If set, overrides the profile's configured model for this one cycle.
+  // Use "auto" to force auto-routing; any other string is passed verbatim
+  // to the backend. Used by the HTTP API to support per-request model.
+  modelOverride?: string;
 }
 
 export interface CycleOutput {
@@ -75,9 +79,10 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
 
     if (cfg.memorySync) syncFromClaude(db, log);
 
-    // Pick the model (or honor the configured id) before sizing context.
+    // Pick the model. Per-request override wins over profile config.
+    const effectiveModel = input.modelOverride ?? cfg.model;
     const picked = pickModel({
-      configuredModel: cfg.model,
+      configuredModel: effectiveModel,
       task,
       source: isHeartbeat ? "heartbeat" : undefined,
     });

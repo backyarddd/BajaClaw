@@ -49,11 +49,21 @@ Lists exposed BajaClaw profiles as OpenAI-format model entries.
 {
   "object": "list",
   "data": [
-    {"id": "default", "object": "model", "created": 1700000000, "owned_by": "bajaclaw"},
-    {"id": "researcher", "object": "model", "created": 1700000000, "owned_by": "bajaclaw"}
+    { "id": "default",                        "object": "model", "owned_by": "bajaclaw" },
+    { "id": "default:auto",                   "object": "model", "owned_by": "bajaclaw" },
+    { "id": "default:claude-opus-4-7",        "object": "model", "owned_by": "bajaclaw" },
+    { "id": "default:claude-sonnet-4-6",      "object": "model", "owned_by": "bajaclaw" },
+    { "id": "default:claude-haiku-4-5",       "object": "model", "owned_by": "bajaclaw" },
+    { "id": "auto",                           "object": "model", "owned_by": "bajaclaw" },
+    { "id": "claude-opus-4-7",                "object": "model", "owned_by": "bajaclaw" }
   ]
 }
 ```
+
+The endpoint lists the bare profile names, then `<profile>:<model>`
+virtual entries for each known model, and finally bare model-id
+shortcuts (which apply to the `default` profile). Any string you send
+is still parsed — the list is a hint, not a hard whitelist.
 
 ### `POST /v1/chat/completions`
 
@@ -71,8 +81,32 @@ OpenAI ChatCompletion. Non-streaming or SSE streaming.
 }
 ```
 
-The `model` field is a BajaClaw profile name. Optionally prefix with
-`bajaclaw:` (`"model": "bajaclaw:default"`) for clarity.
+**Model field — how it's parsed**
+
+BajaClaw supports three forms. Each resolves to a `(profile, modelOverride?)` pair:
+
+| request `model` | profile | model override | meaning |
+|---|---|---|---|
+| `default` | `default` | — | use the profile's configured model (may be `auto`) |
+| `bajaclaw:default` | `default` | — | same, with explicit namespace |
+| `researcher` | `researcher` | — | any profile name works |
+| `default:claude-opus-4-7` | `default` | `claude-opus-4-7` | **force Opus for this one request** |
+| `bajaclaw:researcher:claude-sonnet-4-6` | `researcher` | `claude-sonnet-4-6` | same, namespaced |
+| `default:auto` | `default` | `auto` | force auto-routing for this request |
+| `auto` | `default` | `auto` | shortcut: default profile, auto |
+| `claude-opus-4-7` | `default` | `claude-opus-4-7` | shortcut: default profile, forced Opus |
+
+So: if your profile's configured model is `auto` and you send
+`"model": "default"`, you get auto-routing. If you send
+`"model": "default:claude-opus-4-7"` on the same profile, you force
+Opus for just that request — the profile's config is not modified.
+
+**Answer to "does it auto-route to the model BajaClaw is pointed at?"**
+Yes. The request uses the profile's configured model unless you
+explicitly override it. If the profile is `auto`, it routes per task.
+
+**Answer to "can I send my own model in the API call?"**
+Yes. Use any of the override forms above.
 
 Message handling:
 - If one message is provided, its content is the task.

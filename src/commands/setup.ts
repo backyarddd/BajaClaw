@@ -1,4 +1,10 @@
 // Idempotent first-run bootstrap. Safe to re-run.
+//
+// Interactive by default on a TTY: asks the user to name their agent,
+// pick a tone, set their own preferred name, timezone, focus area,
+// any topics the agent should know, and any hard "don't" rules.
+// Non-interactive (--silent, postinstall, pipes) falls back to sane
+// defaults — nothing blocks.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
@@ -13,6 +19,9 @@ import { runHealth } from "../health-check.js";
 import { printBanner } from "../banner.js";
 import { currentVersion } from "../updater.js";
 import { cmdRegister } from "./mcp.js";
+import { ask, askChoice, askList, detectTimezone, isInteractive } from "../prompt.js";
+import { loadPersona, savePersona } from "../persona-io.js";
+import { TONE_OPTIONS, type Persona } from "../persona.js";
 
 export const DEFAULT_PROFILE_NAME =
   process.env.BAJACLAW_DEFAULT_PROFILE ?? "default";
@@ -24,6 +33,10 @@ export interface SetupOptions {
   skipMcpRegister?: boolean;
   skipBanner?: boolean;
   silent?: boolean;
+  // Force the interactive wizard even on a non-TTY (for testing).
+  interactive?: boolean;
+  // Skip the interactive wizard entirely and just scaffold.
+  nonInteractive?: boolean;
 }
 
 export async function runSetup(opts: SetupOptions = {}): Promise<void> {
@@ -34,27 +47,41 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
 
   if (!opts.skipBanner && !opts.silent) printBanner(currentVersion(), { force: true });
 
-  const already = existsSync(profileDir(name)) && existsSync(join(profileDir(name), "config.json"));
-  if (!already) {
-    if (!opts.silent) console.log(chalk.cyan(`Creating default profile "${name}"…`));
+  const profileExisted = existsSync(profileDir(name)) && existsSync(join(profileDir(name), "config.json"));
+
+  if (!profileExisted) {
+    if (!opts.silent) console.log(chalk.cyan(`Creating profile "${name}"…`));
     await runInit({ name, template, model: model as never });
   } else if (!opts.silent) {
-    console.log(chalk.dim(`✓ profile "${name}" already exists — leaving it alone`));
+    console.log(chalk.dim(`✓ profile "${name}" already exists`));
   }
 
-  // Ensure agent descriptor exists even if the profile was made before 0.2.
   ensureAgentDescriptor(name);
 
-  // Register MCP server with desktop config.
-  if (!opts.skipMcpRegister) {
+  // Interactive persona wizard on first setup (or re-ask on explicit --interactive).
+  const wantWizard = !opts.silent && !opts.nonInteractive && (opts.interactive || (isInteractive() && !loadPersona(name)));
+  if (wantWizard) {
+    console.log("");
+    console.log(chalk.bold("Let's set up your agent's personality."));
+    console.log(chalk.dim("This is an agent, not a chatbot. These answers tell it who it is and how to work for you."));
+    console.log("");
     try {
-      await cmdRegister(name);
+      const persona = await promptPersona(name);
+      savePersona(name, persona);
+      console.log("");
+      console.log(chalk.green(`✓ persona saved to ${profileDir(name)}/SOUL.md`));
     } catch (e) {
-      if (!opts.silent) console.log(chalk.yellow(`mcp register: ${(e as Error).message}`));
+      console.log(chalk.yellow(`(skipped persona wizard: ${(e as Error).message})`));
     }
+  } else if (!opts.silent && loadPersona(name)) {
+    console.log(chalk.dim(`✓ persona already set — run \`bajaclaw persona\` to change`));
   }
 
-  // Health snapshot.
+  if (!opts.skipMcpRegister) {
+    try { await cmdRegister(name); }
+    catch (e) { if (!opts.silent) console.log(chalk.yellow(`mcp register: ${(e as Error).message}`)); }
+  }
+
   if (!opts.silent) {
     console.log("");
     console.log(chalk.bold("Toolchain check:"));
@@ -78,9 +105,57 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
     console.log(`  ${chalk.cyan("bajaclaw start")}                  ${chalk.dim("# run a cycle")}`);
     console.log(`  ${chalk.cyan("bajaclaw dashboard")}              ${chalk.dim("# http://localhost:7337")}`);
     console.log(`  ${chalk.cyan("bajaclaw daemon install")}         ${chalk.dim("# schedule recurring heartbeat")}`);
-    console.log(`  ${chalk.cyan("bajaclaw init my-agent")}          ${chalk.dim("# additional named profiles, optional")}`);
+    console.log(`  ${chalk.cyan("bajaclaw subagent create mail --parent " + name)} ${chalk.dim("# scoped helper agent")}`);
     console.log("");
   }
+}
+
+async function promptPersona(profile: string): Promise<Persona> {
+  const existing = loadPersona(profile) ?? undefined;
+
+  const agentName = await ask(
+    chalk.bold("What should your agent call itself?"),
+    existing?.agentName ?? "Baja",
+  );
+
+  const userName = await ask(
+    chalk.bold("What should it call you?"),
+    existing?.userName ?? "",
+  );
+
+  const tone = (await askChoice(
+    chalk.bold("How should it talk to you?"),
+    TONE_OPTIONS as string[],
+    existing?.tone ?? "concise",
+  )) as Persona["tone"];
+
+  const tz = await ask(
+    chalk.bold("What's your timezone?"),
+    existing?.timezone ?? detectTimezone() ?? "",
+  );
+
+  console.log("");
+  console.log(chalk.dim("Give your agent a purpose. One or two sentences — what is it here to do?"));
+  const focus = await ask(chalk.bold("Focus:"), existing?.focus ?? "Help me get things done. Triage, drafts, and research on request.");
+
+  console.log("");
+  console.log(chalk.dim("Any topics, domains, or projects it should be aware of?"));
+  const interests = await askList(chalk.bold("Interests:"));
+
+  console.log("");
+  console.log(chalk.dim("Any hard rules? Things it should never do. e.g. \"send email without approval\""));
+  const doNots = await askList(chalk.bold("Don'ts:"));
+
+  return {
+    agentName: agentName || "Baja",
+    userName: userName || undefined,
+    tone,
+    timezone: tz || undefined,
+    focus: focus || undefined,
+    interests: interests.length > 0 ? interests : (existing?.interests ?? undefined),
+    doNots: doNots.length > 0 ? doNots : (existing?.doNots ?? undefined),
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+  };
 }
 
 function ensureAgentDescriptor(profile: string): void {
@@ -117,7 +192,6 @@ export function defaultProfileName(): string {
   return DEFAULT_PROFILE_NAME;
 }
 
-// Marker file used only to detect truly-fresh installs for one-time messaging.
 export function firstRunMarkerPath(): string {
   ensureDir(bajaclawHome());
   return join(bajaclawHome(), ".first-run-done");
@@ -131,10 +205,8 @@ export function markFirstRunDone(): void {
   try { writeFileSync(firstRunMarkerPath(), new Date().toISOString()); } catch { /* silent */ }
 }
 
-// Helper consumed by the CLI to auto-bootstrap when someone runs `bajaclaw
-// start` without ever having run setup. Runs setup silently once.
 export async function autoBootstrapIfNeeded(): Promise<void> {
   const p = join(bajaclawHome(), "profiles", DEFAULT_PROFILE_NAME, "config.json");
   if (existsSync(p)) return;
-  await runSetup({ silent: true, skipMcpRegister: true });
+  await runSetup({ silent: true, skipMcpRegister: true, nonInteractive: true });
 }

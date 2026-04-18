@@ -17,6 +17,8 @@ import { runModel } from "./commands/model.js";
 import { runEffort } from "./commands/effort.js";
 import { runGuide } from "./commands/guide.js";
 import { runServe } from "./commands/serve.js";
+import { runPersonaCmd } from "./commands/persona.js";
+import * as subagent from "./commands/subagent.js";
 import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
@@ -169,20 +171,61 @@ program.command("update").description("Check for and install a newer version")
   .option("--yes", "apply without confirmation")
   .action(async (opts) => runUpdate({ check: !!opts.check, yes: !!opts.yes }));
 
-// Setup — idempotent first-run bootstrap. Safe to rerun.
-program.command("setup").description("Idempotent first-run bootstrap (default profile + MCP register + health check)")
+// Setup — idempotent first-run bootstrap. Safe to rerun. Interactive
+// persona wizard on a TTY the first time; non-interactive otherwise.
+program.command("setup").description("Idempotent first-run bootstrap (profile, MCP register, persona wizard, health check)")
   .option("--profile <name>", "profile name (default: 'default')")
   .option("--template <t>", "template: outreach|research|support|social|code|custom", "custom")
   .option("--model <id>", "model id (default: auto)", "auto")
   .option("--skip-mcp-register", "don't touch desktop MCP config")
   .option("--silent", "no output")
+  .option("--interactive", "force interactive wizard even if persona exists")
+  .option("--non-interactive", "skip the wizard; just scaffold with defaults")
   .action(async (opts) => runSetup({
     profile: opts.profile,
     template: opts.template,
     model: opts.model,
     skipMcpRegister: !!opts.skipMcpRegister,
     silent: !!opts.silent,
+    interactive: !!opts.interactive,
+    nonInteractive: !!opts.nonInteractive,
   }));
+
+// Persona — view or re-run the wizard
+program.command("persona [profile]")
+  .description("Show or edit the agent's persona (name, tone, user name, focus)")
+  .option("--edit", "re-run the interactive wizard")
+  .option("--reset", "discard current persona and start fresh")
+  .action(async (p, opts) => runPersonaCmd({ profile: p, edit: !!opts.edit, reset: !!opts.reset }));
+
+// Sub-agent group
+const subCmd = program.command("subagent").description("Sub-agent management (orchestrator + scoped helpers)");
+subCmd.command("create <name>")
+  .description("Scaffold a sub-agent under a parent profile")
+  .requiredOption("--parent <p>", "parent profile (orchestrator)")
+  .option("--template <t>", "template (default: custom)", "custom")
+  .option("--model <id>", "model (default: auto)")
+  .option("--allowed-tools <list>", "comma-separated allowed tools")
+  .option("--disallowed-tools <list>", "comma-separated disallowed tools")
+  .option("--description <text>", "one-line purpose (seeded into SOUL.md)")
+  .action(async (name, opts) => subagent.cmdCreate({
+    name,
+    parent: opts.parent,
+    template: opts.template,
+    model: opts.model,
+    allowedTools: opts.allowedTools ? String(opts.allowedTools).split(",").map((s: string) => s.trim()).filter(Boolean) : undefined,
+    disallowedTools: opts.disallowedTools ? String(opts.disallowedTools).split(",").map((s: string) => s.trim()).filter(Boolean) : undefined,
+    description: opts.description,
+  }));
+subCmd.command("list [parent]")
+  .description("List sub-agents under a parent (or the whole tree if omitted)")
+  .action(async (p) => subagent.cmdList(p));
+
+// Delegate — orchestrators call this via Bash to hand off a task
+program.command("delegate <subagent> <task>")
+  .description("Run one cycle on a sub-agent and stream its response text to stdout")
+  .option("--json", "output full CycleOutput JSON instead of just text")
+  .action(async (sub, task, opts) => subagent.cmdDelegate(sub, task, { json: !!opts.json }));
 
 // Uninstall — full teardown.
 program.command("uninstall").description("Remove all BajaClaw state (profiles, scheduler, MCP, memory sync)")
