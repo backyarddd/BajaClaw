@@ -23,6 +23,31 @@ export async function runDashboard(profile: string): Promise<void> {
   });
 }
 
+/** Start the dashboard in the background and return. Caller owns the
+ *  lifetime — the returned server is null if the listen attempt
+ *  failed (port in use, etc.). No throws: the caller can log the
+ *  onError result and carry on. */
+export async function startDashboardInProcess(profile: string): Promise<{
+  port: number;
+  ok: boolean;
+  error?: string;
+}> {
+  const cfg = loadConfig(profile);
+  const port = cfg.dashboardPort ?? 7337;
+  return new Promise((resolve) => {
+    const srv = createServer((req: IncomingMessage, res: ServerResponse) => {
+      try { handle(req, res, profile); }
+      catch (e) { res.writeHead(500); res.end((e as Error).message); }
+    });
+    srv.on("error", (err: NodeJS.ErrnoException) => {
+      resolve({ port, ok: false, error: err.code === "EADDRINUSE" ? `port ${port} already in use` : err.message });
+    });
+    srv.listen(port, () => {
+      resolve({ port, ok: true });
+    });
+  });
+}
+
 function handle(req: IncomingMessage, res: ServerResponse, profile: string): void {
   const url = req.url ?? "/";
   if (url === "/" || url === "/index.html") {
