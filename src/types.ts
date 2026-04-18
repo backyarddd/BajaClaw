@@ -74,7 +74,7 @@ export interface AgentConfig {
   dashboardPort?: number;
   // If true (default), the daemon starts the local dashboard HTTP
   // server alongside the gateway when it boots. Set to false to opt
-  // out — e.g. if you prefer to run `bajaclaw dashboard` manually,
+  // out - e.g. if you prefer to run `bajaclaw dashboard` manually,
   // or if the port conflicts with something you don't want evicted.
   dashboardAutostart?: boolean;
   memorySync?: boolean;
@@ -87,7 +87,7 @@ export interface AgentConfig {
   // Extra claude beta flags to include verbatim.
   betas?: string[];
   // When true, the desktop CLI's MCP config is merged into the cycle
-  // subprocess. Off by default — BajaClaw keeps its own MCP config separate.
+  // subprocess. Off by default - BajaClaw keeps its own MCP config separate.
   mergeDesktopMcp?: boolean;
   // Per-cycle auto-skill synthesis settings (inspired by the "skill after
   // complex tasks" pattern). Override defaults here per profile.
@@ -159,9 +159,9 @@ export interface Skill {
   // env vars the skill expects. Normalized from openclaw
   // `requires.env` or hermes `required_environment_variables[].name`.
   requiredEnv?: string[];
-  // openclaw `requires.bins` — all must be on PATH.
+  // openclaw `requires.bins` - all must be on PATH.
   requiredBins?: string[];
-  // openclaw `requires.anyBins` — at least one must be on PATH.
+  // openclaw `requires.anyBins` - at least one must be on PATH.
   anyBins?: string[];
   // hermes conditional activation hints.
   requiresTools?: string[];

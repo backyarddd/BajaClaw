@@ -23,7 +23,7 @@ Detection: `findClaudeBinary()` uses `which claude` (POSIX) or `where.exe
 claude` (Windows). If the binary is missing, `bajaclaw doctor` flags it and
 `runCycle` returns `ok=false` with a clear error.
 
-## 2. Skills — isolated by default
+## 2. Skills - isolated by default
 
 BajaClaw scans only BajaClaw-owned directories:
 
@@ -43,13 +43,13 @@ bajaclaw skill port --scope profile --profile default
 bajaclaw skill port --source /path/to/skills  # arbitrary source
 ```
 
-This works the other direction too — copy a BajaClaw skill into
+This works the other direction too - copy a BajaClaw skill into
 `~/.claude/skills/` manually and the desktop CLI picks it up (format is
 compatible).
 
 See [`skills.md`](skills.md) for the full skill documentation.
 
-## 3. MCP — isolated by default
+## 3. MCP - isolated by default
 
 BajaClaw uses its own MCP config, not the desktop CLI's. Merge order
 (highest wins):
@@ -57,7 +57,7 @@ BajaClaw uses its own MCP config, not the desktop CLI's. Merge order
 1. `<profile>/agent-mcp-config.json`
 2. `<profile>/mcp-config.json`
 3. `~/.bajaclaw/mcp-config.json` (user-global BajaClaw MCP)
-4. Desktop CLI MCP config — **only if `mergeDesktopMcp: true`** in the
+4. Desktop CLI MCP config - **only if `mergeDesktopMcp: true`** in the
    profile's `config.json`
 
 The merged file is written to `.mcp-merged.json` in the profile directory
@@ -72,13 +72,13 @@ bajaclaw mcp port --names fs git   # port just these two
 bajaclaw mcp port --force          # overwrite existing BajaClaw entries
 ```
 
-BajaClaw's own MCP entry (`bajaclaw`) is skipped during port — no
+BajaClaw's own MCP entry (`bajaclaw`) is skipped during port - no
 self-references.
 
 ### Auto-inherit from desktop (opt-in)
 
-If you want the pre-isolation behavior back — every desktop MCP server
-inherited on every cycle — set this in the profile's `config.json`:
+If you want the pre-isolation behavior back - every desktop MCP server
+inherited on every cycle - set this in the profile's `config.json`:
 
 ```json
 { "mergeDesktopMcp": true }
@@ -86,7 +86,7 @@ inherited on every cycle — set this in the profile's `config.json`:
 
 Per profile, not globally.
 
-## 4. MCP — expose
+## 4. MCP - expose
 
 BajaClaw is itself an MCP server (`src/mcp/server.ts`). `bajaclaw setup`
 auto-registers it in every known desktop MCP config path for your OS.
@@ -115,14 +115,14 @@ Transports:
 
 `bajaclaw init` writes two paired files:
 
-- `~/.claude/agents/<profile>/<name>.md` — standard agent frontmatter
+- `~/.claude/agents/<profile>/<name>.md` - standard agent frontmatter
   (`name`, `description`, `model`, `effort`, `maxTurns`, `disallowedTools`,
   `isolation`, `background`). Any tool that respects this convention can
   pick up the agent via `@<name>`.
-- `~/.bajaclaw/profiles/<name>/config.json` — BajaClaw's runtime config:
+- `~/.bajaclaw/profiles/<name>/config.json` - BajaClaw's runtime config:
   heartbeat, channels, DB path, skill scopes.
 
-The descriptor is written once. Edit it freely — BajaClaw only reads its
+The descriptor is written once. Edit it freely - BajaClaw only reads its
 own config, never the descriptor.
 
 ## 6. Memory compatibility
@@ -163,5 +163,5 @@ See [`skills.md`](skills.md) for configuration + review workflow.
 | skills | BajaClaw-only scopes | `bajaclaw skill port` |
 | MCP | BajaClaw-only config | `bajaclaw mcp port` or `mergeDesktopMcp: true` |
 | memory | isolated | `memorySync: true` |
-| agent descriptor | always written | — |
-| MCP server | registered on `setup` | — |
+| agent descriptor | always written | - |
+| MCP server | registered on `setup` | - |

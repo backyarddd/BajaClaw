@@ -13,7 +13,7 @@
 //   the SQLite file to reclaim space.
 //
 // Why cycle-time triggers work: BajaClaw's cycles are already
-// stateless — each cycle rebuilds the prompt from memory + skills +
+// stateless - each cycle rebuilds the prompt from memory + skills +
 // task. The model's own context window never "fills up" across cycles.
 // The thing that grows unbounded is the memory DB itself. Compaction
 // is memory hygiene, not conversation truncation.

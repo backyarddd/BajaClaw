@@ -1,7 +1,7 @@
 {
   "name": "bajaclaw",
-  "version": "0.14.3",
-  "description": "BajaClaw — autonomous agents on your terms",
+  "version": "0.14.4",
+  "description": "BajaClaw - autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {
     "npmName": "bajaclaw",

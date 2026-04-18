@@ -28,7 +28,7 @@ heartbeat triggers.
 4. Tail logs: `bajaclaw daemon logs <profile> --lines 100`
 5. Restart: `bajaclaw daemon restart <profile>`
 6. Stop: `bajaclaw daemon stop <profile>` (SIGTERM + pid cleanup).
-7. Auto-start on login: `bajaclaw daemon install <profile>` — creates a
+7. Auto-start on login: `bajaclaw daemon install <profile>` - creates a
    `*/15 * * * *` OS-scheduler entry that invokes `bajaclaw start <profile>`.
 
 ## Pitfalls

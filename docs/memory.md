@@ -5,16 +5,16 @@ for full-text recall.
 
 ## Schema
 
-- `cycles` — one row per cycle (task, prompt preview, response preview,
+- `cycles` - one row per cycle (task, prompt preview, response preview,
   cost, tokens, status)
-- `memories` — durable facts extracted from cycles
-- `memories_fts` — FTS5 virtual table over memories.content
-- `schedules` — heartbeat entries parsed from HEARTBEAT.md
-- `tasks` — inbound tasks awaiting processing (priority: high/normal/low)
-- `circuit_state` — key/value for the breaker + arbitrary state
-- `prompts` — versioned system prompts for future A/B work
+- `memories` - durable facts extracted from cycles
+- `memories_fts` - FTS5 virtual table over memories.content
+- `schedules` - heartbeat entries parsed from HEARTBEAT.md
+- `tasks` - inbound tasks awaiting processing (priority: high/normal/low)
+- `circuit_state` - key/value for the breaker + arbitrary state
+- `prompts` - versioned system prompts for future A/B work
 
-See `src/db.ts` for the migration SQL. Schema is additive — never drops.
+See `src/db.ts` for the migration SQL. Schema is additive - never drops.
 
 ## Lifecycle
 
@@ -27,7 +27,7 @@ See `src/db.ts` for the migration SQL. Schema is additive — never drops.
 ## Kinds
 
 Soft taxonomy: `fact`, `decision`, `preference`, `todo`, `reference`,
-`claude-code`, `imported`. Not enforced — pick whatever shape is useful in
+`claude-code`, `imported`. Not enforced - pick whatever shape is useful in
 the dashboard/filter.
 
 ## Cross-tool memory sync
@@ -40,7 +40,7 @@ Set `memorySync: true` in the profile config to enable two-way sync with
 - **Out**: `writeClaudeMemoryFile(profile)` writes a digest to
   `~/.claude/memory/bajaclaw-<profile>.md` so other tools benefit.
 
-Disabled by default — memory sharing is deliberate, not automatic.
+Disabled by default - memory sharing is deliberate, not automatic.
 
 ## Searching
 
@@ -50,7 +50,7 @@ Three access points:
 - **CLI**: no dedicated `bajaclaw memory search` command yet; use the MCP
   tool or open the DB directly
 - **MCP tool**: `bajaclaw_memory_search({ query, limit, profile })` from any
-  MCP client — returns the top matches as JSON
+  MCP client - returns the top matches as JSON
 
 ## Compaction
 

@@ -14,7 +14,7 @@ import type { AgentConfig, ChannelConfig } from "../types.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DASHBOARD_HTML = join(__dirname, "..", "..", "src", "dashboard.html");
 
-// Daemon start time — when the dashboard starts in-process, we capture
+// Daemon start time - when the dashboard starts in-process, we capture
 // it for the /api/status uptime readout.
 const START_TIME = Date.now();
 
@@ -28,7 +28,7 @@ export async function runDashboard(profile: string): Promise<void> {
 }
 
 /** Start the dashboard in the background and return. Port-in-use is
- *  non-fatal — the caller gets an `ok: false` result to log. */
+ *  non-fatal - the caller gets an `ok: false` result to log. */
 export async function startDashboardInProcess(profile: string): Promise<{
   port: number;
   ok: boolean;
@@ -80,7 +80,7 @@ async function dispatchApi(
   url: string,
   method: string,
 ): Promise<void> {
-  // POST /api/chat — blocks until the cycle finishes and returns the
+  // POST /api/chat - blocks until the cycle finishes and returns the
   // full result. Cycles are serialized per-profile by runCycle, so
   // concurrent dashboard chats queue behind each other.
   if (url === "/api/chat" && method === "POST") {
@@ -104,14 +104,14 @@ async function dispatchApi(
     return;
   }
 
-  // GET /api/config — safe subset of AgentConfig for the UI.
+  // GET /api/config - safe subset of AgentConfig for the UI.
   if (url === "/api/config" && method === "GET") {
     const cfg = loadConfig(profile);
     json(res, publicConfig(cfg));
     return;
   }
 
-  // PUT /api/config — merges a safe subset onto the on-disk config.
+  // PUT /api/config - merges a safe subset onto the on-disk config.
   if (url === "/api/config" && method === "PUT") {
     const body = await readJson(req) as Partial<AgentConfig>;
     const cfg = loadConfig(profile);
@@ -121,7 +121,7 @@ async function dispatchApi(
     return;
   }
 
-  // GET /api/status — daemon + gateway + version info.
+  // GET /api/status - daemon + gateway + version info.
   if (url === "/api/status" && method === "GET") {
     json(res, {
       profile,
@@ -133,14 +133,14 @@ async function dispatchApi(
     return;
   }
 
-  // GET /api/channels — configured channels with tokens masked.
+  // GET /api/channels - configured channels with tokens masked.
   if (url === "/api/channels" && method === "GET") {
     const cfg = loadConfig(profile);
     json(res, (cfg.channels ?? []).map(maskChannel));
     return;
   }
 
-  // DELETE /api/channels/:kind — remove a configured channel.
+  // DELETE /api/channels/:kind - remove a configured channel.
   const chDel = url.match(/^\/api\/channels\/(telegram|discord)$/);
   if (chDel && method === "DELETE") {
     const kind = chDel[1] as "telegram" | "discord";
@@ -151,7 +151,7 @@ async function dispatchApi(
     return;
   }
 
-  // GET /api/skills — active + inactive skills with origin.
+  // GET /api/skills - active + inactive skills with origin.
   if (url === "/api/skills" && method === "GET") {
     const skills = loadAllSkillsRaw(profile);
     json(res, skills.map((s) => ({
@@ -245,14 +245,14 @@ function sendHtml(res: ServerResponse): void {
 
 function fallbackHtml(): string {
   return `<!doctype html><html><body style="font-family:system-ui;background:#09090B;color:#F0F0F3;padding:2rem">
-<h1>BajaClaw Dashboard</h1><p>dashboard.html not found — run <code>npm run build</code>.</p>
+<h1>BajaClaw Dashboard</h1><p>dashboard.html not found - run <code>npm run build</code>.</p>
 </body></html>`;
 }
 
 // ── Config shaping ─────────────────────────────────────────────────
 
 // Fields the UI is allowed to see. Channels, tools, anything touching
-// auth is left off — the API is localhost-only but treat leaks
+// auth is left off - the API is localhost-only but treat leaks
 // conservatively anyway.
 interface PublicConfig {
   profile: string;
@@ -295,7 +295,7 @@ function publicConfig(cfg: AgentConfig): PublicConfig {
 }
 
 // Whitelist of fields the PUT /api/config endpoint will merge. Anything
-// else is silently ignored — prevents an injection from rewriting e.g.
+// else is silently ignored - prevents an injection from rewriting e.g.
 // the allowedTools list via the dashboard.
 const ALLOWED_FIELDS = new Set<keyof AgentConfig>([
   "model", "effort", "contextWindow", "dashboardPort",
@@ -308,7 +308,7 @@ function mergeSafe(cfg: AgentConfig, patch: Partial<AgentConfig>): AgentConfig {
     if (!ALLOWED_FIELDS.has(k as keyof AgentConfig)) continue;
     (next as Record<string, unknown>)[k] = v;
   }
-  // Compaction has its own subsection — merge just the known numeric/boolean fields.
+  // Compaction has its own subsection - merge just the known numeric/boolean fields.
   if (patch.compaction && typeof patch.compaction === "object") {
     const p = patch.compaction as Record<string, unknown>;
     next.compaction = { ...(cfg.compaction ?? {} as NonNullable<AgentConfig["compaction"]>) };

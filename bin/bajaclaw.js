@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Thin launcher — resolves tsx and invokes src/cli.ts, or dist/cli.js if built.
+// Thin launcher - resolves tsx and invokes src/cli.ts, or dist/cli.js if built.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";

@@ -2,8 +2,8 @@
 
 An agent is a pairing of:
 
-- `~/.bajaclaw/profiles/<name>/` — runtime config, DB, logs, schedules, skills
-- `~/.claude/agents/<name>/<name>.md` — agent descriptor (shared with other
+- `~/.bajaclaw/profiles/<name>/` - runtime config, DB, logs, schedules, skills
+- `~/.claude/agents/<name>/<name>.md` - agent descriptor (shared with other
   tools that respect the convention)
 
 ## Templates
@@ -45,10 +45,10 @@ bajaclaw dashboard my-agent         # http://localhost:7337
 
 ## AGENT.md / SOUL.md / HEARTBEAT.md
 
-- `AGENT.md` — operating rules; how the agent should behave. Edits take
+- `AGENT.md` - operating rules; how the agent should behave. Edits take
   effect on the next cycle.
-- `SOUL.md` — identity; tone, priorities, what the agent cares about.
-- `HEARTBEAT.md` — schedule entries in `<cron> | <task>` form, parsed into
+- `SOUL.md` - identity; tone, priorities, what the agent cares about.
+- `HEARTBEAT.md` - schedule entries in `<cron> | <task>` form, parsed into
   the DB on daemon first-boot.
 
 BajaClaw pre-0.2 used `CLAUDE.md` in place of `AGENT.md`. The cycle loader

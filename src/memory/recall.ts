@@ -23,7 +23,7 @@ export function recall(db: DB, query: string, limit = 5): Memory[] {
       LIMIT ?
     `).all(match, limit * 2) as Memory[];
     if (rows.length > 0) return dedupe(rows).slice(0, limit);
-  } catch { /* FTS may reject — fall through */ }
+  } catch { /* FTS may reject - fall through */ }
 
   return dedupe(db.prepare("SELECT * FROM memories ORDER BY id DESC LIMIT ?").all(limit) as Memory[]);
 }

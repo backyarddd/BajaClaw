@@ -1,10 +1,10 @@
 // Auto model selection. When a profile's model is set to "auto", pick a
-// concrete model id based on the task's shape. Heuristic only — no
+// concrete model id based on the task's shape. Heuristic only - no
 // extra backend calls.
 //
 // Tiers:
 //   claude-haiku-4-5   trivial / triage / heartbeat
-//   claude-sonnet-4-6  default — most normal work
+//   claude-sonnet-4-6  default - most normal work
 //   claude-opus-4-7    planning, coding, deep research, reflection
 
 import type { Model } from "./types.js";
@@ -76,7 +76,7 @@ export interface ContextBudget {
 }
 
 // Per-tier prompt budgets. These only shape the prompt BajaClaw
-// assembles (how many memories / skills to pack in) — the number of
+// assembles (how many memories / skills to pack in) - the number of
 // turns and tokens the agent can actually run is controlled by claude's
 // `--effort` level, not by us.
 export function budgetFor(tier: PickResult["tier"]): ContextBudget {
@@ -128,7 +128,7 @@ function countWords(text: string): number {
 // Known model ids for display in `bajaclaw model`.
 export const KNOWN_MODELS: { id: string; note: string }[] = [
   { id: AUTO,   note: "pick automatically per task (haiku/sonnet/opus)" },
-  { id: HAIKU,  note: "fast, cheap — triage + simple answers" },
+  { id: HAIKU,  note: "fast, cheap - triage + simple answers" },
   { id: SONNET, note: "balanced default" },
   { id: OPUS,   note: "planning, coding, deep research" },
 ];

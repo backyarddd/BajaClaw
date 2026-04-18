@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// npm postinstall — global-install scaffold + install-status notice.
+// npm postinstall - global-install scaffold + install-status notice.
 //
 // npm v7+ captures postinstall stdout by default (`foreground-scripts: false`),
 // so the full welcome screen runs on the FIRST `bajaclaw` invocation
@@ -28,7 +28,7 @@ if (!isGlobal) process.exit(0);
 // CI: skip unless explicitly opted in (don't touch $HOME we don't own).
 if (process.env.CI && process.env.BAJACLAW_SETUP_IN_CI !== "1") process.exit(0);
 
-// Running as root via sudo without a SUDO_USER fallback — profile
+// Running as root via sudo without a SUDO_USER fallback - profile
 // scaffolding would create a root-owned ~/.bajaclaw. Skip and let the
 // real user run `bajaclaw setup` themselves.
 const uid = typeof process.getuid === "function" ? process.getuid() : 1;
@@ -55,8 +55,8 @@ try {
   sqliteErr = (e && e.message) ? String(e.message).split("\n")[0] : "unknown";
 }
 
-// Check whether the `claude` CLI backend is on PATH. Not a blocker —
-// bajaclaw works without it in dry-run mode — but worth flagging.
+// Check whether the `claude` CLI backend is on PATH. Not a blocker -
+// bajaclaw works without it in dry-run mode - but worth flagging.
 const claudeCheck = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["claude"], { encoding: "utf8" });
 const claudeOK = claudeCheck.status === 0 && claudeCheck.stdout.trim().length > 0;
 

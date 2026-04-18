@@ -4,7 +4,7 @@
 
 BajaClaw can't find `claude` on your `PATH`.
 
-- Install the backend. BajaClaw drives it as a subprocess — without it, no
+- Install the backend. BajaClaw drives it as a subprocess - without it, no
   cycles can run.
 - On macOS with Homebrew: ensure `/opt/homebrew/bin` (Apple Silicon) or
   `/usr/local/bin` (Intel) is in your shell PATH.
@@ -25,7 +25,7 @@ Fix: `rm -rf node_modules && npm install`.
 
 Five consecutive failed cycles tripped the breaker.
 
-- Wait 15 minutes — it auto-closes on cooldown.
+- Wait 15 minutes - it auto-closes on cooldown.
 - Or inspect the last error: `bajaclaw health <profile>` shows the breaker
   state and the `logs/<date>.jsonl` file has full detail.
 - Run `bajaclaw start --dry-run` to confirm the prompt assembles cleanly.
@@ -35,7 +35,7 @@ Five consecutive failed cycles tripped the breaker.
 BajaClaw caps cycles at 60/hour by default. Either wait, or edit the cap
 passed in `safety.ts` via a profile-level setting if you need more.
 
-## Daemon won't start — "already running (pid N)"
+## Daemon won't start - "already running (pid N)"
 
 A stale `daemon.pid` file. If `bajaclaw daemon status` says "stale pid N",
 delete the file under `~/.bajaclaw/profiles/<name>/daemon.pid` and retry.
@@ -46,7 +46,7 @@ The notice respects three stops:
 
 - `BAJACLAW_NO_UPDATE_NOTICE=1` in the environment
 - A successful `bajaclaw update --yes` that brings you up to the latest
-- Non-TTY stdout (e.g. piped output) — the notice is silently suppressed
+- Non-TTY stdout (e.g. piped output) - the notice is silently suppressed
 
 If none of those apply and you still see it, delete
 `~/.bajaclaw/.update-check.json` to reset the cache and rerun.
@@ -55,13 +55,13 @@ If none of those apply and you still see it, delete
 
 - Run `bajaclaw skill list` to confirm the scope and path.
 - A skill with no `triggers` array and a very short `description` may score
-  0 against a short task — add triggers or broaden the description.
+  0 against a short task - add triggers or broaden the description.
 - Only the top 3 matches are injected per cycle.
 
 ## MCP server in desktop client doesn't show BajaClaw
 
 - Run `bajaclaw mcp register` and check the JSON it wrote.
-- Restart the desktop client — MCP config is read on start.
+- Restart the desktop client - MCP config is read on start.
 - Run `bajaclaw mcp serve --stdio` manually in a terminal and send a JSON-RPC
   `initialize` request on stdin to confirm the server responds.
 

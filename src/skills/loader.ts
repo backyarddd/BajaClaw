@@ -16,7 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // daemon; checking every skill every cycle is wasteful.
 const binCache = new Map<string, boolean>();
 
-/** Load active skills — those whose platform / required bins match
+/** Load active skills - those whose platform / required bins match
  *  the current machine. This is what the agent cycle should use. */
 export function loadAllSkills(profile: string): Skill[] {
   return loadAllSkillsRaw(profile).filter((s) => passesRuntimeChecks(s));

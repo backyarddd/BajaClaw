@@ -16,7 +16,7 @@ export async function cmdAdd(
 
   // For telegram: `--channel-id` is the user's numeric Telegram id
   //   (the same thing @userinfobot returns). It lives in the allowlist,
-  //   not channelId — telegram adapters route replies by chat id from
+  //   not channelId - telegram adapters route replies by chat id from
   //   the inbound message, not a pre-set channel.
   // For discord: `--channel-id` is the discord channel id; `--user-id`
   //   is the sender to allow. Without a user id, no allowlist is
@@ -36,7 +36,7 @@ export async function cmdAdd(
   saveConfig(cfg);
   console.log(chalk.green(`✓ added ${kind} channel to ${profile}`));
   if (kind === "telegram" && entry.allowlist?.length === 0) {
-    console.log(chalk.yellow("  note: no user id provided — allowlist is empty (any user can message)"));
+    console.log(chalk.yellow("  note: no user id provided - allowlist is empty (any user can message)"));
   }
 }
 

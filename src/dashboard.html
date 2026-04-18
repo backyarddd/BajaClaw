@@ -26,7 +26,7 @@
     --border-hover: rgba(255,255,255,0.12);
     --border-focus: rgba(20,214,206,0.55);
 
-    /* Baja Blast — Mountain Dew's tropical lime teal. */
+    /* Baja Blast - Mountain Dew's tropical lime teal. */
     --accent: #14D6CE;
     --accent-hover: #0DB8B0;
     --accent-soft: rgba(20,214,206,0.14);
@@ -360,7 +360,7 @@
     </div>
 
     <div class="nav-footer">
-      <span class="dot"></span><span id="status-footer">daemon live · pid —</span>
+      <span class="dot"></span><span id="status-footer">daemon live · pid -</span>
     </div>
   </aside>
 
@@ -541,8 +541,8 @@
     }
     return e;
   };
-  const fmt = (n) => n == null ? "—" : (n >= 1000 ? (n/1000).toFixed(1) + "k" : String(n));
-  const usd = (n) => n == null ? "—" : "$" + Number(n).toFixed(4);
+  const fmt = (n) => n == null ? "-" : (n >= 1000 ? (n/1000).toFixed(1) + "k" : String(n));
+  const usd = (n) => n == null ? "-" : "$" + Number(n).toFixed(4);
   const ago = (iso) => {
     if (!iso) return "";
     const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -708,7 +708,7 @@
     const rows = await api("/api/schedules");
     const list = $("#schedules");
     list.innerHTML = "";
-    if (rows.length === 0) list.append(el("div", { class: "muted" }, "no schedules — run `bajaclaw schedule add`"));
+    if (rows.length === 0) list.append(el("div", { class: "muted" }, "no schedules - run `bajaclaw schedule add`"));
     for (const s of rows) {
       list.append(el("div", { class: "list-item" }, [
         el("div", { class: "list-item-main" }, [

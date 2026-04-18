@@ -1,4 +1,4 @@
-// `bajaclaw compact [profile]` — run memory compaction now.
+// `bajaclaw compact [profile]` - run memory compaction now.
 import chalk from "chalk";
 import { openDb } from "../db.js";
 import { loadConfig, saveConfig } from "../config.js";
@@ -47,7 +47,7 @@ export async function runCompact(opts: CompactOptions): Promise<void> {
     if (!opts.force) {
       const decision = shouldCompact(db, cfg.compaction);
       if (!decision.yes) {
-        console.log(chalk.dim(`no trigger — ${decision.reason}. Use --force to run anyway.`));
+        console.log(chalk.dim(`no trigger - ${decision.reason}. Use --force to run anyway.`));
         return;
       }
       console.log(chalk.dim(`trigger: ${decision.reason}`));

@@ -34,7 +34,7 @@ Signals that a task belongs to a sub-agent:
    has that tool and you don't, delegate.
 2. Phrase the task for the sub-agent. Be specific. Pass along whatever
    filter, range, or query the user gave you. Don't just forward the
-   raw user message verbatim — rephrase if useful.
+   raw user message verbatim - rephrase if useful.
 3. Run the delegation via Bash:
    ```
    bajaclaw delegate <subagent> "<specific task>"
@@ -42,16 +42,16 @@ Signals that a task belongs to a sub-agent:
 4. Read the stdout response carefully. Summarize or quote back to the
    user as appropriate.
 5. If the sub-agent's response contains sensitive data (account numbers,
-   PII, auth tokens), follow your own don'ts — don't echo that verbatim
+   PII, auth tokens), follow your own don'ts - don't echo that verbatim
    in your reply. Summarize.
 
 ## Pitfalls
 - Do NOT invoke `bajaclaw start <subagent>` to trigger a cycle for the
-  sub-agent — that pulls from the sub-agent's queue, not your task.
+  sub-agent - that pulls from the sub-agent's queue, not your task.
   Use `bajaclaw delegate` instead.
 - Do NOT loop: if the sub-agent fails, report the failure to the user.
   Don't retry indefinitely.
-- Each delegation is a full cycle — one backend call with memory/skill
+- Each delegation is a full cycle - one backend call with memory/skill
   load. Don't delegate for trivial answers you already have.
 - A sub-agent has its own memory and skills. If you need it to see
   context from your conversation, include that context in the task

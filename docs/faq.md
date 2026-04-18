@@ -3,7 +3,7 @@
 ### Do I need an API key?
 
 No. BajaClaw drives the `claude` CLI backend as a subprocess. Whatever
-authentication that CLI already has — subscription, API key, or otherwise —
+authentication that CLI already has - subscription, API key, or otherwise -
 is what BajaClaw uses. BajaClaw itself never sees your credentials.
 
 ### Does BajaClaw send data anywhere?
@@ -34,12 +34,12 @@ profile).
 
 BajaClaw consumes MCP (passes your desktop config to the backend) and
 exposes MCP (resources + tools for its own state). The agent loop itself is
-not MCP — MCP is RPC; an agent loop is an autonomous scheduler.
+not MCP - MCP is RPC; an agent loop is an autonomous scheduler.
 
 ### Why SQLite + FTS5 instead of a vector DB?
 
 FTS5 is built into SQLite, zero-setup, and "good enough" for the memory
-scale a single user generates. The public interface to recall is a function —
+scale a single user generates. The public interface to recall is a function -
 swapping in embeddings later is a ~50-line change.
 
 ### Can I run BajaClaw without the daemon?

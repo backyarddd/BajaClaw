@@ -25,7 +25,7 @@ export class Logger {
     try {
       appendFileSync(this.file(), line + "\n");
     } catch {
-      // swallow — never crash on log errors
+      // swallow - never crash on log errors
     }
     if (process.env.BAJACLAW_VERBOSE === "1" || level === "error") {
       const out = level === "error" ? process.stderr : process.stdout;

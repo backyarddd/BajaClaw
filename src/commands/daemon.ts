@@ -34,7 +34,7 @@ export async function cmdStart(profile: string, foreground = false): Promise<voi
     unlinkSync(pidFile);
   }
 
-  // Sweep unreferenced stale daemons — processes running `daemon run
+  // Sweep unreferenced stale daemons - processes running `daemon run
   // <profile>` that our pidfile doesn't point to. A daemon can orphan
   // if the previous `daemon stop` killed the pidfile's launcher but
   // not the detached child, or if the process was SIGKILLed without
@@ -77,7 +77,7 @@ export async function cmdStart(profile: string, foreground = false): Promise<voi
 
 export async function cmdStop(profile: string): Promise<void> {
   const pidFile = pidPath(profile);
-  if (!existsSync(pidFile)) { console.log(chalk.dim("no pid file — daemon not running?")); return; }
+  if (!existsSync(pidFile)) { console.log(chalk.dim("no pid file - daemon not running?")); return; }
   const pid = Number(readFileSync(pidFile, "utf8").trim());
   try { process.kill(pid, "SIGTERM"); } catch { /* already gone */ }
   unlinkSync(pidFile);
@@ -130,7 +130,7 @@ async function runLoop(profile: string): Promise<void> {
   catch (e) { log.error("daemon.gateway.start.err", { error: (e as Error).message }); }
 
   // Auto-start the dashboard unless explicitly disabled. Runs in
-  // this process so its lifetime matches the daemon — no orphan HTTP
+  // this process so its lifetime matches the daemon - no orphan HTTP
   // servers to chase down. Port conflicts are logged but non-fatal.
   const cfgForDash = loadConfig(profile);
   if (cfgForDash.dashboardAutostart !== false) {
@@ -139,7 +139,7 @@ async function runLoop(profile: string): Promise<void> {
     else log.warn("daemon.dashboard.skip", { port: r.port, error: r.error });
   }
 
-  // Channel-sourced tasks need a shorter poll — 60s would feel like
+  // Channel-sourced tasks need a shorter poll - 60s would feel like
   // the bot is asleep. 3s when a gateway is wired, 60s otherwise.
   const hasChannels = await hasAnyChannel(profile);
   const pollMs = hasChannels ? 3_000 : 60_000;
@@ -153,7 +153,7 @@ async function runLoop(profile: string): Promise<void> {
         const out = await runCycle({ profile });
         if (out.source) {
           // Always clear the typing indicator, even on the empty-text
-          // path — the gateway started one when the inbound message
+          // path - the gateway started one when the inbound message
           // arrived and expects someone to end it.
           try {
             if (out.ok && out.text) {

@@ -98,7 +98,7 @@ function requireProfile(p: string | undefined): string {
   return p;
 }
 
-// Read back what Claude has — useful for `bajaclaw mcp port --list`.
+// Read back what Claude has - useful for `bajaclaw mcp port --list`.
 export function listDesktopServers(): string[] {
   const path = claudeDesktopConfigPath();
   if (!existsSync(path)) return [];

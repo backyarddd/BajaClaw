@@ -1,5 +1,5 @@
 // Delegate coding-heavy work to a dedicated CLI sub-session.
-// Orchestrating BajaClaw agents never write code directly — they call this.
+// Orchestrating BajaClaw agents never write code directly - they call this.
 import { runOnce } from "./claude.js";
 import type { ClaudeOptions, ClaudeResult } from "./types.js";
 
@@ -11,7 +11,7 @@ export interface DelegateOptions extends ClaudeOptions {
 export async function delegateCoding(task: string, opts: DelegateOptions): Promise<ClaudeResult> {
   const merged: ClaudeOptions = {
     model: opts.model ?? "claude-opus-4-7",
-    // Use max effort by default for delegated coding — these are the
+    // Use max effort by default for delegated coding - these are the
     // heavy-lift tasks that burn through turns.
     effort: opts.effort ?? "max",
     allowedTools: opts.allowedTools ?? ["Read", "Edit", "Write", "Bash", "Grep", "Glob"],

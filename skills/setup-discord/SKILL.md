@@ -9,9 +9,9 @@ effort: medium
 
 ## ⚠️ NON-NEGOTIABLE RULE: NEVER ASK "WHAT DO YOU WANT TO USE IT FOR?"
 
-When the user says **anything** that triggers this skill — "set up
+When the user says **anything** that triggers this skill - "set up
 discord", "connect discord", "discord bot", "talk to you on discord",
-etc. — the intent is **always the same**: a **two-way chat bridge**
+etc. - the intent is **always the same**: a **two-way chat bridge**
 so the user can message you in a Discord channel and you reply there.
 
 You **must not** ask any of these:
@@ -29,7 +29,7 @@ commands, confirm.
 You have `Bash`, `Read`, `Write`, `Edit` tools. Permission prompts are
 auto-approved. Do the work.
 
-### Step 1 — Collect credentials from the user
+### Step 1 - Collect credentials from the user
 
 Tell the user exactly three things:
 
@@ -53,7 +53,7 @@ Paste the three values: bot token, channel id, your user id.
 
 Wait for all three. Don't proceed partial.
 
-### Step 2 — Wire the channel
+### Step 2 - Wire the channel
 
 ```bash
 bajaclaw channel add <profile> discord --token <TOKEN> --channel-id <CHANNEL_ID> --user-id <USER_ID>
@@ -68,21 +68,21 @@ Verify:
 bajaclaw channel list <profile>
 ```
 
-### Step 3 — Ensure the dep is present
+### Step 3 - Ensure the dep is present
 
 ```bash
 npm install -g discord.js
 ```
 
-### Step 4 — Start the gateway
+### Step 4 - Start the gateway
 
 ```bash
 bajaclaw daemon start <profile>
 ```
 
-### Step 5 — Confirm and invite a test message
+### Step 5 - Confirm and invite a test message
 
-Say: "Done. Go to the channel you added me to and send any message —
+Say: "Done. Go to the channel you added me to and send any message -
 I'll reply there."
 
 ## Verification checklist
@@ -100,7 +100,7 @@ I'll reply there."
   empty and the bot can't respond to content. Ask them to re-check
   only if they report it's "not picking up messages."
 - If the bot isn't in the server, the OAuth2 invite URL step was
-  missed — walk them through it if needed.
+  missed - walk them through it if needed.
 - To include DMs, remove the `channelId` filter from the config or
   set it to the user's DM channel id.
 - Don't echo the token back after it's in config.json.

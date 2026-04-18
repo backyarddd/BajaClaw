@@ -46,10 +46,10 @@ Fields:
 
 BajaClaw reads these four directories, in priority order (first match wins):
 
-1. `<agent-dir>/skills/` — agent-specific (per profile)
-2. `~/.bajaclaw/profiles/<name>/skills/` — profile-scoped
-3. `~/.bajaclaw/skills/` — user-global
-4. `<repo>/skills/` — built-ins shipped with BajaClaw
+1. `<agent-dir>/skills/` - agent-specific (per profile)
+2. `~/.bajaclaw/profiles/<name>/skills/` - profile-scoped
+3. `~/.bajaclaw/skills/` - user-global
+4. `<repo>/skills/` - built-ins shipped with BajaClaw
 
 **The desktop CLI's `~/.claude/skills/` is not read automatically.** If you
 want a skill from that directory available to BajaClaw, port it in:
@@ -62,7 +62,7 @@ bajaclaw skill port --scope profile --profile default   # port into the profile 
 bajaclaw skill port --source /some/dir       # custom source
 ```
 
-`--link` creates a symlink so the desktop copy stays authoritative — edits
+`--link` creates a symlink so the desktop copy stays authoritative - edits
 made via the desktop CLI show up in BajaClaw too. `--copy` (default) takes
 a snapshot that BajaClaw owns independently.
 
@@ -91,7 +91,7 @@ Top 3 (score > 0) are injected into the prompt as `# Active Skills`.
 
 BajaClaw watches every cycle. When a cycle uses enough tools (5+ by default)
 to look like a real procedure, a follow-up call analyzes the task, the tool
-sequence, and the response, and — if the procedure is reusable — writes a
+sequence, and the response, and - if the procedure is reusable - writes a
 structured SKILL.md to `~/.bajaclaw/skills/auto/<name>/`.
 
 This is BajaClaw's take on the "create a skill after a complex task"
@@ -140,16 +140,16 @@ In the profile's `config.json`:
 }
 ```
 
-- `enabled` — master switch (default `true`).
-- `minToolUses` — tool-use count required to trigger synthesis. Tasks that
+- `enabled` - master switch (default `true`).
+- `minToolUses` - tool-use count required to trigger synthesis. Tasks that
   used fewer tools are considered too trivial to capture.
-- `maxPerDay` — hard cap on auto-generated candidates per day. Protects
+- `maxPerDay` - hard cap on auto-generated candidates per day. Protects
   against runaway synthesis.
 
 ### Review + promote
 
 Auto-skills live in `~/.bajaclaw/skills/auto/<name>/` until you review them.
-They are **not** injected into prompts from there — only after you promote.
+They are **not** injected into prompts from there - only after you promote.
 
 ```
 bajaclaw skill review                  # print each candidate's SKILL.md
@@ -166,7 +166,7 @@ rm -rf ~/.bajaclaw/skills/auto/<name>
 ### Trimming the auto dir
 
 Candidates you never promote accumulate in `~/.bajaclaw/skills/auto/`. They
-are harmless — unreviewed candidates don't affect prompts. Occasional
+are harmless - unreviewed candidates don't affect prompts. Occasional
 cleanup:
 
 ```
@@ -181,9 +181,9 @@ Shipped in this repo under `skills/`.
 
 ### General-purpose
 
-- `daily-briefing` — morning briefing covering schedule, priorities, open threads
-- `email-triage` — classify inbox; draft replies for routine items
-- `web-research` — search + synthesize with inline citations
+- `daily-briefing` - morning briefing covering schedule, priorities, open threads
+- `email-triage` - classify inbox; draft replies for routine items
+- `web-research` - search + synthesize with inline citations
 
 ### Self-knowledge (configure BajaClaw)
 
@@ -213,5 +213,5 @@ bajaclaw guide                  # list all
 bajaclaw guide telegram         # print the telegram walkthrough
 ```
 
-Or talk to your agent in natural language — the skill matcher does the
+Or talk to your agent in natural language - the skill matcher does the
 routing.

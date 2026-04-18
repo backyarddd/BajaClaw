@@ -9,7 +9,7 @@ Compaction keeps the pool lean so the agent stays sharp.
 - BajaClaw **does not** carry context across cycles the way a chat app
   does. Each cycle is a fresh `claude -p …` subprocess. Nothing stays
   in the model between cycles.
-- What grows unbounded is the **memory database** — the FTS5 table
+- What grows unbounded is the **memory database** - the FTS5 table
   that fuels recall and the cycle log.
 - Compaction = memory hygiene. It summarizes old memories, prunes
   stale cycle rows, and VACUUMs the DB.
@@ -21,8 +21,8 @@ Compaction keeps the pool lean so the agent stays sharp.
 
 Short answer: no ongoing-conversation context to compact. Long answer:
 
-Because BajaClaw builds each cycle's prompt from scratch — persona +
-AGENT.md + top-N recalled memories + matched skills + current task —
+Because BajaClaw builds each cycle's prompt from scratch - persona +
+AGENT.md + top-N recalled memories + matched skills + current task -
 the model never sees more than one cycle's worth of context. The
 per-tier budgets in `src/model-picker.ts` already cap how much memory
 goes into the prompt (3 / 5 / 7 memories for Haiku / Sonnet / Opus,
@@ -80,7 +80,7 @@ timezone changes, and daylight saving. If you're in the US Pacific,
 4. Write `last_compaction_at` into `circuit_state`.
 
 Summarization costs one Haiku call per batch. On a pool of 500 old
-memories, that's about a dozen calls — cents of spend, not dollars.
+memories, that's about a dozen calls - cents of spend, not dollars.
 
 ## Configuration
 
@@ -148,7 +148,7 @@ bajaclaw compact --disable
 
 or set `"schedule": "off"` / `"enabled": false` in `config.json`.
 
-Be aware that recall degrades and the DB grows without bound — only
+Be aware that recall degrades and the DB grows without bound - only
 worth it for research setups where you want raw history intact.
 
 ## How this interacts with…
@@ -169,7 +169,7 @@ worth it for research setups where you want raw history intact.
 ## Operational notes
 
 - The pre-cycle trigger check is a single fast SQLite query. It costs
-  effectively nothing — safe to leave on.
+  effectively nothing - safe to leave on.
 - A compaction run on a 500-memory pool typically finishes in 5–15
   seconds (dominated by Haiku latency).
 - If the `VACUUM` fails (e.g., another process holds the DB), the
@@ -180,7 +180,7 @@ worth it for research setups where you want raw history intact.
 
 ## Related
 
-- [Memory](memory.md) — overall memory model and FTS5 details
-- [Architecture](architecture.md) — cycle loop, prompt assembly
-- [Heartbeat](heartbeat.md) — scheduled cycles that drive background
+- [Memory](memory.md) - overall memory model and FTS5 details
+- [Architecture](architecture.md) - cycle loop, prompt assembly
+- [Heartbeat](heartbeat.md) - scheduled cycles that drive background
   compaction in the absence of user traffic

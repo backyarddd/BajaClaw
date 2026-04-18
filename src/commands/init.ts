@@ -29,7 +29,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
     throw new Error(`Profile ${opts.name} already exists at ${dir}. Use --force to overwrite.`);
   }
 
-  // Resolve the template dir before touching the filesystem — __dirname is
+  // Resolve the template dir before touching the filesystem - __dirname is
   // <repo>/src/commands (tsx) or <repo>/dist/commands (built); both resolve
   // the repo root with two parent hops.
   const tplDir = join(__dirname, "..", "..", "templates", template);
@@ -86,7 +86,7 @@ function render(text: string, vars: Record<string, string>): string {
 function defaultTools(template: TemplateName): { allowed?: string[]; disallowed?: string[] } {
   // Tool restrictions are per-template soft defaults. Agents can edit
   // config.json afterwards to loosen or tighten. Only `code` keeps tight
-  // restrictions by design — it's an orchestrator that delegates execution
+  // restrictions by design - it's an orchestrator that delegates execution
   // to a sub-agent.
   switch (template) {
     case "code":
@@ -111,7 +111,7 @@ function writeClaudeAgentMd(cfg: AgentConfig): void {
   const dir = ensureDir(claudeAgentsDir(cfg.profile));
   const body = `---
 name: ${cfg.name}
-description: BajaClaw agent (${cfg.template}) — autonomous, runs on heartbeat
+description: BajaClaw agent (${cfg.template}) - autonomous, runs on heartbeat
 model: ${cfg.model}
 effort: ${cfg.effort}
 ${cfg.disallowedTools ? `disallowedTools: [${cfg.disallowedTools.join(", ")}]\n` : ""}isolation: worktree

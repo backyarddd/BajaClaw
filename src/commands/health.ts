@@ -12,7 +12,7 @@ export async function runHealthCmd(profile: string): Promise<void> {
     ).get() as { c: number; errs: number; last: string | null };
     console.log(`profile:       ${chalk.bold(profile)}`);
     console.log(`cycles (24h):  ${row.c} (${row.errs} errors)`);
-    console.log(`last cycle:    ${row.last ?? "—"}`);
+    console.log(`last cycle:    ${row.last ?? "-"}`);
     console.log(`breaker:       ${breaker.open ? chalk.red("open") : chalk.green("closed")} (failures=${breaker.failures})`);
     console.log(`rate limit:    ${rl.used}/hr`);
   } finally { db.close(); }

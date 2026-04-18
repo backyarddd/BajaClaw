@@ -4,7 +4,7 @@
 // pick a tone, set their own preferred name, timezone, focus area,
 // any topics the agent should know, and any hard "don't" rules.
 // Non-interactive (--silent, postinstall, pipes) falls back to sane
-// defaults — nothing blocks.
+// defaults - nothing blocks.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import chalk from "chalk";
@@ -77,7 +77,7 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
       console.log(chalk.yellow(`(skipped persona wizard: ${(e as Error).message})`));
     }
   } else if (!opts.silent && loadPersona(name)) {
-    console.log(chalk.dim(`✓ persona already set — run \`bajaclaw persona\` to change`));
+    console.log(chalk.dim(`✓ persona already set - run \`bajaclaw persona\` to change`));
   }
 
   if (wantWizard) {
@@ -109,7 +109,7 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
     if (!backend?.ok) {
       console.log("");
       console.log(chalk.yellow("Note: the `claude` CLI backend is not on your PATH."));
-      console.log(chalk.yellow("BajaClaw drives it as a subprocess — install it to run live cycles."));
+      console.log(chalk.yellow("BajaClaw drives it as a subprocess - install it to run live cycles."));
       console.log(chalk.dim("Dry-run still works: `bajaclaw start --dry-run`"));
     }
     console.log("");
@@ -150,7 +150,7 @@ async function promptPersona(profile: string): Promise<Persona> {
   );
 
   console.log("");
-  console.log(chalk.dim("Give your agent a purpose. One or two sentences — what is it here to do?"));
+  console.log(chalk.dim("Give your agent a purpose. One or two sentences - what is it here to do?"));
   const focus = await ask(chalk.bold("Focus:"), existing?.focus ?? "Help me get things done. Triage, drafts, and research on request.");
 
   console.log("");
@@ -187,8 +187,8 @@ async function promptCompaction(profile: string): Promise<CompactionConfig> {
 
   const schedule = (await askChoice(
     chalk.bold("When should it compact?"),
-    ["both (threshold + daily) — recommended", "threshold only", "daily only", "off"],
-    "both (threshold + daily) — recommended",
+    ["both (threshold + daily) - recommended", "threshold only", "daily only", "off"],
+    "both (threshold + daily) - recommended",
   ));
   const mode: CompactionConfig["schedule"] =
     schedule.startsWith("both") ? "both"
@@ -241,7 +241,7 @@ function ensureAgentDescriptor(profile: string): void {
   };
   const body = `---
 name: ${cfg.name}
-description: BajaClaw agent (${cfg.template}) — autonomous, runs on heartbeat
+description: BajaClaw agent (${cfg.template}) - autonomous, runs on heartbeat
 model: ${cfg.model}
 effort: ${cfg.effort}
 ${cfg.disallowedTools?.length ? `disallowedTools: [${cfg.disallowedTools.join(", ")}]\n` : ""}isolation: worktree

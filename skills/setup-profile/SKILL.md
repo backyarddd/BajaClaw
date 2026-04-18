@@ -8,7 +8,7 @@ effort: low
 ---
 
 ## When to use
-User wants more than one agent — e.g. one for research, one for inbox
+User wants more than one agent - e.g. one for research, one for inbox
 triage, one for coding. Each profile gets its own DB, skills, schedule,
 logs, and agent descriptor.
 
@@ -19,7 +19,7 @@ logs, and agent descriptor.
 - Switch: positional arg or `BAJACLAW_PROFILE` env var.
 
 ## Procedure
-1. Ask the user what this agent is for — that picks the template.
+1. Ask the user what this agent is for - that picks the template.
 2. Run: `bajaclaw init <name> --template <tpl>`
    - Example: `bajaclaw init researcher --template research`
 3. Optional: set model + effort at init:

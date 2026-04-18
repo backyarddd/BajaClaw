@@ -44,7 +44,7 @@ bajaclaw subagent create <name> \
 Any option can be omitted. Defaults: template=custom, tools=inherited.
 
 ### 3. Tighten MCP servers on the sub-agent (optional)
-If the sub-agent owns a domain — say, email — you want its MCP config to
+If the sub-agent owns a domain - say, email - you want its MCP config to
 include the relevant server. Edit:
 `~/.bajaclaw/profiles/<name>/mcp-config.json`
 

@@ -32,7 +32,7 @@ export function listConfigured(profile: string): Record<string, McpServerEntry> 
 //   1. <profile>/agent-mcp-config.json
 //   2. <profile>/mcp-config.json
 //   3. ~/.bajaclaw/mcp-config.json (user-global BajaClaw MCP)
-//   4. Desktop CLI MCP config — ONLY if mergeDesktopMcp: true in the profile.
+//   4. Desktop CLI MCP config - ONLY if mergeDesktopMcp: true in the profile.
 //
 // This keeps BajaClaw's MCP separate from the desktop CLI's by default.
 // Use `bajaclaw mcp port` to copy servers from desktop into BajaClaw's scope,

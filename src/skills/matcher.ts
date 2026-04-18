@@ -17,7 +17,7 @@ export function matchSkills(skills: Skill[], task: string, topN = 3, ctx: MatchC
 function isActiveForContext(skill: Skill, ctx: MatchContext): boolean {
   const tools = new Set(ctx.allowedTools ?? []);
   // `requires_tools`: every listed tool must be active. If the config
-  // has no allowlist at all, the agent gets every built-in tool — skip
+  // has no allowlist at all, the agent gets every built-in tool - skip
   // the check in that case (empty allowedTools means "all").
   if (skill.requiresTools && skill.requiresTools.length > 0 && tools.size > 0) {
     for (const t of skill.requiresTools) if (!tools.has(t)) return false;

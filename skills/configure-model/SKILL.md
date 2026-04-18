@@ -8,14 +8,14 @@ effort: low
 ---
 
 ## When to use
-User wants a different model for a profile — e.g. Opus for deep reasoning,
+User wants a different model for a profile - e.g. Opus for deep reasoning,
 Haiku for fast heartbeat triage, Sonnet as a balanced default.
 
 ## Quick reference
 - Stored in `~/.bajaclaw/profiles/<profile>/config.json` → `"model"`.
 - Special value: `auto` routes per-task (haiku / sonnet / opus).
 - Known ids: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`.
-  Any string is accepted — the backend CLI validates against your
+  Any string is accepted - the backend CLI validates against your
   subscription.
 - Tradeoffs: Opus > Sonnet > Haiku in capability; Haiku > Sonnet > Opus in
   speed and cost.
@@ -33,7 +33,7 @@ Haiku for fast heartbeat triage, Sonnet as a balanced default.
 ## Pitfalls
 - If the id is unknown to the backend, cycles will fail with a model-not-
   found error. Fall back to a known-good id.
-- Opus burns tokens fast — for daily heartbeats, Sonnet or Haiku is usually
+- Opus burns tokens fast - for daily heartbeats, Sonnet or Haiku is usually
   the right call. Save Opus for reflection cycles or hard reasoning tasks.
 
 ## Verification

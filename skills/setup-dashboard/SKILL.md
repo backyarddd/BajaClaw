@@ -21,7 +21,7 @@ tasks.
 1. Start in the background so the shell returns to the agent:
    `nohup bajaclaw dashboard <profile> >/tmp/bajaclaw-dashboard.log 2>&1 &`
    (profile defaults to `default`). **Never run it in the foreground
-   from an agent cycle** — `bajaclaw dashboard` is a long-lived HTTP
+   from an agent cycle** - `bajaclaw dashboard` is a long-lived HTTP
    server, so a blocking call would hang the Bash tool until timeout
    and leave a child process holding stdout, which confuses the
    backend exit-code handling.
@@ -38,7 +38,7 @@ tasks.
   localhost (default behavior). Don't expose it to a LAN without a proxy +
   auth in front.
 - Refresh happens every 5s. If the tab sits open for days, the browser
-  keeps the connection pool tight — not a bug, just a long-run caveat.
+  keeps the connection pool tight - not a bug, just a long-run caveat.
 
 ## Verification
 - `curl -s http://localhost:<PORT>/api/summary` returns JSON including the

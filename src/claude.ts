@@ -53,7 +53,7 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   // --effort is the real knob for "how much runway does the agent get".
   // Levels: low < medium < high < xhigh < max. Higher = more turns
   // + more tokens + higher cost. claude's internal turn budget is
-  // tied to this level — there is no `--max-turns` flag.
+  // tied to this level - there is no `--max-turns` flag.
   if (opts.effort) args.push("--effort", opts.effort);
   if (opts.allowedTools?.length) args.push("--allowedTools", opts.allowedTools.join(","));
   if (opts.disallowedTools?.length) args.push("--disallowedTools", opts.disallowedTools.join(","));
@@ -61,7 +61,7 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   if (opts.systemPrompt) args.push("--system-prompt", opts.systemPrompt);
 
   // Beta flags. `context1M: true` is shorthand for adding the
-  // `context-1m-2025-08-07` beta. API-key-only — the CLI warns and
+  // `context-1m-2025-08-07` beta. API-key-only - the CLI warns and
   // falls back to 200k for subscription auth.
   const betas = [...(opts.betas ?? [])];
   if (opts.context1M && !betas.includes("context-1m-2025-08-07")) {
@@ -70,7 +70,7 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   if (betas.length > 0) args.push("--betas", ...betas);
 
   // Per-cycle cost ceiling. Safer than a turn cap because agent
-  // complexity varies wildly — this caps the actual spend, not a
+  // complexity varies wildly - this caps the actual spend, not a
   // proxy for it.
   if (opts.maxBudgetUsd !== undefined) {
     args.push("--max-budget-usd", String(opts.maxBudgetUsd));
@@ -125,7 +125,7 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
       // Explicitly close stdin. Without this, the claude CLI waits 3s
       // for piped input before proceeding (and treats the wait as a
       // warning that contaminates stdout). Closing stdin tells it
-      // "the prompt on -p is complete — don't wait for more".
+      // "the prompt on -p is complete - don't wait for more".
       stdin: "ignore",
     });
     return parseResult(r.stdout, r.stderr, r.exitCode ?? 0, start, jsonSupported, ["claude", ...cmd]);
@@ -168,13 +168,13 @@ function parseResult(
   };
 
   // True when the JSON result block explicitly reported success. When
-  // it's set, trust the JSON over a non-zero exit code — claude can
+  // it's set, trust the JSON over a non-zero exit code - claude can
   // exit non-zero if a child process it spawned (e.g. a long-running
   // dashboard server) leaves stdout/stderr pipes open past the
   // parent's timeout, even though the turn itself completed cleanly.
   let jsonReportedSuccess = false;
 
-  // Try JSON parse regardless of exit code — claude sometimes emits
+  // Try JSON parse regardless of exit code - claude sometimes emits
   // useful error detail in JSON even when exiting non-zero.
   if (jsonMode) {
     try {
@@ -250,7 +250,7 @@ function parseResult(
 
   if (exitCode !== 0 && !base.error && !jsonReportedSuccess) {
     // Prefer stderr, then stdout first-line fallback. Never echo the
-    // entire stdout into the error field — it may be a multi-KB JSON.
+    // entire stdout into the error field - it may be a multi-KB JSON.
     const trimmedStderr = stderr.trim();
     if (trimmedStderr) base.error = trimmedStderr.slice(0, 400);
     else if (stdout.trim()) base.error = stdout.trim().split("\n")[0]!.slice(0, 400);
@@ -260,7 +260,7 @@ function parseResult(
   // If we determined an error from JSON but exit was 0, still mark not-ok.
   if (base.error && base.ok) base.ok = false;
 
-  // Conversely: JSON explicitly said success. Honor that — ignore a
+  // Conversely: JSON explicitly said success. Honor that - ignore a
   // non-zero exit caused by lingering child processes.
   if (jsonReportedSuccess) {
     base.ok = true;

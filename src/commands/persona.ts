@@ -1,4 +1,4 @@
-// `bajaclaw persona [profile]` — view or re-run the persona wizard.
+// `bajaclaw persona [profile]` - view or re-run the persona wizard.
 import chalk from "chalk";
 import { loadPersona, savePersona, personaPath, soulPath } from "../persona-io.js";
 import { renderSoul, TONE_OPTIONS, type Persona } from "../persona.js";

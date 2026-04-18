@@ -69,7 +69,7 @@ export interface ChatCompletionChunk {
 //   "claude-opus-4-7"                  -> profile=default, override = opus 4.7
 //
 // "auto" or any string that starts with "claude-" is treated as a model id
-// applied to the default profile — that's the shortest shortcut for
+// applied to the default profile - that's the shortest shortcut for
 // "just use BajaClaw's pipeline but with this model".
 export interface ResolvedRequest {
   profile: string;

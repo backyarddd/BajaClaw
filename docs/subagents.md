@@ -5,7 +5,7 @@ to. The orchestrator plans and routes; the sub-agent does the scoped
 work.
 
 This is how you build the pattern: **main agent can't read your email,
-but its `mail` sub-agent can — and the main knows to ask**. Permissions
+but its `mail` sub-agent can - and the main knows to ask**. Permissions
 are physical, not policy: if the orchestrator doesn't have a tool or an
 MCP server in its config, it literally cannot use that capability.
 
@@ -52,7 +52,7 @@ Then give it its own MCP config (for email access, etc.) by editing
 bajaclaw mcp port --names gmail
 ```
 
-And — critically — **remove** the email MCP from the main profile's MCP
+And - critically - **remove** the email MCP from the main profile's MCP
 config so the orchestrator can't use it directly. That's what makes the
 isolation real.
 
@@ -78,7 +78,7 @@ bajaclaw delegate mail "check inbox for anything from Alice in the last 24h"
 # The orchestrator reads that, uses it in its own reply.
 ```
 
-The response is just text — clean for piping. Pass `--json` if you want
+The response is just text - clean for piping. Pass `--json` if you want
 the full `CycleOutput` (cycle id, cost, timing, command argv).
 
 ## Permission patterns
@@ -104,11 +104,11 @@ the full `CycleOutput` (cycle id, cost, timing, command argv).
 - Own SQLite DB, own memory table, own FTS recall
 - Own skill scopes (inherits nothing from the parent)
 - Own `config.json`, `AGENT.md`, `SOUL.md`, `HEARTBEAT.md`
-- Own `persona` — set one with `bajaclaw persona --edit --profile mail`
+- Own `persona` - set one with `bajaclaw persona --edit --profile mail`
 
 If you want context to flow, pass it explicitly in the delegation
 string. Or enable memory sync (`memorySync: true`) on both profiles
-with a shared `~/.claude/memory/` digest — but that crosses boundaries,
+with a shared `~/.claude/memory/` digest - but that crosses boundaries,
 so think before enabling.
 
 ## Self-service
@@ -120,6 +120,6 @@ bajaclaw guide subagent
 ```
 
 prints the full setup walkthrough. The orchestrator will match that
-guide itself when you ask things like "create a mail subagent" — so
+guide itself when you ask things like "create a mail subagent" - so
 you can talk to your main agent in plain language and it will know how
 to spin up a scoped helper.

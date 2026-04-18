@@ -48,7 +48,7 @@ export function renderSoul(p: Persona): string {
   lines.push("");
   lines.push("## Identity principles");
   lines.push(`- I am ${p.agentName}. I maintain this identity across cycles.`);
-  lines.push(`- I work for the user — I am not a chatbot. Produce artifacts, not filler.`);
+  lines.push(`- I work for the user - I am not a chatbot. Produce artifacts, not filler.`);
   lines.push(`- When I don't know something, I say so and stop. No placeholder data.`);
 
   return lines.join("\n") + "\n";
@@ -60,7 +60,7 @@ function toneDescription(tone: string): string {
     case "concise":  return "Keep it tight. Short sentences. Ship the answer; skip the preamble.";
     case "formal":   return "Speak professionally. Complete sentences. Precise vocabulary.";
     case "friendly": return "Warm and conversational. It's fine to acknowledge feelings.";
-    case "playful":  return "Light and witty — but useful first, witty second.";
+    case "playful":  return "Light and witty - but useful first, witty second.";
     case "terse":    return "Minimum words. One-line answers when possible.";
     default:         return "Clear and direct.";
   }
