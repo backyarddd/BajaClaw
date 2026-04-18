@@ -52,6 +52,24 @@ Three access points:
 - **MCP tool**: `bajaclaw_memory_search({ query, limit, profile })` from any
   MCP client — returns the top matches as JSON
 
+## Compaction
+
+BajaClaw auto-compacts its memory pool so the agent can keep learning
+without slowing down. See `docs/compaction.md` for the full writeup.
+
+Short version:
+
+- **Trigger**: either memory pool > `threshold` × 200k-token reference
+  context window, OR daily at a configurable UTC time (default 00:00).
+- **Action**: summarize older memories per kind into denser rows (keeps
+  newest 25 per kind verbatim); prune cycle-log rows older than 30
+  days; VACUUM the SQLite file.
+- **Configure**: set via the setup wizard, via `bajaclaw compact
+  --schedule both --threshold 0.75`, or in `config.json` under
+  `compaction`.
+- **Skipped on `--dry-run`**: a dry-run cycle never triggers backend
+  calls.
+
 ## Backup
 
 `~/.bajaclaw/profiles/<name>/bajaclaw.db` is a WAL-mode SQLite file. Copy

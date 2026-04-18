@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.10.0
+
+**Memory compaction — so the agent keeps learning without slowing
+down over time.** BajaClaw's cycles are stateless (each one rebuilds
+the prompt from scratch), so the model's context window never "fills
+up" across cycles. What grows unbounded is the memory database.
+Compaction = memory hygiene: summarize older rows into denser ones,
+prune stale cycle log rows, VACUUM the SQLite file.
+
+- **Two triggers, both on by default**:
+  - **Threshold**: memory pool > 75% of a 200k-token reference window
+    (configurable 0.1–0.99).
+  - **Daily**: first cycle after a configurable UTC time (default
+    `00:00`).
+- **Pre-cycle check is ~free**: a single `COUNT/SUM(LENGTH)` on the
+  memories table. Heavy work only runs if a trigger fires.
+- **What it does**: per kind (fact/decision/preference/todo/reference),
+  keep the newest 25 verbatim; batch the rest in groups of 40; ask
+  Haiku to collapse each batch into one or two dense sentences that
+  preserve load-bearing facts; replace originals with the summary.
+  Then prune cycle-log rows older than 30 days and VACUUM.
+- **New command `bajaclaw compact [profile]`**:
+  `--dry-run` / `--force` / `--schedule` / `--threshold` /
+  `--daily-at` / `--keep` / `--prune-days` / `--enable` / `--disable`.
+- **Setup wizard**: the interactive `bajaclaw setup` now asks about
+  compaction after the persona step. Choices: both / threshold / daily
+  / off. Non-interactive installs get the default "both" policy.
+- **New config block** under `compaction` in `config.json`. Every
+  field has a safe default; partial overrides merge with defaults.
+- **New built-in skill** `setup-compaction` (shows up in `bajaclaw
+  guide compaction`). New doc `docs/compaction.md`. Memory doc
+  (`docs/memory.md`) and command reference (`docs/commands.md`)
+  updated.
+- **Skipped on dry-run cycles**: `bajaclaw start --dry-run` never
+  fires compaction, so dry runs remain zero-cost.
+
+Ten new tests in `tests/compaction.test.js` covering
+`shouldCompact` trigger math (disabled / off / threshold over / under
+/ daily-with-recent), `mergeCompactionDefaults`, `evaluateThreshold`,
+and `DEFAULT_COMPACTION`.
+
 ## 0.9.0
 
 **Interactive persona wizard**. First TTY `bajaclaw setup` now asks for

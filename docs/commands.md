@@ -68,6 +68,25 @@ Known ids: `auto`, `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`.
 `auto` routes per-task (haiku/sonnet/opus). Any other string is passed
 through to the backend, which validates against your subscription.
 
+### `bajaclaw compact [profile]`
+Run memory compaction now, or inspect / change the policy. Compaction
+summarizes old memories into denser rows and prunes the cycle log so
+the agent keeps learning without the DB growing unbounded. See
+`docs/compaction.md`.
+
+Options:
+- `--dry-run` — show pool size, trigger state, and policy; don't run.
+- `--force` — run even if no trigger fired.
+- `--schedule <mode>` — `threshold` / `daily` / `both` / `off`.
+- `--threshold <frac>` — 0.1–0.99; default 0.75 of a 200k-token
+  reference context window.
+- `--daily-at <HH:MM>` — UTC time of day for the daily trigger
+  (default `00:00`).
+- `--keep <n>` — newest rows per kind kept verbatim (default 25).
+- `--prune-days <n>` — drop cycle-log rows older than N days
+  (default 30, 0 disables).
+- `--enable` / `--disable` — master switch.
+
 ### `bajaclaw effort [level] [profile]`
 Show or set the effort level. Values: `low`, `medium`, `high`. Default:
 `medium`.
@@ -81,8 +100,9 @@ Options:
 - `--profile <name>` — use the given profile's skill scopes when looking up the guide.
 
 Built-in guide topics: `telegram`, `discord`, `heartbeat`, `daemon`,
-`dashboard`, `mcp-port`, `memory-sync`, `profile`, `self-update`,
-`uninstall`, `model`, `effort`, `tools`.
+`dashboard`, `mcp-port`, `memory-sync`, `compaction`, `profile`,
+`self-update`, `uninstall`, `model`, `effort`, `tools`, `subagent`,
+`api`.
 
 ### `bajaclaw update`
 Check for and install a newer version.

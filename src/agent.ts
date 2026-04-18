@@ -25,6 +25,7 @@ import { shouldAllow, rateLimit, recordFailure, recordSuccess } from "./safety.j
 import { recall } from "./memory/recall.js";
 import { extract } from "./memory/extract.js";
 import { syncFromClaude } from "./memory/claude-compat.js";
+import { shouldCompact, compact as compactMemory } from "./memory/compact.js";
 import { loadAllSkills } from "./skills/loader.js";
 import { matchSkills } from "./skills/matcher.js";
 import { synthesize as synthesizeSkill } from "./skills/auto-skiller.js";
@@ -78,6 +79,28 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     const isHeartbeat = task === heartbeatDefault;
 
     if (cfg.memorySync) syncFromClaude(db, log);
+
+    // Memory compaction. Cheap pre-cycle check; heavy work only if a
+    // trigger fires (size > threshold × context window, or daily UTC
+    // time passed since last compaction). Skipped on dry runs so
+    // --dry-run never spawns extract/summarize backend calls.
+    if (!input.dryRun) {
+      const decision = shouldCompact(db, cfg.compaction);
+      if (decision.yes) {
+        log.info("compact.trigger", { reason: decision.reason });
+        try {
+          const r = await compactMemory(db, cfg.compaction, log);
+          log.info("compact.done", {
+            before: r.memoriesBefore,
+            after: r.memoriesAfter,
+            cyclesPruned: r.cyclesPruned,
+            durationMs: r.durationMs,
+          });
+        } catch (e) {
+          log.warn("compact.fail", { error: (e as Error).message });
+        }
+      }
+    }
 
     // Pick the model. Per-request override wins over profile config.
     const effectiveModel = input.modelOverride ?? cfg.model;
