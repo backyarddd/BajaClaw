@@ -45,7 +45,9 @@ export function recordFailure(db: DB): CircuitState {
   return next;
 }
 
-const DEFAULT_MAX_PER_HOUR = 60;
+// Conservative default to stay well under backend fair-use limits.
+// Bump via an override if your subscription/plan genuinely supports more.
+const DEFAULT_MAX_PER_HOUR = 30;
 
 export function rateLimit(db: DB, maxPerHour = DEFAULT_MAX_PER_HOUR): { allow: boolean; used: number } {
   const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();

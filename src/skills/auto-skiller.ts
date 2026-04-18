@@ -21,8 +21,10 @@ export interface AutoSkillConfig {
 
 export const AUTO_SKILL_DEFAULT: AutoSkillConfig = {
   enabled: true,
-  minToolUses: 5,
-  maxPerDay: 10,
+  // Conservative: only fire after genuinely complex cycles. Tune up for
+  // more noise; tune down for more capture.
+  minToolUses: 6,
+  maxPerDay: 5,
 };
 
 export interface AutoSkillInput {
@@ -104,10 +106,11 @@ export async function synthesize(
   }
 
   const tools = summarizeToolSequence(input.events);
+  // Tighter caps than before to keep the synthesis call cheap.
   const prompt = SYNTH_PROMPT
-    .replace("{{TASK}}", input.task.slice(0, 4000))
+    .replace("{{TASK}}", input.task.slice(0, 1500))
     .replace("{{TOOLS}}", tools)
-    .replace("{{RESPONSE}}", input.response.slice(0, 8000));
+    .replace("{{RESPONSE}}", input.response.slice(0, 3000));
 
   const r = await runOnce(prompt, {
     model: "claude-sonnet-4-5",

@@ -3,7 +3,9 @@ import { runOnce } from "../claude.js";
 import { insertMemory } from "./recall.js";
 import type { AgentConfig } from "../types.js";
 
-const EXTRACT_PROMPT = `You are a post-cycle memory extractor. From the cycle below, output 0-5 durable facts worth remembering across future sessions. Return strict JSON only: {"memories":[{"kind":"fact|decision|preference|todo|reference","content":"one sentence"}]} . Skip transient status, skip anything obvious from code.
+// Tight extractor prompt. Caps task/response inputs aggressively so this
+// post-cycle call stays cheap. Returns at most 3 durable facts.
+const EXTRACT_PROMPT = `Post-cycle extractor. Return strict JSON only: {"memories":[{"kind":"fact|decision|preference|todo|reference","content":"one sentence"}]}. Emit 0-3 items. Skip transient status and anything trivially derivable from code.
 
 <task>
 {{TASK}}
@@ -18,18 +20,18 @@ export async function extract(
   cycleId: number,
   task: string,
   response: string,
-  cfg: AgentConfig,
+  _cfg: AgentConfig,
 ): Promise<number> {
   const prompt = EXTRACT_PROMPT
-    .replace("{{TASK}}", task.slice(0, 2000))
-    .replace("{{RESPONSE}}", response.slice(0, 6000));
+    .replace("{{TASK}}", task.slice(0, 800))
+    .replace("{{RESPONSE}}", response.slice(0, 2000));
 
   const r = await runOnce(prompt, {
     model: "claude-haiku-4-5",
     effort: "low",
     maxTurns: 1,
     printMode: true,
-    disallowedTools: ["Bash", "Write", "Edit", "Read"],
+    disallowedTools: ["Bash", "Write", "Edit", "Read", "Grep", "Glob", "WebSearch", "WebFetch"],
   });
 
   if (!r.ok || !r.text) return 0;

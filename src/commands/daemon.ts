@@ -109,7 +109,8 @@ async function runLoop(profile: string): Promise<void> {
       await sleep(backoff);
       backoff = Math.min(backoff * 2, maxBackoff);
     }
-    await sleep(30_000);
+    // Poll once a minute. Idle daemon = zero backend calls.
+    await sleep(60_000);
   }
 }
 

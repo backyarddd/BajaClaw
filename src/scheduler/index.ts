@@ -1,4 +1,5 @@
 import { platform } from "node:os";
+// Daemon poll interval bumped from 30s to 60s in v0.7.0 for token economy.
 import type { ScheduleEntry } from "../types.js";
 import * as launchd from "./launchd.js";
 import * as systemd from "./systemd.js";

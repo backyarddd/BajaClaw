@@ -1,13 +1,8 @@
 import chalk from "chalk";
 import { loadConfig, saveConfig } from "../config.js";
+import { KNOWN_MODELS as MODEL_TABLE } from "../model-picker.js";
 
-// Soft list. Any string is accepted — the backend CLI validates per
-// subscription. Update as new ids ship.
-export const KNOWN_MODELS = [
-  "claude-opus-4-5",
-  "claude-sonnet-4-5",
-  "claude-haiku-4-5",
-] as const;
+export const KNOWN_MODELS = MODEL_TABLE.map((m) => m.id);
 
 export interface ModelCmdOptions {
   profile?: string;
@@ -24,13 +19,14 @@ export async function runModel(
     console.log(`profile: ${chalk.bold(profile)}`);
     console.log(`current: ${chalk.cyan(cfg.model)}`);
     console.log("");
-    console.log(chalk.bold("known models:"));
-    for (const m of KNOWN_MODELS) {
-      const mark = m === cfg.model ? chalk.green("*") : " ";
-      console.log(`  ${mark} ${m}`);
+    console.log(chalk.bold("available:"));
+    for (const m of MODEL_TABLE) {
+      const mark = m.id === cfg.model ? chalk.green("*") : " ";
+      const id = m.id === "auto" ? chalk.bold.yellow(m.id.padEnd(22)) : m.id.padEnd(22);
+      console.log(`  ${mark} ${id} ${chalk.dim(m.note)}`);
     }
     console.log("");
-    console.log(chalk.dim("Any string is accepted; the backend validates against your subscription."));
+    console.log(chalk.dim("Any backend model id is accepted; subscription validates."));
     console.log(chalk.dim(`Set with: bajaclaw model <id> [profile]`));
     return;
   }
@@ -39,4 +35,7 @@ export async function runModel(
   cfg.model = value;
   saveConfig(cfg);
   console.log(chalk.green(`✓ ${profile}: model ${previous} → ${value}`));
+  if (value === "auto") {
+    console.log(chalk.dim("  tasks will be routed to haiku / sonnet / opus based on shape"));
+  }
 }
