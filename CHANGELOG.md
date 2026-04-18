@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.14.9
+
+**Active prompt wrapped in top + bottom rules.** The 0.14.8 layout
+dropped the sandwich entirely - the user wanted it kept on the active
+prompt but removed from history. Done. While you're typing, the
+prompt looks like:
+
+```
+─────────────────
+ › _                    ← cursor here
+─────────────────
+```
+
+When you submit, ANSI cursor-save (`\x1b[s`) and cursor-restore
+(`\x1b[u`) let us park the bottom rule below the cursor without
+readline stepping on it. After Enter, the whole sandwich is cleared
+(`\x1b[2A\r\x1b[0J`) and just the plain `› user input` line lands in
+scrollback. The agent response and stats line render below that,
+unframed, then the next turn's sandwich draws fresh.
+
+### Known limits
+
+- If input wraps past terminal width while typing, readline's echo
+  overwrites the bottom rule. The erase math only accounts for 2
+  rule lines, so wrapped inputs may leave stray glyphs. Real queries
+  tend to fit on one line; raise an issue if this bites.
+- Save/restore cursor (`DECSC` / `DECRC`) relies on terminal support.
+  Every modern terminal (iTerm, Terminal.app, alacritty, kitty,
+  gnome-terminal) handles it. Exotic or legacy terminals may glitch.
+
 ## 0.14.8
 
 **Chat CLI: scrolling-clean layout inspired by Hermes + Claude Code.**
