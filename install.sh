@@ -9,4 +9,4 @@ if ! command -v claude >/dev/null 2>&1; then
   echo "BajaClaw drives it as a subprocess — install it first, then rerun."
   exit 1
 fi
-exec npm install -g github:backyarddd/BajaClaw "$@"
+exec npm install -g bajaclaw "$@"

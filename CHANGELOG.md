@@ -1,24 +1,37 @@
 # Changelog
 
+## 0.10.1
+
+**Published to npm.** BajaClaw is now on the npm registry as
+[`bajaclaw`](https://www.npmjs.com/package/bajaclaw). Install is
+canonical again:
+
+```
+npm install -g bajaclaw
+```
+
+- README, install scripts, docs, and the `setup-self-update` skill
+  flipped back to the registry name.
+- `bajaclaw update` reinstalls via `npm install -g bajaclaw@latest`.
+  Forks can pin to a git spec via `bajaclaw.installSpec` in
+  `package.json` (e.g. `"github:myuser/BajaClaw"`).
+- The github-slug install path (`npm install -g
+  github:backyarddd/BajaClaw`) still works for bleeding-edge / HEAD
+  tracking — the `prepare` script added in 0.10.0 means git installs
+  build `dist/` on the way in.
+
+No behavior changes to the runtime — this release is install metadata
+only. See 0.10.0 for the memory-compaction feature.
+
 ## 0.10.0
 
-**Install from GitHub.** BajaClaw isn't on the npm registry (yet), so
-the install command is now:
-
-```
-npm install -g github:backyarddd/BajaClaw
-```
+**Install flow groundwork for publishing.**
 
 - Added `prepare: npm run build` so git installs build `dist/` before
   packing.
 - Added `files` list in `package.json` so the packed tarball includes
   `bin/`, `dist/`, `scripts/`, `skills/`, and `templates/` (and
   excludes `src/`, `tests/`, `docs/`).
-- `bajaclaw update` now reinstalls from the GitHub slug instead of
-  `npm install -g bajaclaw@latest`. Override via `bajaclaw.installSpec`
-  or `bajaclaw.githubSlug` in `package.json` if you fork.
-- `install.sh`, `install.ps1`, README, docs/agents.md, docs/faq.md,
-  and the `setup-self-update` skill all point at the github URL.
 
 **Memory compaction — so the agent keeps learning without slowing
 down over time.** BajaClaw's cycles are stateless (each one rebuilds

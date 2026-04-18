@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.10.0
+          autonomous agents on your terms  ·  MIT  ·  v0.10.1
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -22,12 +22,10 @@ You install it once. It sets itself up. You run `bajaclaw start`. It goes.
 ## Install
 
 ```
-npm install -g github:backyarddd/BajaClaw
+npm install -g bajaclaw
 ```
 
-Installs from GitHub — the package is not on npmjs.com yet. npm clones
-the repo, runs the `prepare` script to build `dist/`, then installs
-globally. The post-install runs `bajaclaw setup` automatically, which:
+That's it. The post-install runs `bajaclaw setup` automatically, which:
 
 - Creates the default profile at `~/.bajaclaw/profiles/default/`
 - Writes the matching agent descriptor at `~/.claude/agents/default/default.md`
@@ -41,9 +39,12 @@ that CLI uses is what BajaClaw uses. BajaClaw itself never sees credentials.
 First run, end-to-end:
 
 ```
-npm install -g github:backyarddd/BajaClaw   # installs + auto-setup
-bajaclaw start                               # runs a cycle on the default profile
+npm install -g bajaclaw       # installs + auto-setup
+bajaclaw start                # runs a cycle on the default profile
 ```
+
+> Prefer to track the bleeding edge? `npm install -g github:backyarddd/BajaClaw`
+> installs straight from main (runs the `prepare` script to build `dist/`).
 
 No profile name to pick. No config to fill in. No decisions to make.
 
@@ -393,7 +394,7 @@ bajaclaw update --check        # print delta, don't install
 bajaclaw update --yes          # install immediately
 ```
 
-On a global GitHub install, update runs `npm install -g github:backyarddd/BajaClaw`.
+On a global npm install, update runs `npm install -g bajaclaw@latest`.
 On a git clone, it runs `git pull && npm install && npm run build`. Silence
 the notice with `BAJACLAW_NO_UPDATE_NOTICE=1`.
 

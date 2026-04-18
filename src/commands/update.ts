@@ -28,7 +28,7 @@ export async function runUpdate(opts: UpdateCmdOptions = {}): Promise<void> {
   }
   if (!opts.yes) {
     console.log("");
-    console.log(`Update will run: ${chalk.dim(loc.kind === "git" ? "git pull + npm install + npm run build" : "npm install -g github:backyarddd/BajaClaw")}`);
+    console.log(`Update will run: ${chalk.dim(loc.kind === "git" ? "git pull + npm install + npm run build" : "npm install -g bajaclaw@latest")}`);
     console.log(chalk.yellow("re-run with --yes to apply."));
     return;
   }
