@@ -10,7 +10,9 @@ import { runMigrate } from "./commands/migrate.js";
 import { runDashboard } from "./commands/dashboard.js";
 import { runTrigger } from "./commands/trigger.js";
 import { runUpdate, maybeNoticeAtExit } from "./commands/update.js";
-import { runSetup, autoBootstrapIfNeeded, DEFAULT_PROFILE_NAME } from "./commands/setup.js";
+import { runSetup, autoBootstrapIfNeeded, DEFAULT_PROFILE_NAME, isFirstRun, markFirstRunDone } from "./commands/setup.js";
+import { runHealth } from "./health-check.js";
+import chalk from "chalk";
 import { runUninstall } from "./commands/uninstall.js";
 import { cmdSkillPort, cmdMcpPort, listDesktopServers } from "./commands/port.js";
 import { runModel } from "./commands/model.js";
@@ -300,6 +302,66 @@ program.command("banner").description("Print the ASCII banner").action(() => {
   printBanner(pkg.version, { force: true });
 });
 
+// Welcome — first-run greeting; also callable anytime
+program.command("welcome").description("Print the welcome banner + next steps")
+  .action(async () => {
+    await printWelcome({ force: true });
+  });
+
+async function printWelcome(opts: { force?: boolean } = {}): Promise<void> {
+  printBanner(pkg.version, { force: true });
+  console.log("");
+  console.log(chalk.bold.green("Welcome to BajaClaw."));
+  console.log("");
+  console.log(chalk.dim("Your default profile is ready at ~/.bajaclaw/profiles/default/"));
+  console.log("");
+
+  try {
+    const checks = await runHealth();
+    const backend = checks.find((c) => c.name === "cli backend");
+    if (!backend?.ok) {
+      console.log(chalk.yellow("!  `claude` CLI backend not on your PATH"));
+      console.log(chalk.dim("   BajaClaw drives it as a subprocess. Install from:"));
+      console.log(chalk.dim("   https://docs.claude.com/en/docs/claude-code/setup"));
+      console.log(chalk.dim("   Without it, only `--dry-run` cycles work."));
+      console.log("");
+    } else {
+      console.log(chalk.green("✓ ") + chalk.dim(`claude backend: ${backend.detail}`));
+      console.log("");
+    }
+  } catch { /* health check optional */ }
+
+  console.log(chalk.bold("First-time setup:"));
+  console.log(`  ${chalk.cyan("bajaclaw setup --interactive")}    ${chalk.dim("# name your agent, set tone, topics, don'ts")}`);
+  console.log(`  ${chalk.cyan("bajaclaw doctor")}                 ${chalk.dim("# full toolchain check")}`);
+  console.log(`  ${chalk.cyan("bajaclaw start --dry-run")}        ${chalk.dim("# preview the assembled prompt")}`);
+  console.log(`  ${chalk.cyan("bajaclaw start")}                  ${chalk.dim("# run a cycle")}`);
+  console.log("");
+  console.log(chalk.bold("Common commands:"));
+  console.log(`  ${chalk.cyan("bajaclaw dashboard")}              ${chalk.dim("# http://localhost:7337")}`);
+  console.log(`  ${chalk.cyan("bajaclaw daemon install")}         ${chalk.dim("# schedule heartbeat cycles")}`);
+  console.log(`  ${chalk.cyan("bajaclaw serve")}                  ${chalk.dim("# OpenAI-compatible HTTP API")}`);
+  console.log(`  ${chalk.cyan("bajaclaw guide")}                  ${chalk.dim("# built-in setup walkthroughs")}`);
+  console.log(`  ${chalk.cyan("bajaclaw compact")}                ${chalk.dim("# keep memory lean as the agent learns")}`);
+  console.log(`  ${chalk.cyan("bajaclaw persona --edit")}         ${chalk.dim("# change your agent's personality")}`);
+  console.log("");
+  console.log(chalk.dim("Docs: https://github.com/backyarddd/BajaClaw"));
+  console.log(chalk.dim("See `bajaclaw --help` for the full command list."));
+  console.log("");
+  void opts.force;
+}
+
+// First-run hook: show the welcome before the user's first command.
+// Marks done so it only fires once per install.
+async function maybeShowWelcome(): Promise<void> {
+  if (!isFirstRun()) return;
+  const cmd = process.argv[2];
+  const skip = new Set(["uninstall", "update", "banner", "welcome", "--version", "-V", "--help", "-h"]);
+  if (cmd && skip.has(cmd)) { markFirstRunDone(); return; }
+  await printWelcome();
+  markFirstRunDone();
+}
+
 program.hook("postAction", async () => {
   // Non-blocking notice at the end of any command. Skipped for noisy or
   // self-referential commands.
@@ -307,6 +369,10 @@ program.hook("postAction", async () => {
   if (cmd === "update" || cmd === "banner" || cmd === "uninstall" || cmd === "setup") return;
   await maybeNoticeAtExit();
 });
+
+// Run the first-run welcome before command dispatch. Non-blocking —
+// a failure here should never prevent the user's command from running.
+await maybeShowWelcome().catch(() => { /* silent */ });
 
 program.parseAsync(process.argv).catch((e) => {
   console.error(`error: ${(e as Error).message}`);
