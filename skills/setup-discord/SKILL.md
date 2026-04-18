@@ -7,17 +7,22 @@ triggers: ["setup discord", "help me with discord", "connect discord", "discord 
 effort: medium
 ---
 
-## Default intent — do NOT ask clarifying questions
+## ⚠️ NON-NEGOTIABLE RULE: NEVER ASK "WHAT DO YOU WANT TO USE IT FOR?"
 
-When the user says any form of "set up discord", "connect discord",
-"talk to you on discord", etc. the default intent is **a two-way chat
-bridge**: the user posts to a Discord channel where the bot lives, the
-bot forwards the message to BajaClaw as a task, and the agent's reply
-is posted back in the same channel (or the user's DM channel).
+When the user says **anything** that triggers this skill — "set up
+discord", "connect discord", "discord bot", "talk to you on discord",
+etc. — the intent is **always the same**: a **two-way chat bridge**
+so the user can message you in a Discord channel and you reply there.
 
-Don't ask "what do you want to use it for?" or present alternatives.
-Just execute the setup below. If the user later clarifies they want
-something different, adjust then.
+You **must not** ask any of these:
+- "What do you want to use Discord for?"
+- "Notifications or something else?"
+- "What should the bot do in the channel?"
+- Any other meta-question about intent.
+
+Just wire it up. If the user specifically says they want something
+different, ADJUST then. Otherwise: collect credentials, run the
+commands, confirm.
 
 ## Execution plan
 

@@ -197,8 +197,15 @@ function formatCycleError(r: CycleOutput | null): string {
   const raw = (r.error ?? "").trim();
   if (!raw) return "backend returned no output";
 
+  // Max turns — translate claude.ts sentinel into a chat-friendly tip.
+  const maxTurnsMatch = raw.match(/^max_turns_hit:(\d+|\?)/);
+  if (maxTurnsMatch) {
+    const used = maxTurnsMatch[1];
+    return `ran out of turns (${used} used this cycle). The task needed more tool calls than the per-cycle budget. Try: (a) break it into smaller asks, (b) "/model opus" for a higher cap, or (c) just send the request again — the agent often finishes on retry.`;
+  }
+
   if (/permission|needs write/i.test(raw)) {
-    return `backend wanted to use a tool that needs approval, and BajaClaw closes stdin. Enabled in v0.11.2+ via --dangerously-skip-permissions — if you're seeing this, update: npm install -g bajaclaw@latest`;
+    return `backend wanted to use a tool that needs approval, and BajaClaw closes stdin. Fixed in v0.11.2+ via --dangerously-skip-permissions. If you're seeing this, update: npm install -g bajaclaw@latest`;
   }
   if (/rate[- ]?limit/i.test(raw)) {
     return "rate-limited by Anthropic. Wait a few minutes and retry.";
@@ -207,9 +214,9 @@ function formatCycleError(r: CycleOutput | null): string {
     return `${raw} — check your Anthropic plan at anthropic.com.`;
   }
   if (/^exit \d+$/i.test(raw)) {
-    return `backend exited (${raw}) with no error detail. Check \`bajaclaw health ${r.cycleId ? "" : ""}\` and the profile log.`;
+    return `backend exited (${raw}) with no detail. Check the profile log: bajaclaw daemon logs`;
   }
-  // First line + truncate
+  // Fallback: first line + truncate. Never echo multi-KB JSON.
   return raw.split("\n")[0]!.slice(0, 400);
 }
 
