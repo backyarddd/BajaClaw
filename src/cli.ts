@@ -355,8 +355,16 @@ async function printWelcome(opts: { force?: boolean } = {}): Promise<void> {
 // Marks done so it only fires once per install.
 async function maybeShowWelcome(): Promise<void> {
   if (!isFirstRun()) return;
+  // Only show when stdout is a TTY. npm captures postinstall output,
+  // so firing the welcome during `npm install` prints to the void and
+  // then marks done — defeating the point. Non-TTY: silent no-op, don't
+  // even mark done, so the next interactive run still gets the welcome.
+  if (!process.stdout.isTTY) return;
   const cmd = process.argv[2];
-  const skip = new Set(["uninstall", "update", "banner", "welcome", "--version", "-V", "--help", "-h"]);
+  const skip = new Set([
+    "uninstall", "update", "banner", "welcome", "setup", "init",
+    "--version", "-V", "--help", "-h",
+  ]);
   if (cmd && skip.has(cmd)) { markFirstRunDone(); return; }
   await printWelcome();
   markFirstRunDone();
