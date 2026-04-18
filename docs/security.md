@@ -53,6 +53,15 @@ write to `~/.bajaclaw/`, they can do anything the agent can do.
 - Check the `tools` field in a SKILL.md frontmatter — that's what the skill
   author expects, not an enforced limit.
 
+## Fair use
+
+BajaClaw is a wrapper: it only drives the `claude` CLI as a subprocess
+and only uses documented flags. It never touches your credentials
+directly and never calls the Anthropic API. See
+[`docs/fair-use.md`](fair-use.md) for the full story on rate limits,
+circuit breakers, cycle serialization, and what the daemon does / does
+not do on idle.
+
 ## Reporting a vulnerability
 
 Open a GitHub security advisory on the repo. Describe the issue, the

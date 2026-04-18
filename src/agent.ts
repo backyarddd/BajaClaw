@@ -29,6 +29,8 @@ import { loadAllSkills } from "./skills/loader.js";
 import { matchSkills } from "./skills/matcher.js";
 import { synthesize as synthesizeSkill } from "./skills/auto-skiller.js";
 import { buildMcpConfig } from "./mcp/consumer.js";
+import { pickModel, budgetFor } from "./model-picker.js";
+import { serialize } from "./concurrency.js";
 import type { AgentConfig, ClaudeOptions } from "./types.js";
 
 export interface CycleInput {
@@ -50,6 +52,12 @@ export interface CycleOutput {
 }
 
 export async function runCycle(input: CycleInput): Promise<CycleOutput> {
+  // Serialize cycles per-profile within this process. Prevents the HTTP
+  // API from spawning parallel `claude` subprocesses under load.
+  return serialize(input.profile, () => runCycleInner(input));
+}
+
+async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
   const cfg = loadConfig(input.profile);
   const db = openDb(input.profile);
   const log = new Logger(input.profile);
@@ -61,38 +69,62 @@ export async function runCycle(input: CycleInput): Promise<CycleOutput> {
     const limit = rateLimit(db);
     if (!limit.allow) throw new Error(`rate limit exceeded (${limit.used}/hr)`);
 
-    const task = input.task ?? popTask(db) ?? "Heartbeat check. Review state, note anything worth action, and return a brief summary.";
+    const heartbeatDefault = "Heartbeat check. Review state, note anything worth action, and return a brief summary.";
+    const task = input.task ?? popTask(db) ?? heartbeatDefault;
+    const isHeartbeat = task === heartbeatDefault;
 
     if (cfg.memorySync) syncFromClaude(db, log);
 
-    const memories = recall(db, task, 10);
+    // Pick the model (or honor the configured id) before sizing context.
+    const picked = pickModel({
+      configuredModel: cfg.model,
+      task,
+      source: isHeartbeat ? "heartbeat" : undefined,
+    });
+    const budget = budgetFor(picked.tier);
+
+    // Tiered context: trivial cycles get less prompt, opus cycles get more.
+    const memories = recall(db, task, budget.memoryCount);
     const systemDocs = loadSystemDocs(input.profile);
     const allSkills = loadAllSkills(input.profile);
-    const matched = matchSkills(allSkills, task, 3);
+    const matched = matchSkills(allSkills, task, budget.skillCount);
     const mcpConfig = buildMcpConfig(input.profile);
 
     const prompt = assemblePrompt({
       task,
-      memories: memories.map((m) => `- [${m.kind}] ${m.content}`).join("\n"),
+      memories: memories
+        .map((m) => `- [${m.kind}] ${m.content.slice(0, budget.memoryCharsEach)}`)
+        .join("\n"),
       agentMd: systemDocs.agent,
       soulMd: systemDocs.soul,
-      heartbeat: systemDocs.heartbeat,
-      skills: matched.map((s) => `## Skill: ${s.name}\n${s.body}`).join("\n\n"),
+      heartbeat: isHeartbeat ? systemDocs.heartbeat : "",
+      skills: matched
+        .map((s) => `## Skill: ${s.name}\n${s.body}`)
+        .join("\n\n"),
     });
 
     const cycleId = insertCycle(db, {
       started_at: started,
       status: "running",
       task,
-      prompt_preview: prompt.slice(0, 500),
+      prompt_preview: prompt.slice(0, 300),
     });
 
-    log.info("cycle.start", { cycleId, task: task.slice(0, 80) });
+    log.info("cycle.start", {
+      cycleId,
+      task: task.slice(0, 80),
+      model: picked.model,
+      tier: picked.tier,
+      reason: picked.reason,
+    });
+
+    // maxTurns is the min of the budget and the user's configured cap.
+    const effectiveMaxTurns = Math.min(cfg.maxTurns ?? 10, budget.maxTurns);
 
     const opts: ClaudeOptions & { dryRun?: boolean } = {
-      model: cfg.model,
+      model: picked.model,
       effort: cfg.effort,
-      maxTurns: cfg.maxTurns,
+      maxTurns: effectiveMaxTurns,
       allowedTools: cfg.allowedTools,
       disallowedTools: cfg.disallowedTools,
       mcpConfig,
@@ -127,7 +159,7 @@ export async function runCycle(input: CycleInput): Promise<CycleOutput> {
     ).run(
       finished,
       "ok",
-      result.text.slice(0, 500),
+      result.text.slice(0, 300),
       result.costUsd ?? null,
       result.inputTokens ?? null,
       result.outputTokens ?? null,
@@ -135,12 +167,14 @@ export async function runCycle(input: CycleInput): Promise<CycleOutput> {
       cycleId,
     );
 
-    if (!result.dryRun && result.text.length > 50) {
+    // Post-cycle memory extraction + auto-skill synthesis. Both are extra
+    // backend calls — skip them on cheap (Haiku) cycles and on trivially
+    // short responses to keep token usage tight.
+    const shouldDoPostWork = !result.dryRun && result.text.length >= 120 && picked.tier !== "haiku";
+    if (shouldDoPostWork) {
       try { await extract(db, cycleId, task, result.text, cfg); }
       catch (e) { log.warn("memory.extract.fail", { error: (e as Error).message }); }
 
-      // Step 13b: auto-skill synthesis. Triggers only when the cycle used
-      // enough tools to suggest a real procedure. Throttled per-day.
       try {
         const as = await synthesizeSkill({
           cycleId,

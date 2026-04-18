@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.7.0
+
+**`model: auto` is the new default.** Before every cycle, a heuristic
+classifier in `src/model-picker.ts` routes the task to a tier:
+
+- Haiku — triage, status checks, heartbeats, very short tasks
+- Sonnet — normal work (default fallback)
+- Opus — planning, coding, refactoring, deep research, reflection
+
+Zero extra backend calls — routing is pure heuristics.
+
+**Token economy pass**, every cycle trimmed for cost:
+
+- Context is now tiered per picked model: Haiku 3 memories + 1 skill +
+  4 turns; Sonnet 5 + 2 + 8; Opus 7 + 3 + 14.
+- Memory recall caps each memory at the tier's char budget (180/220/280)
+  and dedupes near-duplicates.
+- Only the heartbeat task injects `HEARTBEAT.md`; other cycles skip it.
+- Post-cycle memory extractor shrinks the task slice (2000 → 800) and
+  response slice (6000 → 2000); caps output at 3 facts (was 5).
+- Auto-skill synthesizer shrinks task (4000 → 1500) and response slice
+  (8000 → 3000), raises the default tool-use threshold (5 → 6), lowers
+  the daily cap (10 → 5).
+- Haiku-tier cycles skip post-cycle memory extract + auto-skill synth
+  entirely. Cheap tasks stay cheap.
+- Default `maxTurns` dropped from 20 to 10; tier budget can lower it
+  further.
+- Default rate limit dropped from 60/hr to 30/hr.
+- Daemon poll interval raised from 30s to 60s.
+
+**Cycle serialization.** `src/concurrency.ts` adds an in-process
+per-profile queue. The HTTP API can no longer spawn parallel `claude`
+subprocesses — two simultaneous requests for the same profile are
+processed in order.
+
+**Wrapper story documented.** New `docs/fair-use.md` spells out exactly
+what BajaClaw does and doesn't do at the backend boundary: documented
+flags only, no direct Anthropic API calls, no credential handling,
+execa with `shell: false`, rate limiter + circuit breaker +
+serialization as built-in backoff. Linked from `README.md` and
+`docs/security.md`.
+
+**`bajaclaw model` lists `auto` as an option** and tells you what each
+tier is for. Setting `auto` prints a hint about the routing.
+
 ## 0.6.0
 
 - **OpenAI-compatible HTTP endpoint**: `bajaclaw serve` exposes every

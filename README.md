@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.6.0
+          autonomous agents on your terms  ·  MIT  ·  v0.7.0
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -309,6 +309,29 @@ BAJACLAW_PROFILE=triage bajaclaw daemon start
 
 ---
 
+## Auto model (default)
+
+New profiles ship with `model: auto`. Before every cycle, BajaClaw
+classifies the task and routes it to the cheapest capable model:
+
+| tier | when it fires | context budget |
+|---|---|---|
+| **Haiku**  | triage, status checks, heartbeats, very short tasks | 3 memories, 1 skill, 4 turns |
+| **Sonnet** | normal work, answers, summaries | 5 memories, 2 skills, 8 turns |
+| **Opus**   | planning, coding, refactoring, deep research, reflection | 7 memories, 3 skills, 14 turns |
+
+The classifier is a heuristic — zero extra backend calls for routing.
+Post-cycle memory extract + auto-skill synthesis are **skipped**
+entirely for Haiku cycles. This keeps cheap tasks cheap.
+
+Override per profile:
+
+```
+bajaclaw model                     # show current + list
+bajaclaw model auto                # (default) route per task
+bajaclaw model claude-opus-4-5     # pin to a single model
+```
+
 ## Use BajaClaw as an OpenAI-compatible HTTP endpoint
 
 ```
@@ -487,11 +510,23 @@ SQLite DB — no extra service.
 
 ---
 
-## Safety
+## Safety + fair use
+
+BajaClaw is a thin wrapper around the `claude` CLI. It never sees your
+credentials, never calls the Anthropic API directly, and only uses
+documented CLI flags. See [`docs/fair-use.md`](docs/fair-use.md) for
+the full boundary story.
+
+Built-in guards:
 
 - **Circuit breaker**: 5 consecutive failed cycles open the breaker for 15
   minutes.
-- **Rate limiter**: 60 cycles/hour by default.
+- **Rate limiter**: 30 cycles/hour/profile by default.
+- **Cycle serialization**: at most one `claude` subprocess per profile at
+  a time (see [`src/concurrency.ts`](src/concurrency.ts)). HTTP API hits
+  queue instead of spawning parallel processes.
+- **Auto tier caps**: Haiku cycles use fewer memories/skills/turns than
+  Sonnet, and Sonnet less than Opus. Small tasks stay small.
 - **Dry run**: `bajaclaw start --dry-run` prints the full prompt + exact
   argv without executing.
 - **Dry install**: `bajaclaw uninstall` without `--yes` prints the plan and
@@ -503,7 +538,8 @@ SQLite DB — no extra service.
 - **No telemetry**: the only outbound call BajaClaw makes on its own behalf
   is the once-per-24h update check to the npm registry.
 
-See [`docs/security.md`](docs/security.md).
+See [`docs/security.md`](docs/security.md) and
+[`docs/fair-use.md`](docs/fair-use.md).
 
 ---
 
@@ -588,6 +624,7 @@ Deeper in [`docs/architecture.md`](docs/architecture.md).
 - [`channels.md`](docs/channels.md)
 - [`api.md`](docs/api.md) — OpenAI-compatible HTTP endpoint — Telegram + Discord
 - [`security.md`](docs/security.md) — threat model + mitigations
+- [`fair-use.md`](docs/fair-use.md) — how BajaClaw stays a thin wrapper
 - [`troubleshooting.md`](docs/troubleshooting.md) — common fixes
 - [`faq.md`](docs/faq.md) — frequently asked
 - [`contributing.md`](docs/contributing.md) — dev setup, style, release

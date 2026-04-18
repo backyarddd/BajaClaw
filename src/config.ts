@@ -4,9 +4,14 @@ import type { AgentConfig } from "./types.js";
 import { profileDir, ensureDir } from "./paths.js";
 
 const DEFAULT: Partial<AgentConfig> = {
-  model: "claude-sonnet-4-5",
+  // "auto" picks haiku/sonnet/opus per task via src/model-picker.ts.
+  // Override with a specific id to disable auto-selection.
+  model: "auto",
   effort: "medium",
-  maxTurns: 20,
+  // Capped low by default to keep token usage tight. Auto-picked tiers
+  // further constrain turns per cycle. Bump explicitly for agents that
+  // legitimately need long tool chains.
+  maxTurns: 10,
   dashboardPort: 7337,
   memorySync: false,
 };
