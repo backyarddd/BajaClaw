@@ -129,7 +129,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     const memories = recall(db, task, budget.memoryCount);
     const systemDocs = loadSystemDocs(input.profile);
     const allSkills = loadAllSkills(input.profile);
-    const matched = matchSkills(allSkills, task, budget.skillCount);
+    const matched = matchSkills(allSkills, task, budget.skillCount, { allowedTools: cfg.allowedTools });
     const mcpConfig = buildMcpConfig(input.profile);
 
     const prompt = assemblePrompt({

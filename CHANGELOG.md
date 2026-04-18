@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.13.0
+
+**Load skills from OpenClaw (ClawHub) and Hermes Agent.** BajaClaw used
+to parse one format: its own flavour of `SKILL.md`. Now the loader
+reads all three — the two external formats share the same file shape,
+with extra metadata blocks that declare platform, env, and tool
+requirements. A skill from ClawHub or the Hermes skills hub drops into
+`~/.bajaclaw/skills/` and Just Works.
+
+### What changed
+
+1. **Real YAML parser** (`yaml` dep). Replaced the hand-rolled
+   frontmatter parser. Handles nested maps, inline-flow objects,
+   quotes, multiline strings — everything the two foreign formats
+   need. Existing bajaclaw skills continue to parse identically.
+2. **`origin` field on every skill**. Derived from the frontmatter:
+   `metadata.hermes` → "hermes", `metadata.openclaw` (or legacy
+   `clawdbot`/`clawdis`) → "openclaw", otherwise "bajaclaw".
+3. **Platform + bin gating**. Skills declaring `platforms: [macos]`
+   (hermes) or `metadata.openclaw.os: [linux]` are skipped on boxes
+   that don't match. Skills declaring `requires.bins: [sonos]` are
+   skipped if `which sonos` fails. `skill list` still shows them but
+   marked inactive with reason.
+4. **Hermes conditional activation**. `requires_tools` and
+   `fallback_for_tools` in the hermes metadata are honored at match
+   time against the profile's `allowedTools`. A skill flagged as a
+   fallback for `web_search` disappears from the prompt when
+   `web_search` is in the toolset.
+5. **Tags contribute to matcher scoring**. Hermes skills usually ship
+   without explicit `triggers` but always have `tags`; those now
+   score alongside triggers so the matcher picks them up.
+6. **`bajaclaw skill install` grew teeth**. New source schemes:
+   - `clawhub:<slug>[@version]` — resolve + download + extract from
+     the ClawHub registry via their public API.
+   - bare slug — shorthand for `clawhub:<slug>`.
+   - `https://…/file.zip` or `.tar.gz` — download + extract.
+   - `https://…/SKILL.md` and local paths still work as before.
+7. **`bajaclaw skill search <query>`**. Hits ClawHub's search API.
+   Pipe to grep/fzf for interactive browsing.
+
+### Using it
+
+```bash
+bajaclaw skill search sonos              # browse ClawHub
+bajaclaw skill install clawhub:sonoscli  # drop a skill into ~/.bajaclaw/skills/
+bajaclaw skill list default              # see active vs inactive
+```
+
+Hermes-format skills don't have a dedicated registry URL scheme yet —
+clone or download them by hand (they're regular folders with a
+`SKILL.md`) and `bajaclaw skill install <path>` picks them up.
+
+### Landmines (for next session)
+
+- Install specs (openclaw `install[]`: brew / node / go / uv) are
+  parsed and surfaced after install, but **not auto-executed**. We
+  just print them. Running them would mean shelling out to the user's
+  package managers, which is a much bigger consent surface. Keep it
+  that way until there's a real ask.
+- `parseSkill` now needs `yaml` to be installed. If someone nukes
+  `node_modules` and runs `npm test` without re-installing, the
+  parser tests fail cryptically. `npm install` fixes it.
+- The `metadata` block is parsed permissively: unknown keys are
+  ignored, and an entirely unknown `metadata.<vendor>` block just
+  leaves origin as "bajaclaw". If a new vendor format appears, it'll
+  silently degrade rather than crash.
+- `skill install` uses system `unzip`/`tar` for extraction — zero JS
+  deps but Windows users with a bare shell may not have them. macOS
+  + Linux both have them in `/usr/bin`.
+
 ## 0.12.1
 
 **Telegram + Discord actually work now.** The skills were shipping users

@@ -130,8 +130,19 @@ const skillCmd = program.command("skill").description("Skills across scopes");
 skillCmd.command("list [profile]").action(async (p) => skill.cmdList(defaultProfile(p)));
 skillCmd.command("new").argument("<name>").option("--profile <p>").option("--scope <s>", "user|profile", "user")
   .action(async (name, opts) => skill.cmdNew(name, opts.scope, opts.profile));
-skillCmd.command("install").argument("<source>").option("--scope <s>", "user|profile", "user").option("--profile <p>")
-  .action(async (source, opts) => skill.cmdInstall(source, opts.scope, opts.profile));
+skillCmd.command("install").argument("<source>")
+  .description("Install a skill: clawhub:<slug>[@version], <slug>, URL (zip/tar.gz/SKILL.md), or local path")
+  .option("--scope <s>", "user|profile", "user")
+  .option("--profile <p>")
+  .option("--yes", "skip confirmation")
+  .option("--registry <url>", "override ClawHub registry (env: CLAWHUB_REGISTRY)")
+  .action(async (source, opts) => skill.cmdInstall(source, {
+    scope: opts.scope, profile: opts.profile, yes: !!opts.yes, registry: opts.registry,
+  }));
+skillCmd.command("search").argument("<query...>")
+  .description("Search ClawHub for skills")
+  .option("--registry <url>")
+  .action(async (query: string[], opts) => skill.cmdSearch(query.join(" "), { registry: opts.registry }));
 skillCmd.command("review").action(skill.cmdReview);
 skillCmd.command("promote")
   .description("Move an auto-generated skill from review into the user scope")
