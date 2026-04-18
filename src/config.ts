@@ -7,14 +7,17 @@ const DEFAULT: Partial<AgentConfig> = {
   // "auto" picks haiku/sonnet/opus per task via src/model-picker.ts.
   // Override with a specific id to disable auto-selection.
   model: "auto",
-  effort: "medium",
-  // Generous default so complex multi-command tasks (setup flows,
-  // refactors, multi-file edits) complete without hitting the cap.
-  // The tier budget in src/model-picker.ts is the actual ceiling;
-  // this config is the floor.
-  maxTurns: 30,
+  // `high` is the default so every cycle has real runway. Bump to
+  // `xhigh` / `max` for monster tasks, drop to `low` / `medium` for
+  // triage-only profiles. claude's internal turn budget scales with
+  // this; there is no separate --max-turns flag.
+  effort: "high",
   dashboardPort: 7337,
   memorySync: false,
+  // Default context window: 200k tokens (Sonnet/Haiku/Opus baseline).
+  // Switch to `"1m"` here to opt into Opus's 1M window (API-key auth
+  // only; CLI falls back to 200k for subscription users).
+  contextWindow: "200k",
   compaction: {
     enabled: true,
     threshold: 0.75,

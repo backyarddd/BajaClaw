@@ -115,7 +115,6 @@ export async function synthesize(
   const r = await runOnce(prompt, {
     model: "claude-sonnet-4-6",
     effort: "medium",
-    maxTurns: 1,
     printMode: true,
     disallowedTools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch", "WebFetch"],
   });

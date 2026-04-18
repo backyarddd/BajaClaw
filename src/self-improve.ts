@@ -32,7 +32,7 @@ If there is a recurring pattern worth capturing as a reusable skill, return a SK
 Recent cycles:
 ${summary}`;
 
-  const r = await runOnce(prompt, { model: "claude-opus-4-7", effort: "high", maxTurns: 2, printMode: true });
+  const r = await runOnce(prompt, { model: "claude-opus-4-7", effort: "high", printMode: true });
   if (!r.ok || !r.text || r.text.trim() === "NONE") return null;
 
   if (!r.text.includes("---")) return null;

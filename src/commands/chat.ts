@@ -33,11 +33,12 @@ const MODEL_ALIAS: Record<string, string> = {
   opus: OPUS,
 };
 
-const CTX_TOKENS: Record<"haiku" | "sonnet" | "opus", number> = {
+const CTX_TOKENS_200K: Record<"haiku" | "sonnet" | "opus", number> = {
   haiku: 200_000,
   sonnet: 200_000,
   opus: 200_000,
 };
+const CTX_TOKENS_1M = 1_000_000;
 
 export interface ChatOptions {
   profile: string;
@@ -235,8 +236,10 @@ function printHeader(
     ? chalk.dim(" (routes haiku/sonnet/opus per task)")
     : "";
   const tier = tierFor(modelDisplay === AUTO ? SONNET : modelDisplay);
-  const ctx = CTX_TOKENS[tier];
-  const budget = budgetFor(tier);
+  const ctxTokens = cfg.contextWindow === "1m" ? CTX_TOKENS_1M : CTX_TOKENS_200K[tier];
+  const ctxLabel = cfg.contextWindow === "1m"
+    ? chalk.green("1M") + chalk.dim(" (beta)")
+    : formatNum(ctxTokens);
 
   const db = openDb(profile);
   let fiveH: UsageWindow;
@@ -253,8 +256,11 @@ function printHeader(
   console.log(chalk.bold.cyan(`╭─ ${title} ` + "─".repeat(Math.max(0, 58 - title.length - 3)) + "╮"));
   console.log(`${chalk.bold("  agent     ")} ${chalk.cyan(agentName)}`);
   console.log(`${chalk.bold("  model     ")} ${chalk.cyan(modelDisplay)}${tierNote}`);
-  console.log(`${chalk.bold("  effort    ")} ${cfg.effort}`);
-  console.log(`${chalk.bold("  context   ")} ${formatNum(ctx)} tokens · ${budget.maxTurns}-turn cap per cycle`);
+  console.log(`${chalk.bold("  effort    ")} ${chalk.cyan(cfg.effort)}${chalk.dim("  (/effort max for biggest turn budget)")}`);
+  console.log(`${chalk.bold("  context   ")} ${ctxLabel} tokens${chalk.dim("  (/context 1m to enable 1M beta)")}`);
+  if (cfg.maxBudgetUsd != null) {
+    console.log(`${chalk.bold("  budget    ")} $${cfg.maxBudgetUsd.toFixed(2)} per cycle`);
+  }
   console.log("");
   console.log(`${chalk.bold("  5h usage  ")} ${formatUsage(fiveH)}`);
   console.log(`${chalk.bold("  week      ")} ${formatUsage(week)}`);
@@ -336,8 +342,30 @@ async function handleSlash(input: string, ctx: SlashCtx): Promise<"exit" | "cont
       const m = modelOverride ?? ctx.cfg.model;
       const tier = tierFor(m === AUTO ? SONNET : m);
       const budget = budgetFor(tier);
-      console.log(`${chalk.bold("context window:  ")} ${formatNum(CTX_TOKENS[tier])} tokens (${tier})`);
-      console.log(`${chalk.bold("per-cycle budget:")} ${budget.memoryCount} memories · ${budget.skillCount} skills · ${budget.maxTurns} turns`);
+
+      if (!arg) {
+        const current = ctx.cfg.contextWindow ?? "200k";
+        const ctxTokens = current === "1m" ? CTX_TOKENS_1M : CTX_TOKENS_200K[tier];
+        console.log(`${chalk.bold("context window:  ")} ${formatNum(ctxTokens)} tokens (${current})`);
+        console.log(`${chalk.bold("per-cycle prompt:")} ${budget.memoryCount} memories · ${budget.skillCount} skills`);
+        console.log(chalk.dim("set with: /context 200k | /context 1m  (1m is a beta, API-key auth only)"));
+        console.log("");
+        return "continue";
+      }
+      const target = arg.toLowerCase();
+      if (target !== "200k" && target !== "1m") {
+        console.log(chalk.red("usage: /context 200k | 1m"));
+        console.log("");
+        return "continue";
+      }
+      ctx.cfg.contextWindow = target as "200k" | "1m";
+      saveConfig(ctx.cfg);
+      if (target === "1m") {
+        console.log(chalk.green("✓ context window set to 1M (beta)"));
+        console.log(chalk.dim("  Requires API-key auth. Subscription users will get a warning + fallback to 200k."));
+      } else {
+        console.log(chalk.green("✓ context window set to 200k"));
+      }
       console.log("");
       return "continue";
     }
@@ -359,17 +387,19 @@ async function handleSlash(input: string, ctx: SlashCtx): Promise<"exit" | "cont
     case "effort": {
       if (!arg) {
         console.log(`current: ${chalk.cyan(ctx.cfg.effort)}`);
-        console.log(chalk.dim("set with: /effort low | medium | high"));
+        console.log(chalk.dim("set with: /effort low | medium | high | xhigh | max"));
+        console.log(chalk.dim("higher = more runway (turns/tokens). max = unlimited-ish."));
         console.log("");
         return "continue";
       }
       const level = arg.toLowerCase();
-      if (level !== "low" && level !== "medium" && level !== "high") {
-        console.log(chalk.red("must be one of: low, medium, high"));
+      const allowed = ["low", "medium", "high", "xhigh", "max"];
+      if (!allowed.includes(level)) {
+        console.log(chalk.red(`must be one of: ${allowed.join(", ")}`));
         console.log("");
         return "continue";
       }
-      ctx.cfg.effort = level;
+      ctx.cfg.effort = level as "low" | "medium" | "high" | "xhigh" | "max";
       saveConfig(ctx.cfg);
       console.log(chalk.green(`✓ effort set to ${level} (persisted to config.json)`));
       console.log("");
@@ -421,7 +451,8 @@ function printHelp(): void {
   console.log(`  ${chalk.cyan("/context")} · ${chalk.cyan("/ctx")}       show context window + per-cycle budget`);
   console.log(`  ${chalk.cyan("/model [id|alias]")}     show or set session model`);
   console.log(`                       ${chalk.dim("aliases: auto, haiku, sonnet, opus")}`);
-  console.log(`  ${chalk.cyan("/effort [low|medium|high]")}   show or set effort`);
+  console.log(`  ${chalk.cyan("/effort [low|medium|high|xhigh|max]")}   show or set effort`);
+  console.log(`  ${chalk.cyan("/context [200k|1m]")}   show or set context window (1m is beta)`);
   console.log(`  ${chalk.cyan("/compact")}              run memory compaction now`);
   console.log(`  ${chalk.cyan("/history")}              dump this session's turns`);
   console.log("");

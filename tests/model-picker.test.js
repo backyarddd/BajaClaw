@@ -62,5 +62,5 @@ test("budgetFor tiers differ in shape", async () => {
   const h = budgetFor("haiku"); const s = budgetFor("sonnet"); const o = budgetFor("opus");
   assert.ok(h.memoryCount < s.memoryCount && s.memoryCount < o.memoryCount);
   assert.ok(h.skillCount <= s.skillCount && s.skillCount <= o.skillCount);
-  assert.ok(h.maxTurns < s.maxTurns && s.maxTurns < o.maxTurns);
+  assert.ok(h.memoryCharsEach <= s.memoryCharsEach && s.memoryCharsEach <= o.memoryCharsEach);
 });

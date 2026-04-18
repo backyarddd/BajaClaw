@@ -5,12 +5,19 @@ export type Model =
   | "claude-haiku-4-5"
   | string;
 
-export type Effort = "low" | "medium" | "high";
+// claude CLI's `--effort` accepts these five levels. Higher levels
+// give the agent a larger internal turn budget and more time / tokens
+// to finish a task. `max` is the most generous.
+export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+
+// Which context window the backend should use. "1m" adds the
+// `context-1m-2025-08-07` beta header; requires API-key auth (the
+// CLI prints a warning and falls back to 200k for subscription users).
+export type ContextWindow = "200k" | "1m";
 
 export interface ClaudeOptions {
   model?: Model;
   effort?: Effort;
-  maxTurns?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
   mcpConfig?: string;
@@ -18,6 +25,15 @@ export interface ClaudeOptions {
   printMode?: boolean;
   systemPrompt?: string;
   timeout?: number;
+  // Beta flags to pass via `--betas` (claude CLI, API-key users only).
+  // The most common is `context-1m-2025-08-07` for 1M context.
+  betas?: string[];
+  // Opt in to the 1M context window. Equivalent to adding
+  // `context-1m-2025-08-07` to `betas`. Ignored for subscription auth.
+  context1M?: boolean;
+  // Hard per-cycle cost ceiling in USD (maps to `--max-budget-usd`).
+  // The cycle aborts cleanly if it would exceed this. `undefined` = no cap.
+  maxBudgetUsd?: number;
   // Skip claude's interactive permission prompts for tools like Edit/Bash.
   // Default true: BajaClaw closes stdin when invoking claude, so
   // interactive prompts would just fail anyway. Set false only when you
@@ -51,12 +67,20 @@ export interface AgentConfig {
   template: string;
   model: Model;
   effort: Effort;
-  maxTurns: number;
+  /** @deprecated claude CLI has no --max-turns flag. Ignored. Use `effort: "max"` for biggest turn budget. */
+  maxTurns?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
   dashboardPort?: number;
   memorySync?: boolean;
   channels?: ChannelConfig[];
+  // Per-profile context window. Default: 200k. Set to "1m" to opt in
+  // to Opus's 1-million-token window (API-key auth only).
+  contextWindow?: ContextWindow;
+  // Per-cycle cost ceiling in USD. `undefined` = no cap.
+  maxBudgetUsd?: number;
+  // Extra claude beta flags to include verbatim.
+  betas?: string[];
   // When true, the desktop CLI's MCP config is merged into the cycle
   // subprocess. Off by default — BajaClaw keeps its own MCP config separate.
   mergeDesktopMcp?: boolean;
