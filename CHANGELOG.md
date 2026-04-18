@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.9.0
+
+**Interactive persona wizard**. First TTY `bajaclaw setup` now asks for
+the agent's name, what it should call you, tone
+(concise/casual/friendly/formal/playful/terse), timezone, focus,
+topics of interest, and hard "don't" rules. Answers write to
+`persona.json` and render into `SOUL.md` as the identity block injected
+into every cycle. Re-run any time with `bajaclaw persona --edit`.
+Non-interactive installs (postinstall, `--silent`, pipes) ship defaults.
+
+**Sub-agent system**: orchestrator + scoped helpers with physical
+permission isolation.
+
+- New fields: `parent` on child, `subAgents` on orchestrator.
+- `bajaclaw subagent create <name> --parent <main>` scaffolds a scoped
+  profile with its own template, tools, MCP config, memory, persona.
+- `bajaclaw subagent list [parent]` prints the tree.
+- `bajaclaw delegate <subagent> "<task>"` runs one cycle and streams
+  the response text (or `--json` for full `CycleOutput`).
+- New built-in skills: `delegate-to-subagent` (orchestrator routing
+  rules), `setup-subagent` (guided walkthrough).
+- Permission isolation is physical: the orchestrator literally cannot
+  use a tool/MCP server it doesn't have; it must delegate.
+- New doc: `docs/subagents.md`.
+
+**HTTP API — precise model routing**. The `model` field in
+`/v1/chat/completions` now supports overrides:
+
+- `"default"` → profile's configured model (auto-routes if `auto`)
+- `"default:claude-opus-4-7"` → force Opus for this request only
+- `"auto"` / `"claude-opus-4-7"` → shortcut: default profile + that model
+
+Overrides never mutate profile config. `/v1/models` now lists virtual
+entries per profile × known model so OpenAI clients get a menu.
+Documented in `docs/api.md`. Seven new tests.
+
 ## 0.8.0
 
 **Renamed npm package**: `create-bajaclaw` → `bajaclaw`. Installs are
