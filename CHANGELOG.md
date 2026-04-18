@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.14.0
+
+**New dashboard.** Orbit design system, sidebar navigation, in-browser
+chat with the agent, live config editor. The old dashboard was a
+four-pane readonly dump — this one is a workbench. Directly inspired
+by what Hermes Agent's web dashboard does well (config form, sessions
+view), stitched onto BajaClaw's existing cycle/memory/task data model.
+
+### Views
+
+1. **Overview** — four stat cards (cycles today/week, spend, tokens,
+   memories + pending tasks) and live-refreshed recent-cycles +
+   pending-tasks panels.
+2. **Chat** — send a message, the dashboard calls `/api/chat` which
+   invokes `runCycle` in-process, blocks for the reply, streams it
+   back. Per-reply meta line shows model tier, duration, cost, turn
+   count. History is stashed in localStorage; cleared across browsers.
+3. **Cycles / Memory / Tasks / Schedules** — same data as before,
+   restyled. Memory gets a live client-side filter.
+4. **Skills** — every active + inactive skill, color-coded by origin
+   (bajaclaw / openclaw / hermes). Inactive skills show the reason
+   (missing bin, wrong platform).
+5. **Channels** — telegram / discord entries with masked tokens and
+   allowlist; Remove button wired to `DELETE /api/channels/:kind`.
+6. **Settings** — form editor for model, effort, context window,
+   dashboard port, dashboard autostart, memory sync, per-cycle budget
+   cap. Writes to `~/.bajaclaw/profiles/<p>/config.json` via
+   whitelisted `PUT /api/config`; other fields (channels, tools) are
+   intentionally not touchable from the UI.
+
+### Backend endpoints added
+
+- `GET /api/status` — profile, version, pid, uptime.
+- `POST /api/chat` — `{ message } → runCycle(...)` → `{ ok, text,
+  cycleId, costUsd, turns, model, ... }`. Blocks on the cycle.
+- `GET /api/config` / `PUT /api/config` — whitelisted subset of the
+  profile config. Unknown fields are silently dropped; fields like
+  `allowedTools` and `channels` are not exposed.
+- `GET /api/channels` — configured channels with tokens masked.
+- `DELETE /api/channels/:kind` — remove a configured channel.
+- `GET /api/skills` — parsed skills across all origins with
+  active/inactive state.
+- `GET /api/summary` — now returns day/week stats and token totals.
+
+### Design
+
+- Orbit-inspired dark theme — warm grays (#09090B, #0F0F12, #17171C),
+  orange accent (#F97316), Inter + JetBrains Mono typography, subtle
+  rgba borders, sticky backdrop-blurred topbar, 4-tier text hierarchy.
+- Sidebar collapses to a horizontal scroller on narrow viewports.
+- No JS framework — vanilla DOM, one single-file HTML, auto-refresh
+  every 5s (paused on chat + settings views to avoid clobbering
+  in-flight work).
+
+### Landmines (for next session)
+
+- `/api/chat` blocks until the cycle finishes. A 60s cycle holds the
+  socket open that long. That's fine for one user on localhost but
+  don't expose the dashboard port to a LAN without adding auth +
+  probably SSE.
+- `PUT /api/config` for `dashboardPort` / `dashboardAutostart` only
+  takes effect on daemon restart. The save banner says so. Don't
+  auto-restart on save — the dashboard is inside the process it would
+  be killing.
+- Skills view calls `loadAllSkillsRaw` on every hit (every 5s while
+  the tab is open). For users with hundreds of skills this scans
+  three directories synchronously. Fine for now; cache if it bites.
+
 ## 0.13.2
 
 **Daemon auto-starts the dashboard.** The dashboard was a separate

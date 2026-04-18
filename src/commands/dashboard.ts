@@ -3,30 +3,32 @@ import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
-import { loadConfig } from "../config.js";
+import { loadConfig, saveConfig } from "../config.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
+import { runCycle } from "../agent.js";
+import { loadAllSkillsRaw, runtimeSkipReason } from "../skills/loader.js";
+import { currentVersion } from "../updater.js";
+import type { AgentConfig, ChannelConfig } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// __dirname is <repo>/src/commands (tsx) or <repo>/dist/commands (built).
 const DASHBOARD_HTML = join(__dirname, "..", "..", "src", "dashboard.html");
+
+// Daemon start time — when the dashboard starts in-process, we capture
+// it for the /api/status uptime readout.
+const START_TIME = Date.now();
 
 export async function runDashboard(profile: string): Promise<void> {
   const cfg = loadConfig(profile);
   const port = cfg.dashboardPort ?? 7337;
-  const srv = createServer((req: IncomingMessage, res: ServerResponse) => {
-    try { handle(req, res, profile); }
-    catch (e) { res.writeHead(500); res.end((e as Error).message); }
-  });
+  const srv = createServer((req, res) => route(req, res, profile));
   srv.listen(port, () => {
     console.log(chalk.green(`✓ dashboard: http://localhost:${port}/`));
   });
 }
 
-/** Start the dashboard in the background and return. Caller owns the
- *  lifetime — the returned server is null if the listen attempt
- *  failed (port in use, etc.). No throws: the caller can log the
- *  onError result and carry on. */
+/** Start the dashboard in the background and return. Port-in-use is
+ *  non-fatal — the caller gets an `ok: false` result to log. */
 export async function startDashboardInProcess(profile: string): Promise<{
   port: number;
   ok: boolean;
@@ -35,64 +37,297 @@ export async function startDashboardInProcess(profile: string): Promise<{
   const cfg = loadConfig(profile);
   const port = cfg.dashboardPort ?? 7337;
   return new Promise((resolve) => {
-    const srv = createServer((req: IncomingMessage, res: ServerResponse) => {
-      try { handle(req, res, profile); }
-      catch (e) { res.writeHead(500); res.end((e as Error).message); }
-    });
+    const srv = createServer((req, res) => route(req, res, profile));
     srv.on("error", (err: NodeJS.ErrnoException) => {
       resolve({ port, ok: false, error: err.code === "EADDRINUSE" ? `port ${port} already in use` : err.message });
     });
-    srv.listen(port, () => {
-      resolve({ port, ok: true });
-    });
+    srv.listen(port, () => resolve({ port, ok: true }));
   });
 }
 
-function handle(req: IncomingMessage, res: ServerResponse, profile: string): void {
-  const url = req.url ?? "/";
-  if (url === "/" || url === "/index.html") {
-    const body = existsSync(DASHBOARD_HTML)
-      ? readFileSync(DASHBOARD_HTML, "utf8")
-      : fallbackHtml();
-    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(body);
+function route(req: IncomingMessage, res: ServerResponse, profile: string): void {
+  // Surface errors as JSON when the client is asking for JSON, HTML
+  // otherwise. Saves the frontend from parsing error pages.
+  const handler = async (): Promise<void> => {
+    const url = req.url ?? "/";
+    const method = req.method ?? "GET";
+
+    // Static shell.
+    if (method === "GET" && (url === "/" || url === "/index.html")) {
+      return sendHtml(res);
+    }
+
+    // API routes.
+    if (url.startsWith("/api/")) {
+      await dispatchApi(req, res, profile, url, method);
+      return;
+    }
+
+    res.writeHead(404); res.end();
+  };
+  handler().catch((err: Error) => {
+    if (!res.headersSent) {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+async function dispatchApi(
+  req: IncomingMessage,
+  res: ServerResponse,
+  profile: string,
+  url: string,
+  method: string,
+): Promise<void> {
+  // POST /api/chat — blocks until the cycle finishes and returns the
+  // full result. Cycles are serialized per-profile by runCycle, so
+  // concurrent dashboard chats queue behind each other.
+  if (url === "/api/chat" && method === "POST") {
+    const body = await readJson(req) as { message?: string };
+    const task = (body.message ?? "").trim();
+    if (!task) { json(res, { error: "empty message" }, 400); return; }
+    const out = await runCycle({ profile, task });
+    json(res, {
+      ok: out.ok,
+      text: out.text,
+      cycleId: out.cycleId,
+      costUsd: out.costUsd,
+      inputTokens: out.inputTokens,
+      outputTokens: out.outputTokens,
+      turns: out.turns,
+      durationMs: out.durationMs,
+      model: out.model,
+      tier: out.tier,
+      error: out.error,
+    });
     return;
   }
-  if (url.startsWith("/api/")) {
-    const db = openDb(profile);
-    try {
-      if (url === "/api/cycles") {
-        const rows = db.prepare("SELECT * FROM cycles ORDER BY id DESC LIMIT 50").all();
-        return json(res, rows);
-      }
-      if (url === "/api/memories") {
-        return json(res, listRecent(db, 100));
-      }
-      if (url === "/api/schedules") {
-        const rows = db.prepare("SELECT * FROM schedules").all();
-        return json(res, rows);
-      }
-      if (url === "/api/tasks") {
-        const rows = db.prepare("SELECT * FROM tasks ORDER BY id DESC LIMIT 100").all();
-        return json(res, rows);
-      }
-      if (url === "/api/summary") {
-        const c = db.prepare("SELECT COUNT(*) c, SUM(cost_usd) cost FROM cycles").get() as { c: number; cost: number | null };
-        const m = db.prepare("SELECT COUNT(*) c FROM memories").get() as { c: number };
-        return json(res, { profile, cycles: c.c, totalCostUsd: c.cost ?? 0, memories: m.c });
-      }
-    } finally { db.close(); }
+
+  // GET /api/config — safe subset of AgentConfig for the UI.
+  if (url === "/api/config" && method === "GET") {
+    const cfg = loadConfig(profile);
+    json(res, publicConfig(cfg));
+    return;
   }
+
+  // PUT /api/config — merges a safe subset onto the on-disk config.
+  if (url === "/api/config" && method === "PUT") {
+    const body = await readJson(req) as Partial<AgentConfig>;
+    const cfg = loadConfig(profile);
+    const next = mergeSafe(cfg, body);
+    saveConfig(next);
+    json(res, publicConfig(next));
+    return;
+  }
+
+  // GET /api/status — daemon + gateway + version info.
+  if (url === "/api/status" && method === "GET") {
+    json(res, {
+      profile,
+      version: currentVersion(),
+      uptimeMs: Date.now() - START_TIME,
+      pid: process.pid,
+      now: new Date().toISOString(),
+    });
+    return;
+  }
+
+  // GET /api/channels — configured channels with tokens masked.
+  if (url === "/api/channels" && method === "GET") {
+    const cfg = loadConfig(profile);
+    json(res, (cfg.channels ?? []).map(maskChannel));
+    return;
+  }
+
+  // DELETE /api/channels/:kind — remove a configured channel.
+  const chDel = url.match(/^\/api\/channels\/(telegram|discord)$/);
+  if (chDel && method === "DELETE") {
+    const kind = chDel[1] as "telegram" | "discord";
+    const cfg = loadConfig(profile);
+    cfg.channels = (cfg.channels ?? []).filter((c) => c.kind !== kind);
+    saveConfig(cfg);
+    json(res, (cfg.channels ?? []).map(maskChannel));
+    return;
+  }
+
+  // GET /api/skills — active + inactive skills with origin.
+  if (url === "/api/skills" && method === "GET") {
+    const skills = loadAllSkillsRaw(profile);
+    json(res, skills.map((s) => ({
+      name: s.name,
+      description: s.description,
+      origin: s.origin ?? "bajaclaw",
+      scope: s.scope,
+      version: s.version,
+      tags: s.tags,
+      requiredBins: s.requiredBins,
+      platforms: s.platforms,
+      homepage: s.homepage,
+      inactive: !!runtimeSkipReason(s),
+      inactiveReason: runtimeSkipReason(s),
+    })));
+    return;
+  }
+
+  // Existing DB-backed read endpoints.
+  const db = openDb(profile);
+  try {
+    if (url === "/api/cycles" && method === "GET") {
+      return json(res, db.prepare("SELECT * FROM cycles ORDER BY id DESC LIMIT 50").all());
+    }
+    if (url === "/api/memories" && method === "GET") {
+      return json(res, listRecent(db, 100));
+    }
+    if (url === "/api/schedules" && method === "GET") {
+      return json(res, db.prepare("SELECT * FROM schedules").all());
+    }
+    if (url === "/api/tasks" && method === "GET") {
+      return json(res, db.prepare("SELECT * FROM tasks ORDER BY id DESC LIMIT 100").all());
+    }
+    if (url === "/api/summary" && method === "GET") {
+      const since24 = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+      const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const all = db.prepare("SELECT COUNT(*) c, COALESCE(SUM(cost_usd),0) cost, COALESCE(SUM(input_tokens),0) inTok, COALESCE(SUM(output_tokens),0) outTok FROM cycles WHERE status='ok'").get() as { c: number; cost: number; inTok: number; outTok: number };
+      const day = db.prepare("SELECT COUNT(*) c, COALESCE(SUM(cost_usd),0) cost FROM cycles WHERE status='ok' AND started_at > ?").get(since24) as { c: number; cost: number };
+      const week = db.prepare("SELECT COUNT(*) c, COALESCE(SUM(cost_usd),0) cost FROM cycles WHERE status='ok' AND started_at > ?").get(since7d) as { c: number; cost: number };
+      const memCount = (db.prepare("SELECT COUNT(*) c FROM memories").get() as { c: number }).c;
+      const pending = (db.prepare("SELECT COUNT(*) c FROM tasks WHERE status='pending'").get() as { c: number }).c;
+      return json(res, {
+        profile,
+        cycles: all.c,
+        cyclesDay: day.c,
+        cyclesWeek: week.c,
+        totalCostUsd: all.cost,
+        costDayUsd: day.cost,
+        costWeekUsd: week.cost,
+        inputTokens: all.inTok,
+        outputTokens: all.outTok,
+        memories: memCount,
+        pendingTasks: pending,
+      });
+    }
+  } finally { db.close(); }
+
   res.writeHead(404); res.end();
 }
 
-function json(res: ServerResponse, data: unknown): void {
-  res.writeHead(200, { "content-type": "application/json" });
+// ── Request helpers ────────────────────────────────────────────────
+
+function readJson(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let buf = "";
+    req.on("data", (chunk: Buffer) => {
+      buf += chunk.toString("utf8");
+      if (buf.length > 1_000_000) { req.destroy(); reject(new Error("request body too large")); }
+    });
+    req.on("end", () => {
+      if (!buf) return resolve({});
+      try { resolve(JSON.parse(buf)); }
+      catch (e) { reject(new Error(`invalid JSON body: ${(e as Error).message}`)); }
+    });
+    req.on("error", reject);
+  });
+}
+
+function json(res: ServerResponse, data: unknown, status = 200): void {
+  res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(data));
 }
 
+function sendHtml(res: ServerResponse): void {
+  const body = existsSync(DASHBOARD_HTML)
+    ? readFileSync(DASHBOARD_HTML, "utf8")
+    : fallbackHtml();
+  res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+  res.end(body);
+}
+
 function fallbackHtml(): string {
-  return `<!doctype html><html><body style="font-family:system-ui;background:#111;color:#eee;padding:2rem">
+  return `<!doctype html><html><body style="font-family:system-ui;background:#09090B;color:#F0F0F3;padding:2rem">
 <h1>BajaClaw Dashboard</h1><p>dashboard.html not found — run <code>npm run build</code>.</p>
 </body></html>`;
+}
+
+// ── Config shaping ─────────────────────────────────────────────────
+
+// Fields the UI is allowed to see. Channels, tools, anything touching
+// auth is left off — the API is localhost-only but treat leaks
+// conservatively anyway.
+interface PublicConfig {
+  profile: string;
+  name: string;
+  model: string;
+  effort: string;
+  contextWindow: "200k" | "1m";
+  dashboardPort: number;
+  dashboardAutostart: boolean;
+  memorySync: boolean;
+  maxBudgetUsd?: number;
+  compaction: {
+    enabled: boolean;
+    threshold: number;
+    schedule: string;
+    keepRecentPerKind: number;
+    pruneCycleDays: number;
+  };
+}
+
+function publicConfig(cfg: AgentConfig): PublicConfig {
+  return {
+    profile: cfg.profile,
+    name: cfg.name,
+    model: String(cfg.model ?? "auto"),
+    effort: cfg.effort,
+    contextWindow: cfg.contextWindow ?? "200k",
+    dashboardPort: cfg.dashboardPort ?? 7337,
+    dashboardAutostart: cfg.dashboardAutostart ?? true,
+    memorySync: cfg.memorySync ?? false,
+    maxBudgetUsd: cfg.maxBudgetUsd,
+    compaction: {
+      enabled: cfg.compaction?.enabled ?? true,
+      threshold: cfg.compaction?.threshold ?? 0.75,
+      schedule: cfg.compaction?.schedule ?? "both",
+      keepRecentPerKind: cfg.compaction?.keepRecentPerKind ?? 25,
+      pruneCycleDays: cfg.compaction?.pruneCycleDays ?? 30,
+    },
+  };
+}
+
+// Whitelist of fields the PUT /api/config endpoint will merge. Anything
+// else is silently ignored — prevents an injection from rewriting e.g.
+// the allowedTools list via the dashboard.
+const ALLOWED_FIELDS = new Set<keyof AgentConfig>([
+  "model", "effort", "contextWindow", "dashboardPort",
+  "dashboardAutostart", "memorySync", "maxBudgetUsd",
+]);
+
+function mergeSafe(cfg: AgentConfig, patch: Partial<AgentConfig>): AgentConfig {
+  const next = { ...cfg };
+  for (const [k, v] of Object.entries(patch)) {
+    if (!ALLOWED_FIELDS.has(k as keyof AgentConfig)) continue;
+    (next as Record<string, unknown>)[k] = v;
+  }
+  // Compaction has its own subsection — merge just the known numeric/boolean fields.
+  if (patch.compaction && typeof patch.compaction === "object") {
+    const p = patch.compaction as Record<string, unknown>;
+    next.compaction = { ...(cfg.compaction ?? {} as NonNullable<AgentConfig["compaction"]>) };
+    if (typeof p.enabled === "boolean") next.compaction.enabled = p.enabled;
+    if (typeof p.threshold === "number") next.compaction.threshold = p.threshold;
+    if (typeof p.schedule === "string") next.compaction.schedule = p.schedule as "both" | "threshold" | "daily" | "off";
+    if (typeof p.keepRecentPerKind === "number") next.compaction.keepRecentPerKind = p.keepRecentPerKind;
+    if (typeof p.pruneCycleDays === "number") next.compaction.pruneCycleDays = p.pruneCycleDays;
+  }
+  return next;
+}
+
+function maskChannel(c: ChannelConfig): object {
+  const t = c.token ?? "";
+  const masked = t.length > 8 ? `${t.slice(0, 4)}…${t.slice(-4)}` : "***";
+  return {
+    kind: c.kind,
+    tokenMasked: masked,
+    channelId: c.channelId,
+    allowlist: c.allowlist,
+  };
 }
