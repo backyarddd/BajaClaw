@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.10.3
+
+**Two install-time fixes.**
+
+- **Cycle crash: `Warning: no stdin data received in 3s`**. The
+  `claude` CLI backend expects stdin to be closed when invoked with
+  `-p "<prompt>"`; otherwise it waits 3 seconds for piped input and
+  writes a warning to stdout that contaminates the JSON output.
+  BajaClaw now passes `stdin: "ignore"` to execa so the subprocess
+  sees EOF immediately.
+- **First-run welcome silently consumed by postinstall**. npm v7+
+  captures postinstall stdout, so the welcome printed to the void and
+  then marked done — meaning the user's first real `bajaclaw`
+  invocation saw no welcome either. Now gated on `process.stdout.isTTY`
+  so a non-TTY run (postinstall, pipes, CI) is a true no-op and
+  doesn't touch the marker file. The welcome fires on the first
+  interactive invocation.
+
+If you were on 0.10.2 and never saw the welcome, delete
+`~/.bajaclaw/.first-run-done` (or just run `bajaclaw welcome`) to
+re-display it.
+
 ## 0.10.2
 
 **Install UX: visible welcome, dep health check.**

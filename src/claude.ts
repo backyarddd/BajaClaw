@@ -94,6 +94,11 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
       cwd: opts.workdir,
       timeout: opts.timeout ?? DEFAULT_TIMEOUT,
       reject: false,
+      // Explicitly close stdin. Without this, the claude CLI waits 3s
+      // for piped input before proceeding (and treats the wait as a
+      // warning that contaminates stdout). Closing stdin tells it
+      // "the prompt on -p is complete — don't wait for more".
+      stdin: "ignore",
     });
     return parseResult(r.stdout, r.stderr, r.exitCode ?? 0, start, jsonSupported, ["claude", ...cmd]);
   } catch (e) {
