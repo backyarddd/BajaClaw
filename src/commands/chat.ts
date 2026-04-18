@@ -23,6 +23,7 @@ import { openDb, type DB } from "../db.js";
 import { tierFor, budgetFor, AUTO, HAIKU, SONNET, OPUS } from "../model-picker.js";
 import { currentVersion } from "../updater.js";
 import { loadPersona } from "../persona-io.js";
+import { loadAllSkills } from "../skills/loader.js";
 import type { AgentConfig, ChatTurn } from "../types.js";
 
 const HISTORY_LIMIT = 10;
@@ -106,33 +107,25 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   const rl = createInterface({ input: paste.input, output: stdout });
 
   // Main loop. One turn at a time, no concurrency.
-  // Per-turn layout (Claude Code style):
-  //   ─── top rule ───
-  //    › user input
-  //   ─── bottom rule ───
-  //    · haiku · 1.2s · $0.0012 · 2 turns · #42
+  // Scrolling layout (Claude Code style):
+  //   > user input              ← bullet + user message, scrolls into history
+  //   ● agent response...       ← filled circle + agent text
+  //     haiku · 1.2s · $0.0012 · 2 turns · #42
+  //                             ← blank line
+  //   > _                       ← next prompt, cursor here
   //
-  //    emily › agent response…
-  //
-  //   (next turn's top rule follows)
+  // No rule-sandwich around history. Only the welcome header has
+  // framing. The active prompt is the cursor line itself.
   while (true) {
-    writeHRule();
     let input: string;
     try {
-      const raw = await rl.question(chalk.cyan(" › "));
+      const raw = await rl.question(chalk.cyan("› "));
       input = raw.replace(/\x16/g, "\n").trim();
     } catch {
       break; // rl closed (EOF / Ctrl-D)
     }
 
-    if (!input) {
-      // Empty enter: nothing to do. Move on; a fresh top rule prints
-      // on the next pass. (Accept the visual glitch of an adjacent
-      // double-rule over adding cursor-manipulation complexity.)
-      continue;
-    }
-
-    writeHRule();
+    if (!input) continue;
 
     // Slash commands
     if (input.startsWith("/")) {
@@ -151,9 +144,9 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
     // Normal turn: run a cycle.
     history.push({ role: "user", content: input, ts: Date.now() });
-    // Temporary meta line while the cycle runs. Swapped for the real
-    // stats line once we have a result.
-    stdout.write(chalk.dim(" · thinking…\n"));
+    // Temporary placeholder while the cycle runs. Swapped for the
+    // real agent response + meta once the cycle returns.
+    stdout.write(chalk.dim("● thinking…") + "\n");
 
     let r: CycleOutput | null = null;
     let caughtError: Error | null = null;
@@ -169,31 +162,26 @@ export async function runChat(opts: ChatOptions): Promise<void> {
       caughtError = e as Error;
     }
 
-    // Replace the "thinking…" line in place. `\x1b[1A\x1b[2K` =
-    // cursor up one, erase in line (no `\r` so readline doesn't
-    // re-draw a phantom prompt).
+    // Replace "thinking…" line in place. cursor up + erase-in-line,
+    // no `\r` so readline's prompt-redraw doesn't fire.
     stdout.write("\x1b[1A\x1b[2K");
 
     if (caughtError) {
-      stdout.write(chalk.red(` · error · ${caughtError.message}`) + "\n\n");
-      stdout.write(chalk.red(` ${agentName} › `) + chalk.red(caughtError.message) + "\n\n");
+      stdout.write(chalk.red("● error: ") + caughtError.message + "\n\n");
       history.pop();
       continue;
     }
 
     if (!r || !r.ok) {
-      stdout.write(chalk.red(" · cycle failed") + "\n\n");
-      stdout.write(chalk.red(` ${agentName} › `) + chalk.red(formatCycleError(r)) + "\n\n");
+      stdout.write(chalk.red("● ") + chalk.red(formatCycleError(r)) + "\n\n");
       history.pop();
       continue;
     }
 
-    // Meta line directly under the bottom rule. Then a blank line,
-    // then the response. Layout matches the screenshot you referenced:
-    // rule / prompt / rule / meta / blank / response / blank.
-    printStatusLine(r, cfg);
     const responseText = (r.text ?? "").trim() || chalk.dim("(empty response)");
-    stdout.write(chalk.green(` ${agentName} › `) + responseText + "\n\n");
+    stdout.write(chalk.cyan("● ") + responseText + "\n");
+    printStatusLine(r, cfg);
+    stdout.write("\n");
 
     history.push({ role: "assistant", content: r.text ?? "", ts: Date.now() });
     stats.turnCount += 1;
@@ -285,16 +273,6 @@ function installPasteShim(): PasteShim {
 }
 
 // ───────────────────────────────────────────────────────────────
-// Horizontal rule - spans terminal width, caps at 120 cols so it
-// doesn't sprawl on ultra-wide monitors.
-// ───────────────────────────────────────────────────────────────
-
-function writeHRule(): void {
-  const width = Math.min(stdout.columns || 80, 120);
-  stdout.write(chalk.dim("─".repeat(width)) + "\n");
-}
-
-// ───────────────────────────────────────────────────────────────
 // Error formatting
 // ───────────────────────────────────────────────────────────────
 
@@ -337,49 +315,123 @@ function printHeader(
   modelOverride: string | undefined,
 ): void {
   const modelDisplay = modelOverride ?? cfg.model;
-  const tierNote = modelDisplay === AUTO
-    ? chalk.dim(" (routes haiku/sonnet/opus per task)")
-    : "";
   const tier = tierFor(modelDisplay === AUTO ? SONNET : modelDisplay);
   const ctxTokens = cfg.contextWindow === "1m" ? CTX_TOKENS_1M : CTX_TOKENS_200K[tier];
   const ctxLabel = cfg.contextWindow === "1m"
     ? chalk.green("1M") + chalk.dim(" (beta)")
     : formatNum(ctxTokens);
 
+  // Hermes-inspired: banner on top, two-column info below (agent
+  // identity + session on the left, capabilities inventory on the
+  // right), usage line last. Keeps the first-screen real estate
+  // dense without the old bordered-box feel.
+  const version = currentVersion();
+
+  console.log("");
+  // "BAJACLAW" in a compact block-letter style (matches Hermes'
+  // ASCII banner aesthetic; width-safe for 80-col terminals).
+  for (const line of BANNER) console.log(chalk.cyan(line));
+  console.log("");
+
+  // Two-column block. Left = identity, right = inventory.
+  const { skillNames, scopeCounts } = summarizeSkills(profile);
+  const left: string[] = [
+    `${chalk.bold(agentName)} ${chalk.dim("·")} ${chalk.cyan(modelDisplay)}`,
+    `${chalk.dim("profile:")} ${profile}  ${chalk.dim("effort:")} ${cfg.effort}  ${chalk.dim("ctx:")} ${ctxLabel}`,
+    `${chalk.dim("version:")} ${version}`,
+    "",
+    chalk.dim(`cwd: ${process.cwd()}`),
+  ];
+  if (cfg.maxBudgetUsd != null) {
+    left.splice(3, 0, `${chalk.dim("budget:")} $${cfg.maxBudgetUsd.toFixed(2)}/cycle`);
+  }
+
+  const right: string[] = [
+    chalk.bold("Available Skills"),
+    ...skillLinesGrouped(skillNames, scopeCounts),
+  ];
+
+  renderTwoColumns(left, right);
+  console.log("");
+
+  // Usage line (5h + week) as a single muted row.
   const db = openDb(profile);
-  let fiveH: UsageWindow;
-  let week: UsageWindow;
   try {
-    fiveH = usageWindow(db, 5);
-    week = usageWindow(db, 24 * 7);
+    const fiveH = usageWindow(db, 5);
+    const week = usageWindow(db, 24 * 7);
+    console.log(
+      chalk.dim(`usage  5h: ${fiveH.cycles} cycles · ${formatNum(fiveH.inputTokens + fiveH.outputTokens)} tok · $${fiveH.costUsd.toFixed(4)}`) +
+      chalk.dim(`    week: ${week.cycles} cycles · ${formatNum(week.inputTokens + week.outputTokens)} tok · $${week.costUsd.toFixed(4)}`)
+    );
   } finally {
     db.close();
   }
-
-  const title = `BajaClaw chat · ${profile} · v${currentVersion()}`;
-  console.log("");
-  console.log(chalk.bold.cyan(`╭─ ${title} ` + "─".repeat(Math.max(0, 58 - title.length - 3)) + "╮"));
-  console.log(`${chalk.bold("  agent     ")} ${chalk.cyan(agentName)}`);
-  console.log(`${chalk.bold("  model     ")} ${chalk.cyan(modelDisplay)}${tierNote}`);
-  console.log(`${chalk.bold("  effort    ")} ${chalk.cyan(cfg.effort)}${chalk.dim("  (/effort max for biggest turn budget)")}`);
-  console.log(`${chalk.bold("  context   ")} ${ctxLabel} tokens${chalk.dim("  (/context 1m to enable 1M beta)")}`);
-  if (cfg.maxBudgetUsd != null) {
-    console.log(`${chalk.bold("  budget    ")} $${cfg.maxBudgetUsd.toFixed(2)} per cycle`);
-  }
-  console.log("");
-  console.log(`${chalk.bold("  5h usage  ")} ${formatUsage(fiveH)}`);
-  console.log(`${chalk.bold("  week      ")} ${formatUsage(week)}`);
-  console.log(chalk.dim("  (advisory counts from your local cycle log - compare to your plan)"));
-  console.log("");
-  console.log(chalk.dim("  /help for commands · /exit or Ctrl-D to quit"));
-  console.log(chalk.bold.cyan("╰" + "─".repeat(58) + "╯"));
+  console.log(chalk.dim("/help for commands  ·  /exit or Ctrl-D to quit"));
   console.log("");
 }
 
+// ── Banner ──────────────────────────────────────────────────────
+
+const BANNER = [
+  " ██████╗  █████╗      ██╗ █████╗      ██████╗██╗      █████╗ ██╗    ██╗",
+  " ██╔══██╗██╔══██╗     ██║██╔══██╗    ██╔════╝██║     ██╔══██╗██║    ██║",
+  " ██████╔╝███████║     ██║███████║    ██║     ██║     ███████║██║ █╗ ██║",
+  " ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║",
+  " ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝",
+  " ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝",
+];
+
+function summarizeSkills(profile: string): {
+  skillNames: string[];
+  scopeCounts: { bajaclaw: number; openclaw: number; hermes: number };
+} {
+  const skills = loadAllSkills(profile);
+  const counts = { bajaclaw: 0, openclaw: 0, hermes: 0 };
+  for (const s of skills) {
+    const origin = s.origin ?? "bajaclaw";
+    if (origin in counts) counts[origin as keyof typeof counts] += 1;
+  }
+  return { skillNames: skills.map((s) => s.name).sort(), scopeCounts: counts };
+}
+
+function skillLinesGrouped(names: string[], scopeCounts: {bajaclaw:number;openclaw:number;hermes:number}): string[] {
+  // Up to 6 names inline, then "(+N more)". Stack scope counts below.
+  const lines: string[] = [];
+  if (names.length === 0) {
+    lines.push(chalk.dim("  (none loaded)"));
+  } else {
+    const shown = names.slice(0, 6);
+    const extra = names.length - shown.length;
+    lines.push("  " + shown.map((n) => chalk.cyan(n)).join(chalk.dim(", ")) + (extra > 0 ? chalk.dim(` +${extra} more`) : ""));
+  }
+  const parts = [
+    scopeCounts.bajaclaw > 0 ? chalk.cyan(`${scopeCounts.bajaclaw} bajaclaw`) : "",
+    scopeCounts.openclaw > 0 ? chalk.yellow(`${scopeCounts.openclaw} openclaw`) : "",
+    scopeCounts.hermes > 0 ? chalk.magenta(`${scopeCounts.hermes} hermes`) : "",
+  ].filter(Boolean);
+  if (parts.length > 0) lines.push("  " + parts.join(chalk.dim(" · ")));
+  return lines;
+}
+
+function renderTwoColumns(left: string[], right: string[]): void {
+  // Strip ANSI for width calculations so colors don't break alignment.
+  const leftWidth = 40;
+  const maxRows = Math.max(left.length, right.length);
+  for (let i = 0; i < maxRows; i++) {
+    const l = left[i] ?? "";
+    const r = right[i] ?? "";
+    const pad = Math.max(0, leftWidth - visibleLength(l));
+    console.log("  " + l + " ".repeat(pad) + "  " + r);
+  }
+}
+
+function visibleLength(s: string): number {
+  return s.replace(/\x1b\[[0-9;]*m/g, "").length;
+}
+
 function printStatusLine(r: CycleOutput, cfg: AgentConfig): void {
-  // Rendered directly under the bottom rule of the input sandwich.
-  // One dim line, space-separated bullets, no trailing bullet so
-  // the eye stops at the last token.
+  // Rendered directly under the agent's `●` response line, indented
+  // to align with the response text (after the two-char bullet).
   const bits: string[] = [];
   if (r.model) bits.push(chalk.magenta(shortModel(r.model)));
   bits.push(chalk.dim(cfg.effort));
@@ -389,7 +441,7 @@ function printStatusLine(r: CycleOutput, cfg: AgentConfig): void {
   bits.push(chalk.dim(`${(r.durationMs / 1000).toFixed(1)}s`));
   if (r.costUsd != null) bits.push(chalk.dim(`$${r.costUsd.toFixed(4)}`));
   bits.push(chalk.dim(`#${r.cycleId}`));
-  stdout.write(chalk.dim(" · ") + bits.join(chalk.dim(" · ")) + "\n\n");
+  stdout.write("  " + bits.join(chalk.dim(" · ")) + "\n");
 }
 
 function printSessionSummary(stats: SessionStats): void {
