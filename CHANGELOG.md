@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.14.8
+
+**Chat CLI: scrolling-clean layout inspired by Hermes + Claude Code.**
+The rule-sandwich from 0.14.7 left history looking cluttered (every
+past turn framed in horizontal rules). Ripped out. The new layout
+scrolls cleanly with bullet prefixes: `> user` and `● agent`.
+
+### What changed
+
+1. **Welcome**: big "BAJACLAW" block-letter banner followed by a
+   two-column info block — left column has agent name, model,
+   profile, effort, context, version, cwd; right column is the live
+   **Available Skills** inventory with counts per origin (bajaclaw /
+   openclaw / hermes). Usage line (5h + week) rendered muted below.
+2. **Per-turn**: `> user input` on submit, `● agent response` after
+   the cycle, indented stats line directly under the response, blank,
+   next prompt. No framing rules in scrollback.
+3. **"thinking…"** placeholder renders as `● thinking…` then gets
+   replaced in place when the real response arrives.
+4. **Errors**: same bullet style, `● error: …` in red.
+
+### Tradeoff vs. Claude Code
+
+Claude Code paints a sticky bottom status bar with a live sandwich
+around the active prompt. Doing that without dropping into alt-screen
+mode is messy and breaks scrollback. For now the active prompt is
+just the plain `›` cursor, no rules. If we want the sticky bar later
+it's a separate refactor (probably full-screen + custom input
+handling).
+
 ## 0.14.7
 
 **CLI chat: rule-sandwich layout.** Matches the Claude Code welcome
