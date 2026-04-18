@@ -113,7 +113,7 @@ export async function synthesize(
     .replace("{{RESPONSE}}", input.response.slice(0, 3000));
 
   const r = await runOnce(prompt, {
-    model: "claude-sonnet-4-5",
+    model: "claude-sonnet-4-6",
     effort: "medium",
     maxTurns: 1,
     printMode: true,

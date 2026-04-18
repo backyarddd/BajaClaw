@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.8.0
+
+**Renamed npm package**: `create-bajaclaw` → `bajaclaw`. Installs are
+now `npm install -g bajaclaw`. The `create-bajaclaw` bin alias still
+ships inside the package for back-compat if you type the old name out
+of habit. Uninstall text, install scripts, update flow, docs, and
+guides all updated.
+
+**Bumped default model IDs** to the current tier:
+
+- Opus: `claude-opus-4-5` → `claude-opus-4-7`
+- Sonnet: `claude-sonnet-4-5` → `claude-sonnet-4-6`
+- Haiku: `claude-haiku-4-5` (unchanged — still the newest Haiku)
+
+`bajaclaw model` lists the new ids. `model: auto` (the default) routes
+to these. Internal sub-calls updated:
+
+- Sub-agent delegation (`src/delegation.ts`): Opus 4.7
+- Reflection cycle (`src/self-improve.ts`): Opus 4.7
+- Auto-skill synthesis (`src/skills/auto-skiller.ts`): Sonnet 4.6
+- Post-cycle memory extract: Haiku 4.5 (unchanged)
+
+`init` and `setup` CLI `--model` default: `auto`. The `--model` help
+string now shows the new ids.
+
+Existing profiles' explicit model settings are not rewritten on upgrade
+— their `config.json` still points to whatever you set. Run
+`bajaclaw model <new-id>` to bump.
+
 ## 0.7.0
 
 **`model: auto` is the new default.** Before every cycle, a heuristic

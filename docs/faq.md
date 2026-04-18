@@ -64,7 +64,7 @@ Anything that satisfies that shape can replace the default. Forks welcome.
 Once per 24h, `src/updater.ts` hits `https://registry.npmjs.org/<name>/latest`
 for the current published version. If a newer version is available, a
 one-line notice appears after your next command. `bajaclaw update` runs
-either `npm install -g create-bajaclaw@latest` (if installed that way) or
+either `npm install -g bajaclaw@latest` (if installed that way) or
 `git pull + npm install + npm run build` (if installed from a clone).
 
 Set `BAJACLAW_NO_UPDATE_NOTICE=1` to silence the notice. The check itself

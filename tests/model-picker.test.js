@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 test("pickModel: respects a configured non-auto id", async () => {
   const { pickModel } = await import("../src/model-picker.ts");
-  const r = pickModel({ configuredModel: "claude-opus-4-5", task: "hello" });
-  assert.equal(r.model, "claude-opus-4-5");
+  const r = pickModel({ configuredModel: "claude-opus-4-7", task: "hello" });
+  assert.equal(r.model, "claude-opus-4-7");
   assert.equal(r.reason, "configured");
 });
 

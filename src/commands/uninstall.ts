@@ -126,7 +126,7 @@ export async function runUninstall(opts: UninstallOptions = {}): Promise<void> {
   console.log(chalk.green.bold("Uninstall complete."));
   console.log("");
   console.log(chalk.dim("To remove the bajaclaw command itself:"));
-  console.log(chalk.dim("  npm uninstall -g create-bajaclaw"));
+  console.log(chalk.dim("  npm uninstall -g bajaclaw"));
   console.log(chalk.dim("  (or `rm -rf` your git clone, if installed that way)"));
 }
 

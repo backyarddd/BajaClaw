@@ -1,10 +1,10 @@
 {
-  "name": "create-bajaclaw",
-  "version": "0.7.0",
+  "name": "bajaclaw",
+  "version": "0.8.0",
   "description": "BajaClaw — autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {
-    "npmName": "create-bajaclaw",
+    "npmName": "bajaclaw",
     "updateUrl": "https://raw.githubusercontent.com/backyarddd/BajaClaw/main/package.json"
   },
   "bin": {

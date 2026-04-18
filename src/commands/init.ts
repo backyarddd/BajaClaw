@@ -42,7 +42,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
     name: opts.name,
     profile: opts.name,
     template,
-    model: opts.model ?? "claude-sonnet-4-5",
+    model: opts.model ?? "auto",
     effort: opts.effort ?? "medium",
     maxTurns: 20,
     dashboardPort: 7337,

@@ -142,7 +142,7 @@ Native endpoint. Runs a cycle, returns the full `CycleOutput`.
   "durationMs": 1200,
   "costUsd": 0.0012,
   "prompt": "(the assembled prompt for this cycle)",
-  "command": ["claude", "-p", "…", "--model", "claude-sonnet-4-5", "…"]
+  "command": ["claude", "-p", "…", "--model", "claude-sonnet-4-6", "…"]
 }
 ```
 

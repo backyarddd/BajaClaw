@@ -20,9 +20,9 @@ An agent is a pairing of:
 ## Creating an agent
 
 ```
-npx create-bajaclaw my-agent --template research
-# or
-bajaclaw init my-agent --template research --model claude-sonnet-4-5
+npm install -g bajaclaw            # installs + auto-sets-up the default profile
+bajaclaw init my-agent --template research               # additional named profile
+bajaclaw init my-agent --template research --model claude-opus-4-7
 ```
 
 This writes:
@@ -64,7 +64,7 @@ cycle config merges over the global default. Example:
 {
   "name": "my-agent",
   "template": "research",
-  "model": "claude-opus-4-5",
+  "model": "claude-opus-4-7",
   "effort": "high",
   "maxTurns": 40,
   "allowedTools": ["Read", "Grep", "Glob", "WebSearch", "WebFetch"]

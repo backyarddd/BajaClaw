@@ -30,7 +30,7 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
   const name = opts.profile ?? DEFAULT_PROFILE_NAME;
   const template = (opts.template ?? "custom") as
     | "outreach" | "research" | "support" | "social" | "code" | "custom";
-  const model = opts.model ?? "claude-sonnet-4-5";
+  const model = opts.model ?? "auto";
 
   if (!opts.skipBanner && !opts.silent) printBanner(currentVersion(), { force: true });
 

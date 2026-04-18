@@ -23,7 +23,7 @@ logs, and agent descriptor.
 2. Run: `bajaclaw init <name> --template <tpl>`
    - Example: `bajaclaw init researcher --template research`
 3. Optional: set model + effort at init:
-   `bajaclaw init researcher --template research --model claude-opus-4-5 --effort high`
+   `bajaclaw init researcher --template research --model claude-opus-4-7 --effort high`
 4. Edit `~/.bajaclaw/profiles/<name>/AGENT.md` and `SOUL.md` to tailor the
    agent's operating rules and identity.
 5. Edit `~/.bajaclaw/profiles/<name>/HEARTBEAT.md` with schedule lines.

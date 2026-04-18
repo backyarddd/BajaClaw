@@ -23,7 +23,7 @@ integrations (keeping data), or just a specific profile.
 1. Show the plan: `bajaclaw uninstall`
 2. Review — every item listed will be removed.
 3. Apply: `bajaclaw uninstall --yes`
-4. Remove the binary itself: `npm uninstall -g create-bajaclaw`
+4. Remove the binary itself: `npm uninstall -g bajaclaw`
 
 ### Partial (keep data, remove integrations only)
 1. `bajaclaw uninstall --yes --keep-data`
