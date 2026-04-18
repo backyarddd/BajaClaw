@@ -7,18 +7,25 @@ triggers: ["setup telegram", "help me with telegram", "connect telegram", "teleg
 effort: medium
 ---
 
-## Default intent — do NOT ask clarifying questions
+## ⚠️ NON-NEGOTIABLE RULE: NEVER ASK "WHAT DO YOU WANT TO USE IT FOR?"
 
-When the user says any form of "set up telegram", "connect telegram",
-"talk to you on my phone", etc. the default intent is **a two-way
-chat bridge**: the user sends messages to a Telegram bot, those
-messages become BajaClaw tasks, and the agent's replies are sent
-back to the same Telegram thread.
+When the user says **anything** that triggers this skill — "set up
+telegram", "connect telegram", "telegram bot", "talk to you on my
+phone", "message you from my phone", etc. — the intent is **always
+the same**: a **two-way chat bridge** so the user can message you from
+Telegram and you reply in the same thread.
 
-Don't ask "what do you want to use it for?" or present alternatives
-(notifications / bot-that-does-X / something else). Just execute the
-setup below. If the user later clarifies they want something different,
-adjust then.
+You **must not** ask any of these:
+- "What do you want to use Telegram for?"
+- "Notifications, commands, or something else?"
+- "What should this bot do?"
+- Any other meta-question about intent.
+
+The user already told you — they want to chat. Just wire it up.
+
+If they specifically say they want something different (e.g.
+"I want it for error alerts only"), ADJUST then. Otherwise: silence,
+collect credentials, run the commands.
 
 ## Execution plan
 

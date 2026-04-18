@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.11.3
+
+**Four chat-session bugs found in live testing.**
+
+1. **Raw JSON blob bleeding into the chat as the agent's
+   "response"**. When a cycle hit `{"is_error": true, "subtype":
+   "error_max_turns"}`, `parseResult` didn't match any of the error-
+   extraction branches and fell through to the "first line of
+   stdout" fallback — which was the entire JSON. Now `parseResult`
+   detects `is_error: true` with a `subtype` explicitly, normalizes
+   each known subtype (`error_max_turns`, `error_during_execution`,
+   etc.) into a sentinel, **clears `base.text`** so the JSON never
+   surfaces as response text, and **forces `base.ok = false`** so
+   the chat layer never prints it as an assistant turn.
+
+2. **`error_max_turns` when the agent tried to do real work**. The
+   per-tier `maxTurns` budget was far too tight for multi-step
+   tasks (setup flows, refactors, multi-file edits). Bumped the
+   ceilings:
+
+   | tier   | was | now |
+   |--------|----:|----:|
+   | haiku  |   4 |   8 |
+   | sonnet |   8 |  20 |
+   | opus   |  14 |  30 |
+
+   Default `cfg.maxTurns` raised 10 → 30 so the per-profile cap
+   doesn't clip the tier budget. `chat.ts` translates a remaining
+   `max_turns_hit` sentinel into actionable text ("try `/model
+   opus`, or break into smaller asks, or just retry").
+
+3. **Agent still asked "what do you want to use Telegram for?"
+   despite the v0.11.2 skill rewrite**. Strengthened both
+   `setup-telegram` and `setup-discord` skills (now v0.2.1) with a
+   **"NON-NEGOTIABLE RULE: NEVER ASK"** section at the top listing
+   the specific forbidden questions. LLM compliance with unambiguous
+   directives is much higher than polite prose.
+
+4. **Token accounting showed `10 in` when the model actually
+   processed 146k cached tokens**. `parseResult` now sums
+   `input_tokens + cache_creation_input_tokens +
+   cache_read_input_tokens` for the displayed "in" count, matching
+   the true context size the model saw (cost remains accurate —
+   cache reads are still cheap).
+
 ## 0.11.2
 
 **Bulletproof chat + real cycle fixes.** Four issues from 0.11.1:

@@ -76,16 +76,19 @@ export interface ContextBudget {
   maxTurns: number;
 }
 
-// Context budgets per model tier. Tightened defaults for token economy.
+// Context budgets per model tier. Generous turn caps so real work
+// (multi-command setups, code refactors, research) doesn't truncate
+// mid-task. Memory and skill counts are still tight to keep per-cycle
+// prompts lean.
 export function budgetFor(tier: PickResult["tier"]): ContextBudget {
   switch (tier) {
     case "haiku":
-      return { memoryCount: 3, memoryCharsEach: 180, skillCount: 1, maxTurns: 4 };
+      return { memoryCount: 3, memoryCharsEach: 180, skillCount: 1, maxTurns: 8 };
     case "opus":
-      return { memoryCount: 7, memoryCharsEach: 280, skillCount: 3, maxTurns: 14 };
+      return { memoryCount: 7, memoryCharsEach: 280, skillCount: 3, maxTurns: 30 };
     case "sonnet":
     default:
-      return { memoryCount: 5, memoryCharsEach: 220, skillCount: 2, maxTurns: 8 };
+      return { memoryCount: 5, memoryCharsEach: 220, skillCount: 2, maxTurns: 20 };
   }
 }
 

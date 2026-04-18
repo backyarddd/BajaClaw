@@ -8,10 +8,11 @@ const DEFAULT: Partial<AgentConfig> = {
   // Override with a specific id to disable auto-selection.
   model: "auto",
   effort: "medium",
-  // Capped low by default to keep token usage tight. Auto-picked tiers
-  // further constrain turns per cycle. Bump explicitly for agents that
-  // legitimately need long tool chains.
-  maxTurns: 10,
+  // Generous default so complex multi-command tasks (setup flows,
+  // refactors, multi-file edits) complete without hitting the cap.
+  // The tier budget in src/model-picker.ts is the actual ceiling;
+  // this config is the floor.
+  maxTurns: 30,
   dashboardPort: 7337,
   memorySync: false,
   compaction: {

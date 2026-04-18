@@ -159,16 +159,58 @@ function parseResult(
         if (typeof obj.result === "string") base.text = obj.result;
         if (typeof obj.total_cost_usd === "number") base.costUsd = obj.total_cost_usd;
         else if (typeof obj.cost_usd === "number") base.costUsd = obj.cost_usd;
-        const usage = obj.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+        const usage = obj.usage as {
+          input_tokens?: number;
+          output_tokens?: number;
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+        } | undefined;
         if (usage) {
-          base.inputTokens = usage.input_tokens;
+          // Sum all input-side token classes so the displayed "in" count
+          // reflects the true scale the model processed. Cache reads are
+          // cheap but still count toward context.
+          base.inputTokens =
+            (usage.input_tokens ?? 0) +
+            (usage.cache_creation_input_tokens ?? 0) +
+            (usage.cache_read_input_tokens ?? 0);
           base.outputTokens = usage.output_tokens;
         }
         if (typeof obj.num_turns === "number") base.turns = obj.num_turns;
-        // Error extraction: fields claude uses across versions.
-        if (typeof obj.error === "string") base.error = obj.error;
-        else if (obj.type === "error" && typeof obj.message === "string") base.error = obj.message as string;
-        else if (obj.is_error === true && typeof obj.result === "string") base.error = obj.result;
+
+        // Error extraction. Claude's result wrapper sets is_error:true
+        // for a handful of terminal conditions (max_turns, execution
+        // error, rate limit mid-run). Normalize each subtype into a
+        // clean, actionable message. Also force ok=false and clear
+        // base.text so the raw JSON never bleeds into the agent's
+        // "response".
+        if (typeof obj.error === "string") {
+          base.error = obj.error;
+          base.ok = false;
+          base.text = "";
+        } else if (obj.type === "error" && typeof obj.message === "string") {
+          base.error = obj.message as string;
+          base.ok = false;
+          base.text = "";
+        } else if (obj.is_error === true) {
+          const subtype = typeof obj.subtype === "string" ? obj.subtype : "";
+          const numTurns = typeof obj.num_turns === "number" ? obj.num_turns : undefined;
+          if (subtype === "error_max_turns") {
+            // Sentinel format. chat.ts pretty-prints; other callers
+            // see a short machine-parseable prefix.
+            base.error = `max_turns_hit:${numTurns ?? "?"}`;
+          } else if (subtype === "error_during_execution") {
+            const detail = typeof obj.result === "string" ? obj.result : "";
+            base.error = `backend error during execution${detail ? `: ${detail}` : ""}`;
+          } else if (typeof obj.result === "string") {
+            base.error = obj.result;
+          } else if (subtype) {
+            base.error = `backend error (${subtype})`;
+          } else {
+            base.error = "backend reported an error with no message";
+          }
+          base.ok = false;
+          base.text = "";
+        }
       }
     } catch {
       // Non-JSON stdout. Could be a streaming fragment or a warning.
@@ -177,13 +219,16 @@ function parseResult(
   }
 
   if (exitCode !== 0 && !base.error) {
-    // Prefer stderr, then JSON-embedded hints, then stdout as last resort.
+    // Prefer stderr, then stdout first-line fallback. Never echo the
+    // entire stdout into the error field — it may be a multi-KB JSON.
     const trimmedStderr = stderr.trim();
-    if (trimmedStderr) base.error = trimmedStderr;
-    else if (base.text.trim() && base.text.trim() !== stdout.trim()) base.error = base.text.trim();
+    if (trimmedStderr) base.error = trimmedStderr.slice(0, 400);
     else if (stdout.trim()) base.error = stdout.trim().split("\n")[0]!.slice(0, 400);
     else base.error = `backend exited ${exitCode} with no output`;
   }
+
+  // If we determined an error from JSON but exit was 0, still mark not-ok.
+  if (base.error && base.ok) base.ok = false;
 
   return base;
 }
