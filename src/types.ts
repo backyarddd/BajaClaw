@@ -62,6 +62,11 @@ export interface AgentConfig {
     minToolUses?: number;
     maxPerDay?: number;
   };
+  // Sub-agent relationships. Set on the parent to list owned sub-agents
+  // (used by `bajaclaw subagent list`). Set on the child to point at its
+  // orchestrator.
+  parent?: string;
+  subAgents?: string[];
 }
 
 export interface ChannelConfig {

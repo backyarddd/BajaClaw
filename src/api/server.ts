@@ -24,12 +24,13 @@ import { runCycle } from "../agent.js";
 import { openDb } from "../db.js";
 import {
   taskFromMessages,
-  resolveProfile,
+  resolveRequest,
   cycleToCompletion,
   chunkText,
   makeChunk,
   type OpenAIChatRequest,
 } from "./translate.js";
+import { KNOWN_MODELS } from "../model-picker.js";
 
 export interface ApiConfig {
   host?: string;
@@ -128,15 +129,17 @@ async function handleChat(
   if (!body || !Array.isArray(body.messages) || body.messages.length === 0) {
     return sendJson(res, 400, err("messages[] required"));
   }
-  const profile = resolveProfile(body.model ?? "default");
-  if (!profileExposed(profile, opts.exposedProfiles)) return sendJson(res, 404, err(`unknown profile: ${profile}`));
+  const resolved = resolveRequest(body.model ?? "default");
+  if (!profileExposed(resolved.profile, opts.exposedProfiles)) {
+    return sendJson(res, 404, err(`unknown profile: ${resolved.profile}`));
+  }
 
   const task = taskFromMessages(body.messages);
   const wantStream = !!body.stream;
 
   if (!wantStream) {
-    const out = await runCycle({ profile, task });
-    const completion = cycleToCompletion(body.model ?? profile, out);
+    const out = await runCycle({ profile: resolved.profile, task, modelOverride: resolved.modelOverride });
+    const completion = cycleToCompletion(body.model ?? resolved.profile, out);
     return sendJson(res, 200, completion);
   }
 
@@ -148,13 +151,13 @@ async function handleChat(
   });
 
   const id = `chatcmpl-bc-${Date.now()}`;
-  const model = body.model ?? profile;
+  const model = body.model ?? resolved.profile;
   const delay = opts.streamDelayMs ?? DEFAULT_STREAM_DELAY_MS;
 
   writeEvent(res, makeChunk(id, model, { role: "assistant" }));
 
   try {
-    const out = await runCycle({ profile, task });
+    const out = await runCycle({ profile: resolved.profile, task, modelOverride: resolved.modelOverride });
     if (!out.ok) {
       writeEvent(res, makeChunk(id, model, { content: out.text || out.error || "error" }, "error"));
     } else {
@@ -178,12 +181,30 @@ function listProfilesAsModels(exposed?: string[]): { id: string; object: "model"
   const all = readdirSync(dir).filter((n) => existsSync(join(dir, n, "config.json")));
   const filter = exposed && exposed.length > 0 ? new Set(exposed) : null;
   const names = filter ? all.filter((n) => filter.has(n)) : all;
-  return names.map((id) => ({
-    id,
-    object: "model" as const,
-    created: Math.floor(Date.now() / 1000),
-    owned_by: "bajaclaw" as const,
-  }));
+  const now = Math.floor(Date.now() / 1000);
+  const out: { id: string; object: "model"; created: number; owned_by: "bajaclaw" }[] = [];
+
+  // Bare profile names — use each profile's configured model.
+  for (const id of names) {
+    out.push({ id, object: "model", created: now, owned_by: "bajaclaw" });
+  }
+
+  // profile:model virtual entries — pick any model per request without
+  // touching profile config.
+  for (const id of names) {
+    for (const m of KNOWN_MODELS) {
+      out.push({ id: `${id}:${m.id}`, object: "model", created: now, owned_by: "bajaclaw" });
+    }
+  }
+
+  // Bare model-id shortcuts — apply to the default profile.
+  if (names.includes("default")) {
+    for (const m of KNOWN_MODELS) {
+      out.push({ id: m.id, object: "model", created: now, owned_by: "bajaclaw" });
+    }
+  }
+
+  return out;
 }
 
 function profileExposed(profile: string, exposed?: string[]): boolean {

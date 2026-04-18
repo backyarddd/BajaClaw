@@ -57,12 +57,45 @@ export interface ChatCompletionChunk {
   }[];
 }
 
-// Map the request's "model" field to a BajaClaw profile. Accept either
-// a bare profile name ("default") or the namespaced form ("bajaclaw:default").
+// Map the request's "model" field to a BajaClaw profile + optional
+// per-request model override.
+//
+// Syntax, highest specificity last:
+//   "default"                          -> profile=default, use its config.model
+//   "bajaclaw:default"                 -> same, explicit namespace
+//   "default:claude-opus-4-7"          -> profile=default, override = opus 4.7
+//   "bajaclaw:default:claude-opus-4-7" -> same, explicit namespace
+//   "auto"                             -> profile=default, override = "auto"
+//   "claude-opus-4-7"                  -> profile=default, override = opus 4.7
+//
+// "auto" or any string that starts with "claude-" is treated as a model id
+// applied to the default profile — that's the shortest shortcut for
+// "just use BajaClaw's pipeline but with this model".
+export interface ResolvedRequest {
+  profile: string;
+  modelOverride?: string;
+}
+
 export function resolveProfile(model: string): string {
-  if (!model) return "default";
-  if (model.startsWith("bajaclaw:")) return model.slice("bajaclaw:".length);
-  return model;
+  return resolveRequest(model).profile;
+}
+
+export function resolveRequest(model: string, defaultProfile = "default"): ResolvedRequest {
+  if (!model) return { profile: defaultProfile };
+  let s = model;
+  if (s.startsWith("bajaclaw:")) s = s.slice("bajaclaw:".length);
+
+  // Bare model id shortcut → apply to default profile.
+  if (/^(auto$|claude-)/.test(s)) {
+    return { profile: defaultProfile, modelOverride: s };
+  }
+
+  const idx = s.indexOf(":");
+  if (idx === -1) return { profile: s };
+  return {
+    profile: s.slice(0, idx),
+    modelOverride: s.slice(idx + 1) || undefined,
+  };
 }
 
 export function taskFromMessages(messages: OpenAIMessage[]): string {
