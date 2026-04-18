@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.14.0
+          autonomous agents on your terms  ·  MIT  ·  v0.14.1
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
@@ -16,6 +16,9 @@ skill-matching autonomous agent — with a local dashboard, multiple profiles,
 OS-native scheduling, and first-class MCP integration.
 
 You install it once. It sets itself up. You run `bajaclaw start`. It goes.
+
+> The name is a tribute to Baja Blast — the author's favorite soda. The
+> dashboard ships in that same tropical-lime teal on purpose.
 
 ---
 

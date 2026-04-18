@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.1
+
+**Recolor the dashboard to Baja Blast teal.** The Orbit palette's
+orange accent is gone; everything accent-colored is now the tropical
+lime teal the project is named after (#14D6CE). Focus rings, button
+fills, active sidebar item, user chat bubble, openclaw skill badges —
+all swapped. No structural changes.
+
+Also: README now notes the name is a tribute to the author's favorite
+soda.
+
 ## 0.14.0
 
 **New dashboard.** Orbit design system, sidebar navigation, in-browser
