@@ -132,6 +132,14 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     const matched = matchSkills(allSkills, task, budget.skillCount, { allowedTools: cfg.allowedTools });
     const mcpConfig = buildMcpConfig(input.profile);
 
+    // For channel-sourced cycles (telegram, discord, etc.), auto-load
+    // the recent back-and-forth with this source so the agent doesn't
+    // treat every message as a cold start. In-process callers (chat
+    // REPL, dashboard /api/chat) already pass their own sessionHistory;
+    // that takes precedence.
+    const sessionHistory = input.sessionHistory
+      ?? (popped?.source ? loadSourceHistory(db, popped.source, popped.id, 8) : undefined);
+
     const prompt = assemblePrompt({
       task,
       memories: memories
@@ -143,7 +151,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       skills: matched
         .map((s) => `## Skill: ${s.name}\n${s.body}`)
         .join("\n\n"),
-      recentChat: formatRecentChat(input.sessionHistory),
+      recentChat: formatRecentChat(sessionHistory),
     });
 
     const cycleId = insertCycle(db, {
@@ -205,12 +213,16 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     }
 
     recordSuccess(db);
+    // Store up to 8k chars of the response. Needed for conversational
+    // history on channel-sourced cycles — the old 300-char cap made
+    // every prior turn look like a stub. 8k ≈ 2k tokens; beyond that
+    // we rely on memory extraction to preserve context.
     db.prepare(
       "UPDATE cycles SET finished_at=?, status=?, response_preview=?, cost_usd=?, input_tokens=?, output_tokens=?, turns=? WHERE id=?"
     ).run(
       finished,
       "ok",
-      result.text.slice(0, 300),
+      result.text.slice(0, 8000),
       result.costUsd ?? null,
       result.inputTokens ?? null,
       result.outputTokens ?? null,
@@ -283,6 +295,47 @@ function popTask(db: import("./db.js").DB): { id: number; body: string; source?:
   if (!row) return null;
   db.prepare("UPDATE tasks SET status='running' WHERE id=?").run(row.id);
   return { id: row.id, body: row.body, source: row.source ?? undefined };
+}
+
+/** Build a conversation history window for a given source
+ *  (telegram:<id>, discord:<id>, etc.) by joining finished tasks to
+ *  their cycles and emitting user/assistant turn pairs in chronological
+ *  order. Used by channel-sourced cycles so the agent can see what
+ *  was already said instead of treating every message as a cold
+ *  start. Excludes the currently-running task. */
+function loadSourceHistory(
+  db: import("./db.js").DB,
+  source: string,
+  currentTaskId: number,
+  limit: number,
+): ChatTurn[] {
+  const rows = db.prepare(`
+    SELECT t.id AS task_id, t.body AS user_msg, t.created_at AS user_ts,
+           c.response_preview AS agent_msg, c.finished_at AS agent_ts
+    FROM tasks t
+    LEFT JOIN cycles c ON c.id = t.cycle_id
+    WHERE t.source = ?
+      AND t.id != ?
+      AND t.status = 'done'
+      AND c.status = 'ok'
+    ORDER BY t.id DESC
+    LIMIT ?
+  `).all(source, currentTaskId, limit) as {
+    task_id: number;
+    user_msg: string;
+    user_ts: string;
+    agent_msg: string | null;
+    agent_ts: string | null;
+  }[];
+
+  const turns: ChatTurn[] = [];
+  for (const r of rows.reverse()) {
+    turns.push({ role: "user", content: r.user_msg, ts: Date.parse(r.user_ts) || 0 });
+    if (r.agent_msg) {
+      turns.push({ role: "assistant", content: r.agent_msg, ts: Date.parse(r.agent_ts ?? r.user_ts) || 0 });
+    }
+  }
+  return turns;
 }
 
 function insertCycle(db: import("./db.js").DB, c: {
