@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.14.5
+
+**Fix CI on Node 20.** `npm test` was `node --test "tests/**/*.test.js"`
+which works on Node 22 (native glob support in the test runner) but
+fails on Node 20 with "Could not find 'tests/**/*.test.js'" because
+20 treats the pattern as a literal path. Replaced with a tiny wrapper
+`scripts/run-tests.js` that enumerates the test files via
+`fs.readdirSync` and invokes `node --test` with explicit paths.
+Works on every Node >=20. Same test output, same 40 tests pass.
+
 ## 0.14.4
 
 **Purge em dashes + bake a persona rule against them.** 517 em dashes

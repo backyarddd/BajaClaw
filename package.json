@@ -1,6 +1,6 @@
 {
   "name": "bajaclaw",
-  "version": "0.14.4",
+  "version": "0.14.5",
   "description": "BajaClaw - autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {
@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "test": "node --test \"tests/**/*.test.js\"",
+    "test": "node scripts/run-tests.js",
     "lint": "tsc --noEmit",
     "prepare": "npm run build",
     "postinstall": "node scripts/postinstall.js"
