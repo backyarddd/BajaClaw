@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.14.2
+
+**Typing indicator in Telegram + Discord.** When a user messages the
+bot, the platform's native "…is typing" indicator shows up immediately
+and stays on until the reply is sent. No more silent 30s of wondering
+whether the bot is alive.
+
+### What changed
+
+1. **Adapters expose `startTyping(chatId)`**. Telegram re-sends
+   `sendChatAction(…, "typing")` every 4s (platform auto-clears at
+   5s). Discord re-sends `channel.sendTyping()` every 8s (auto-clears
+   at 10s). Both return a cleanup function the gateway stores.
+2. **Lifecycle**: gateway `message`/`messageCreate` handlers call
+   `beginTyping(profile, source)` right after enqueuing the task —
+   the indicator starts before the daemon picks up the task. When the
+   daemon calls `replyToSource`, it implicitly calls `endTyping` so
+   the indicator stops the same instant the reply lands.
+3. **Always-clear**: the daemon also calls `endTyping` on the empty-
+   text path (successful cycle with no response) and in the reply
+   error handler, so nothing leaves a chat stuck in "typing…" forever.
+
 ## 0.14.1
 
 **Recolor the dashboard to Baja Blast teal.** The Orbit palette's

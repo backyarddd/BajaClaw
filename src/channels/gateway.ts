@@ -9,14 +9,19 @@ import { Logger } from "../logger.js";
 import type { ChannelConfig } from "../types.js";
 
 type Sender = (chatId: string | number, text: string) => Promise<void>;
+type TypingStarter = (chatId: string | number) => () => void;
 
 interface Adapter {
   kind: "telegram" | "discord";
   send: Sender;
+  startTyping: TypingStarter;
   stop: () => Promise<void>;
 }
 
 const adapters = new Map<string, Adapter>();
+// Active typing indicators, keyed by source ("kind:chatId"). Each
+// value is the stop function returned by the adapter's startTyping.
+const activeTyping = new Map<string, () => void>();
 
 function key(profile: string, kind: "telegram" | "discord"): string {
   return `${profile}:${kind}`;
@@ -59,8 +64,10 @@ export async function runGateway(profile: string): Promise<void> {
 
 /** Send an agent reply back to whatever channel originated a task.
  *  `source` is formatted as "telegram:<id>" or "discord:<id>" — the
- *  same string written into tasks.source by the inbound handlers. */
+ *  same string written into tasks.source by the inbound handlers.
+ *  Also ends any typing indicator associated with that source. */
 export async function replyToSource(profile: string, source: string, text: string): Promise<void> {
+  endTyping(source);
   const colon = source.indexOf(":");
   if (colon < 0) return;
   const kind = source.slice(0, colon);
@@ -69,6 +76,34 @@ export async function replyToSource(profile: string, source: string, text: strin
   const a = adapters.get(key(profile, kind));
   if (!a) return;
   await a.send(id, text);
+}
+
+/** Show the platform's "typing…" indicator for the given source. The
+ *  adapter internally refreshes on the platform's cadence (Telegram
+ *  indicator lasts ~5s, Discord ~10s) until `endTyping(source)` is
+ *  called. Safe to call multiple times — a second call replaces the
+ *  first. No-ops if the adapter isn't loaded. */
+export function beginTyping(profile: string, source: string): void {
+  const colon = source.indexOf(":");
+  if (colon < 0) return;
+  const kind = source.slice(0, colon) as "telegram" | "discord";
+  const id = source.slice(colon + 1);
+  if (kind !== "telegram" && kind !== "discord") return;
+  const a = adapters.get(key(profile, kind));
+  if (!a) return;
+  const existing = activeTyping.get(source);
+  if (existing) existing();
+  try {
+    const stop = a.startTyping(id);
+    activeTyping.set(source, stop);
+  } catch { /* ignore — typing is best-effort */ }
+}
+
+export function endTyping(source: string): void {
+  const stop = activeTyping.get(source);
+  if (!stop) return;
+  activeTyping.delete(source);
+  try { stop(); } catch { /* ignore */ }
 }
 
 async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Promise<Adapter | undefined> {
@@ -94,6 +129,9 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
       );
     } finally { db.close(); }
     log.info("gateway.telegram.msg", { from: sender, chat: chatId, len: body.length });
+    // Kick off the "typing…" indicator immediately so the user knows
+    // the message was received. Stays on until replyToSource fires.
+    beginTyping(profile, `telegram:${chatId}`);
   });
   log.info("gateway.telegram.ready");
 
@@ -101,6 +139,18 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
     kind: "telegram",
     send: async (chatId, text) => {
       await bot.sendMessage(Number(chatId), text);
+    },
+    startTyping: (chatId) => {
+      // Telegram's typing indicator auto-clears after 5s, so re-send
+      // every 4s until stopped. `sendChatAction` errors are swallowed
+      // — they'd be noise (bot blocked, etc.) and the agent still has
+      // a reply path via the eventual send.
+      const send = (): void => {
+        bot.sendChatAction(Number(chatId), "typing").catch(() => undefined);
+      };
+      send();
+      const timer = setInterval(send, 4000);
+      return () => clearInterval(timer);
     },
     stop: async () => { try { await bot.stopPolling(); } catch { /* ignore */ } },
   };
@@ -131,6 +181,7 @@ async function startDiscord(profile: string, c: ChannelConfig, log: Logger): Pro
       );
     } finally { db.close(); }
     log.info("gateway.discord.msg", { from: msg.author.id, len: msg.content.length });
+    beginTyping(profile, `discord:${msg.channelId}`);
   });
   client.once("ready", () => log.info("gateway.discord.ready"));
   await client.login(c.token);
@@ -142,6 +193,24 @@ async function startDiscord(profile: string, c: ChannelConfig, log: Logger): Pro
       if (ch && "send" in ch && typeof (ch as { send?: unknown }).send === "function") {
         await (ch as { send: (t: string) => Promise<unknown> }).send(text);
       }
+    },
+    startTyping: (channelId) => {
+      // Discord's typing indicator auto-clears after ~10s or on send.
+      // Re-trigger every 8s. `sendTyping` is channel-bound; the fetch
+      // is cached inside discord.js, so the per-tick cost is cheap.
+      let stopped = false;
+      const tick = async (): Promise<void> => {
+        if (stopped) return;
+        try {
+          const ch = await client.channels.fetch(String(channelId));
+          if (ch && "sendTyping" in ch && typeof (ch as { sendTyping?: unknown }).sendTyping === "function") {
+            await (ch as { sendTyping: () => Promise<void> }).sendTyping();
+          }
+        } catch { /* ignore */ }
+      };
+      tick();
+      const timer = setInterval(tick, 8000);
+      return () => { stopped = true; clearInterval(timer); };
     },
     stop: async () => { try { await client.destroy(); } catch { /* ignore */ } },
   };
