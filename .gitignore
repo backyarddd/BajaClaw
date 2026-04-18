@@ -15,3 +15,7 @@ coverage/
 *.db
 *.db-wal
 *.db-shm
+
+# Internal notes — never committed, never packed
+HANDOFF.md
+HANDOFF.local.md
