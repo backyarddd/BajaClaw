@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.13.1
+
+**Fix two operational bugs.** Bajaclaw mis-reported successful cycles
+as failures whenever a tool call left a child holding stdout. And
+`daemon start` didn't clean up orphan daemons, so a few crashed
+sessions would pile up into a bot choir that all answered every
+telegram message.
+
+### What changed
+
+1. **`parseResult` trusts JSON success.** claude's CLI can emit a
+   `{"type":"result","subtype":"success","is_error":false,...}` body
+   and then exit non-zero because a grandchild (e.g. the `bajaclaw
+   dashboard` HTTP server) still holds stdout/stderr open. Previously
+   we only honored exit code, so the cycle logged `cycle.fail` with
+   the raw JSON as the "error", and the chat REPL printed the JSON
+   back as the agent's response. Now: if the JSON explicitly says
+   success, `ok=true` and `error=undefined`, regardless of exit code.
+2. **`daemon start` sweeps stale processes.** Scans `ps -axo pid,command`
+   for `daemon run <profile>` lines that aren't the pid in `daemon.pid`
+   or the current process, and SIGTERM (→ SIGKILL after 1s) them
+   before spawning a fresh one. Fixes the duplicate-reply cascade on
+   Telegram when three copies of the daemon were all polling.
+3. **`setup-dashboard` skill tells the agent to background.** The old
+   text said "run `bajaclaw dashboard <profile>`" — which hangs a
+   Bash tool call forever. Now: `nohup … >log 2>&1 &`, with a pitfall
+   note explaining why. The parse fix masks the symptom; backgrounding
+   is the actual correct call.
+
 ## 0.13.0
 
 **Load skills from OpenClaw (ClawHub) and Hermes Agent.** BajaClaw used
