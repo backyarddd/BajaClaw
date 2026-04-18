@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.11.1
+
+**Chat REPL: stay-alive fix.** `bajaclaw chat` was exiting back to
+the shell after a single turn instead of looping. Three issues, all
+now fixed:
+
+- `cli.ts` was calling `program.parseAsync(...)` without `await`,
+  so Node's top-level ESM module completed synchronously. That let
+  the runtime think it was done before the chat action had a chance
+  to actually run a second loop iteration.
+- The chat loop used `readline.question()` in a `while (true) {
+  await rl.question(...) }` pattern. Under some terminal conditions
+  the outer promise chain would resolve unexpectedly between turns.
+  Switched to event-based readline (`rl.on('line', …)`) wrapped in
+  a single outer Promise that only resolves on the `close` event.
+  The REPL now stays alive until you type `/exit` or hit Ctrl-D.
+- Replaced the `ora` spinner with a simple interval-based dots
+  animation. ora could leave terminal state inconsistent with
+  readline in edge cases.
+
+Also removed the custom `SIGINT` handler — Ctrl-C now exits cleanly
+via the default behavior. Use `/exit` for a graceful session end
+with the stats summary.
+
 ## 0.11.0
 
 **`bajaclaw chat` — interactive REPL.** Drops you into a turn-by-turn

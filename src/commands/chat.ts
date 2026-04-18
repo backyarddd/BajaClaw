@@ -3,14 +3,15 @@
 // Session history is injected into the next prompt's "Recent Chat"
 // section so the agent remembers within the session.
 //
-// Status header shows model / effort / context / 5-hour / weekly
-// usage (queried from the cycles table). Per-turn status line reports
-// the actual model used (auto-routed), tokens, cost, duration.
+// Uses event-based readline (`on('line')`) rather than the promise
+// `.question()` API because the promise form had a habit of resolving
+// the outer chain in a way that let Node exit unexpectedly between
+// turns. The event-based loop explicitly keeps the interface live
+// until the user types /exit or hits Ctrl-D.
 
-import { createInterface, type Interface } from "node:readline/promises";
+import { createInterface, type Interface as ReadlineInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 import chalk from "chalk";
-import ora from "ora";
 import { runCycle } from "../agent.js";
 import { loadConfig, saveConfig } from "../config.js";
 import { openDb, type DB } from "../db.js";
@@ -21,7 +22,6 @@ import type { AgentConfig, ChatTurn } from "../types.js";
 
 const HISTORY_LIMIT = 10;
 
-// Model aliases so users can type `/model sonnet` instead of the long id.
 const MODEL_ALIAS: Record<string, string> = {
   auto: AUTO,
   haiku: HAIKU,
@@ -29,9 +29,6 @@ const MODEL_ALIAS: Record<string, string> = {
   opus: OPUS,
 };
 
-// Rough context-window reference per tier (input+output combined).
-// Opus supports 1M with the `[1m]` flag — not shown by default since
-// most subscriptions are 200k.
 const CTX_TOKENS: Record<"haiku" | "sonnet" | "opus", number> = {
   haiku: 200_000,
   sonnet: 200_000,
@@ -90,89 +87,127 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
   printHeader(opts.profile, cfg, agentName, modelOverride);
 
-  const rl = createInterface({ input: stdin, output: stdout });
-  let ctrlCPending = false;
-  rl.on("SIGINT", () => {
-    if (ctrlCPending) {
-      rl.close();
-      return;
-    }
-    ctrlCPending = true;
-    process.stdout.write(chalk.dim("\n(Ctrl-C again to exit, or type /exit)\n"));
-    rl.prompt();
-    setTimeout(() => { ctrlCPending = false; }, 3000);
+  const rl = createInterface({
+    input: stdin,
+    output: stdout,
+    terminal: true,
+    prompt: chalk.cyan("you › "),
   });
+  rl.prompt();
 
-  const youLabel = chalk.cyan("you › ");
+  // Serial line processing: while a turn is running, incoming "line"
+  // events are ignored (they just print another prompt). Prevents
+  // stomping on an in-flight cycle.
+  let busy = false;
 
-  outer: while (true) {
-    let userInput: string;
-    try {
-      userInput = (await rl.question(youLabel)).trim();
-    } catch {
-      break; // Ctrl-D / EOF
-    }
+  // Wrap the whole REPL in a promise that resolves on rl 'close'.
+  // runChat awaits this promise, which keeps the Node event loop
+  // alive for the duration of the chat session.
+  await new Promise<void>((resolve) => {
+    const handleLine = async (line: string): Promise<void> => {
+      if (busy) {
+        rl.prompt();
+        return;
+      }
+      busy = true;
 
-    if (!userInput) continue;
-
-    if (userInput.startsWith("/")) {
-      const action = await handleSlash(userInput, {
-        profile: opts.profile,
-        cfg,
-        agentName,
-        history,
-        stats,
-        getModel: () => modelOverride,
-        setModel: (m) => { modelOverride = m; },
-      });
-      if (action === "exit") break outer;
-      continue;
-    }
-
-    history.push({ role: "user", content: userInput, ts: Date.now() });
-    const spinner = ora({
-      text: chalk.dim(`${agentName} is thinking...`),
-      color: "cyan",
-      spinner: "dots",
-    }).start();
-
-    try {
-      const recent = history.slice(-HISTORY_LIMIT - 1, -1);
-      const r = await runCycle({
-        profile: opts.profile,
-        task: userInput,
-        modelOverride,
-        sessionHistory: recent,
-      });
-      spinner.stop();
-
-      if (!r.ok) {
-        console.log(chalk.red(`${agentName} › `) + chalk.red(r.error ?? "(error)"));
-        console.log("");
-        history.pop();
-        continue;
+      const input = line.trim();
+      if (!input) {
+        busy = false;
+        rl.prompt();
+        return;
       }
 
-      console.log(chalk.green(`${agentName} › `) + r.text);
-      console.log("");
+      try {
+        if (input.startsWith("/")) {
+          const action = await handleSlash(input, {
+            profile: opts.profile,
+            cfg,
+            agentName,
+            history,
+            stats,
+            getModel: () => modelOverride,
+            setModel: (m) => { modelOverride = m; },
+          });
+          if (action === "exit") {
+            rl.close();
+            return;
+          }
+          busy = false;
+          rl.prompt();
+          return;
+        }
 
-      history.push({ role: "assistant", content: r.text, ts: Date.now() });
-      stats.turnCount += 1;
-      stats.inputTokens += r.inputTokens ?? 0;
-      stats.outputTokens += r.outputTokens ?? 0;
-      stats.costUsd += r.costUsd ?? 0;
+        history.push({ role: "user", content: input, ts: Date.now() });
+        const stopThinking = startThinking(agentName);
 
-      printStatusLine(r, cfg);
-    } catch (e) {
-      spinner.stop();
-      console.log(chalk.red("error: ") + (e as Error).message);
-      console.log("");
-      history.pop();
-    }
-  }
+        let r;
+        try {
+          const recent = history.slice(-HISTORY_LIMIT - 1, -1);
+          r = await runCycle({
+            profile: opts.profile,
+            task: input,
+            modelOverride,
+            sessionHistory: recent,
+          });
+        } finally {
+          stopThinking();
+        }
 
-  rl.close();
-  printSessionSummary(stats);
+        if (!r.ok) {
+          console.log(chalk.red(`${agentName} › `) + chalk.red(r.error ?? "(error)"));
+          console.log("");
+          history.pop();
+        } else {
+          console.log(chalk.green(`${agentName} › `) + r.text);
+          console.log("");
+          history.push({ role: "assistant", content: r.text, ts: Date.now() });
+          stats.turnCount += 1;
+          stats.inputTokens += r.inputTokens ?? 0;
+          stats.outputTokens += r.outputTokens ?? 0;
+          stats.costUsd += r.costUsd ?? 0;
+          printStatusLine(r, cfg);
+        }
+      } catch (e) {
+        console.log(chalk.red("error: ") + (e as Error).message);
+        console.log("");
+      } finally {
+        busy = false;
+        rl.prompt();
+      }
+    };
+
+    rl.on("line", (line) => {
+      // fire-and-forget; errors are caught inside handleLine
+      void handleLine(line);
+    });
+
+    rl.on("close", () => {
+      printSessionSummary(stats);
+      resolve();
+    });
+  });
+}
+
+// ───────────────────────────────────────────────────────────────
+// "thinking…" animation — plain-text interval, no ora
+// ───────────────────────────────────────────────────────────────
+
+function startThinking(agentName: string): () => void {
+  let dots = 0;
+  const render = () => {
+    // clear line + move cursor to column 0, then write status
+    const bar = ".".repeat((dots % 3) + 1).padEnd(3, " ");
+    stdout.write(`\r\x1b[2K${chalk.dim(`${agentName} is thinking${bar}`)}`);
+    dots += 1;
+  };
+  render();
+  const timer = setInterval(render, 400);
+  return () => {
+    clearInterval(timer);
+    // clear the line so the response starts clean
+    stdout.write("\r\x1b[2K");
+  };
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -203,20 +238,20 @@ function printHeader(
     db.close();
   }
 
-  const line = chalk.dim("─".repeat(58));
+  const title = `BajaClaw chat · ${profile} · v${currentVersion()}`;
   console.log("");
-  console.log(chalk.bold.cyan(`╭─ BajaClaw chat · ${profile} · v${currentVersion()} ─`) + line.slice(0, Math.max(0, 58 - profile.length - currentVersion().length - 25)) + chalk.bold.cyan("╮"));
-  console.log(`${chalk.bold("  agent      ")} ${chalk.cyan(agentName)}`);
-  console.log(`${chalk.bold("  model      ")} ${chalk.cyan(modelDisplay)}${tierNote}`);
-  console.log(`${chalk.bold("  effort     ")} ${cfg.effort}`);
-  console.log(`${chalk.bold("  context    ")} ${formatNum(ctx)} tokens · ${budget.maxTurns}-turn cap`);
+  console.log(chalk.bold.cyan(`╭─ ${title} ` + "─".repeat(Math.max(0, 58 - title.length - 3)) + "╮"));
+  console.log(`${chalk.bold("  agent     ")} ${chalk.cyan(agentName)}`);
+  console.log(`${chalk.bold("  model     ")} ${chalk.cyan(modelDisplay)}${tierNote}`);
+  console.log(`${chalk.bold("  effort    ")} ${cfg.effort}`);
+  console.log(`${chalk.bold("  context   ")} ${formatNum(ctx)} tokens · ${budget.maxTurns}-turn cap per cycle`);
   console.log("");
-  console.log(`${chalk.bold("  5h usage   ")} ${formatUsage(fiveH)}`);
-  console.log(`${chalk.bold("  week       ")} ${formatUsage(week)}`);
-  console.log(chalk.dim("  (advisory counts from your local cycle log — compare to your Anthropic plan)"));
+  console.log(`${chalk.bold("  5h usage  ")} ${formatUsage(fiveH)}`);
+  console.log(`${chalk.bold("  week      ")} ${formatUsage(week)}`);
+  console.log(chalk.dim("  (advisory counts from your local cycle log — compare to your plan)"));
   console.log("");
   console.log(chalk.dim("  /help for commands · /exit or Ctrl-D to quit"));
-  console.log(chalk.bold.cyan("╰") + line + chalk.bold.cyan("╯"));
+  console.log(chalk.bold.cyan("╰" + "─".repeat(58) + "╯"));
   console.log("");
 }
 
@@ -336,7 +371,7 @@ async function handleSlash(input: string, ctx: SlashCtx): Promise<"exit" | "cont
       try {
         const decision = shouldCompact(db, ctx.cfg.compaction);
         if (!decision.yes) {
-          console.log(chalk.dim(`no trigger — ${decision.reason}. Using --force anyway.`));
+          console.log(chalk.dim(`no trigger — ${decision.reason}. Running anyway (--force).`));
         }
         console.log(chalk.cyan("compacting…"));
         const r = await compact(db, ctx.cfg.compaction);

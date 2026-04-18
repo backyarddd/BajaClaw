@@ -395,7 +395,13 @@ program.hook("postAction", async () => {
 // a failure here should never prevent the user's command from running.
 await maybeShowWelcome().catch(() => { /* silent */ });
 
-program.parseAsync(process.argv).catch((e) => {
+// Await the parse so long-running interactive commands (like `chat`)
+// keep the event loop alive until they finish. Without the await, the
+// top-level module completes synchronously and Node may exit before
+// the command's action runs to completion.
+try {
+  await program.parseAsync(process.argv);
+} catch (e) {
   console.error(`error: ${(e as Error).message}`);
   process.exit(1);
-});
+}
