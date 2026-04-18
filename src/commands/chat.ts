@@ -104,19 +104,35 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   // a real newline when rl.question() resolves.
   const paste = installPasteShim();
   const rl = createInterface({ input: paste.input, output: stdout });
-  const youLabel = chalk.cyan("you › ");
 
   // Main loop. One turn at a time, no concurrency.
+  // Per-turn layout (Claude Code style):
+  //   ─── top rule ───
+  //    › user input
+  //   ─── bottom rule ───
+  //    · haiku · 1.2s · $0.0012 · 2 turns · #42
+  //
+  //    emily › agent response…
+  //
+  //   (next turn's top rule follows)
   while (true) {
+    writeHRule();
     let input: string;
     try {
-      const raw = await rl.question(youLabel);
+      const raw = await rl.question(chalk.cyan(" › "));
       input = raw.replace(/\x16/g, "\n").trim();
     } catch {
       break; // rl closed (EOF / Ctrl-D)
     }
 
-    if (!input) continue;
+    if (!input) {
+      // Empty enter: nothing to do. Move on; a fresh top rule prints
+      // on the next pass. (Accept the visual glitch of an adjacent
+      // double-rule over adding cursor-manipulation complexity.)
+      continue;
+    }
+
+    writeHRule();
 
     // Slash commands
     if (input.startsWith("/")) {
@@ -135,7 +151,9 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
     // Normal turn: run a cycle.
     history.push({ role: "user", content: input, ts: Date.now() });
-    writeThinkingLine(agentName);
+    // Temporary meta line while the cycle runs. Swapped for the real
+    // stats line once we have a result.
+    stdout.write(chalk.dim(" · thinking…\n"));
 
     let r: CycleOutput | null = null;
     let caughtError: Error | null = null;
@@ -151,33 +169,37 @@ export async function runChat(opts: ChatOptions): Promise<void> {
       caughtError = e as Error;
     }
 
-    eraseThinkingLine();
+    // Replace the "thinking…" line in place. `\x1b[1A\x1b[2K` =
+    // cursor up one, erase in line (no `\r` so readline doesn't
+    // re-draw a phantom prompt).
+    stdout.write("\x1b[1A\x1b[2K");
 
     if (caughtError) {
-      console.log(chalk.red(`${agentName} › `) + chalk.red(`error: ${caughtError.message}`));
-      console.log("");
+      stdout.write(chalk.red(` · error · ${caughtError.message}`) + "\n\n");
+      stdout.write(chalk.red(` ${agentName} › `) + chalk.red(caughtError.message) + "\n\n");
       history.pop();
       continue;
     }
 
     if (!r || !r.ok) {
-      console.log(chalk.red(`${agentName} › `) + chalk.red(formatCycleError(r)));
-      console.log("");
+      stdout.write(chalk.red(" · cycle failed") + "\n\n");
+      stdout.write(chalk.red(` ${agentName} › `) + chalk.red(formatCycleError(r)) + "\n\n");
       history.pop();
       continue;
     }
 
+    // Meta line directly under the bottom rule. Then a blank line,
+    // then the response. Layout matches the screenshot you referenced:
+    // rule / prompt / rule / meta / blank / response / blank.
+    printStatusLine(r, cfg);
     const responseText = (r.text ?? "").trim() || chalk.dim("(empty response)");
-    console.log(chalk.green(`${agentName} › `) + responseText);
-    console.log("");
+    stdout.write(chalk.green(` ${agentName} › `) + responseText + "\n\n");
 
     history.push({ role: "assistant", content: r.text ?? "", ts: Date.now() });
     stats.turnCount += 1;
     stats.inputTokens += r.inputTokens ?? 0;
     stats.outputTokens += r.outputTokens ?? 0;
     stats.costUsd += r.costUsd ?? 0;
-
-    printStatusLine(r, cfg);
   }
 
   rl.close();
@@ -263,17 +285,13 @@ function installPasteShim(): PasteShim {
 }
 
 // ───────────────────────────────────────────────────────────────
-// Thinking indicator - static, erased on response
+// Horizontal rule - spans terminal width, caps at 120 cols so it
+// doesn't sprawl on ultra-wide monitors.
 // ───────────────────────────────────────────────────────────────
 
-function writeThinkingLine(agentName: string): void {
-  stdout.write(chalk.dim(`${agentName} is thinking…\n`));
-}
-
-function eraseThinkingLine(): void {
-  // Cursor up one line, erase in line. Avoids `\r` which can trigger
-  // readline's prompt-redraw machinery.
-  stdout.write("\x1b[1A\x1b[2K");
+function writeHRule(): void {
+  const width = Math.min(stdout.columns || 80, 120);
+  stdout.write(chalk.dim("─".repeat(width)) + "\n");
 }
 
 // ───────────────────────────────────────────────────────────────
@@ -359,6 +377,9 @@ function printHeader(
 }
 
 function printStatusLine(r: CycleOutput, cfg: AgentConfig): void {
+  // Rendered directly under the bottom rule of the input sandwich.
+  // One dim line, space-separated bullets, no trailing bullet so
+  // the eye stops at the last token.
   const bits: string[] = [];
   if (r.model) bits.push(chalk.magenta(shortModel(r.model)));
   bits.push(chalk.dim(cfg.effort));
@@ -368,8 +389,7 @@ function printStatusLine(r: CycleOutput, cfg: AgentConfig): void {
   bits.push(chalk.dim(`${(r.durationMs / 1000).toFixed(1)}s`));
   if (r.costUsd != null) bits.push(chalk.dim(`$${r.costUsd.toFixed(4)}`));
   bits.push(chalk.dim(`#${r.cycleId}`));
-  console.log(chalk.dim("· ") + bits.join(chalk.dim(" · ")) + chalk.dim(" ·"));
-  console.log("");
+  stdout.write(chalk.dim(" · ") + bits.join(chalk.dim(" · ")) + "\n\n");
 }
 
 function printSessionSummary(stats: SessionStats): void {
