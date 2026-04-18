@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.14.3
+
+**Agent remembers the conversation in Telegram + Discord.** Every
+channel message used to run as a brand-new cycle with no memory of
+the prior back-and-forth — the agent would reply "what did you mean
+by 'it'?" to messages that clearly referred to the last turn. Fixed:
+channel-sourced cycles now auto-load the last 8 turns for that source
+and render them into the "Recent Chat" section of the prompt.
+
+### What changed
+
+1. **`loadSourceHistory(db, source, currentTaskId, limit)`** — joins
+   `tasks` → `cycles` for a given `source` (e.g. `telegram:14154…`),
+   skips the currently-running task, returns the last N user/agent
+   pairs as `ChatTurn[]` in chronological order. Only completed
+   tasks + successful cycles count.
+2. **Auto-population**: `runCycleInner` calls this helper when the
+   popped task has a `source` and no explicit `sessionHistory` was
+   passed. The chat REPL and `/api/chat` keep their explicit-history
+   path; the channel gateway no longer has a cold-start problem.
+3. **Response storage widened 300 → 8000 chars**. The old cap made
+   every historical turn look like a truncated stub. 8k ≈ 2k tokens —
+   enough to preserve real conversational content without bloating
+   the DB on pathological responses.
+
+### Landmines (for next session)
+
+- Historical rows stored before this release have 300-char stubs.
+  They'll appear in the prompt as partial context until they age out
+  of the 8-turn window. Can't retroactively recover the full text.
+- `loadSourceHistory` is called on every channel cycle — the join
+  is indexed by `source` via `idx_tasks_priority`? No, there's no
+  index on `tasks.source` yet. For a user with thousands of messages
+  from one telegram chat, the scan is O(n). Fine for now; add
+  `CREATE INDEX idx_tasks_source ON tasks(source)` if it bites.
+- The 8-turn window is hard-coded. Short enough to stay well under
+  any budget, long enough to feel like a conversation. If you bump
+  it you'll also want to watch token usage on long Telegram threads.
+
 ## 0.14.2
 
 **Typing indicator in Telegram + Discord.** When a user messages the
