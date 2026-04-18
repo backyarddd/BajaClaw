@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.13.2
+
+**Daemon auto-starts the dashboard.** The dashboard was a separate
+long-lived command you had to remember to run — and remember to
+background so it didn't hang an agent cycle. Now the daemon owns
+it. `bajaclaw daemon start` → gateway, dashboard, cycle poller all
+come up together. Stop the daemon → everything goes down cleanly.
+
+### What changed
+
+1. **`startDashboardInProcess(profile)`** returns instead of blocking.
+   Port-in-use is non-fatal: logged as `daemon.dashboard.skip` and
+   the daemon keeps going.
+2. **`dashboardAutostart: boolean`** config field (default `true`).
+   Set to `false` to opt out — e.g. if you're running the dashboard
+   elsewhere or don't want port 7337 bound.
+3. **`bajaclaw dashboard <profile>` still works.** Useful when the
+   daemon is down and you only want the read-only view. It just
+   fails with a clear EADDRINUSE if the daemon has already bound the
+   port.
+
 ## 0.13.1
 
 **Fix two operational bugs.** Bajaclaw mis-reported successful cycles

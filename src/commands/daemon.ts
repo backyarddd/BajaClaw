@@ -9,6 +9,8 @@ import { pickAdapter } from "../scheduler/index.js";
 import { runCycle } from "../agent.js";
 import { openDb } from "../db.js";
 import { startAllGateways, replyToSource } from "../channels/gateway.js";
+import { startDashboardInProcess } from "./dashboard.js";
+import { loadConfig } from "../config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // __dirname is <repo>/src/commands (tsx) or <repo>/dist/commands (built).
@@ -126,6 +128,16 @@ async function runLoop(profile: string): Promise<void> {
   // and replyToSource routes cycle outputs back.
   try { await startAllGateways(profile); }
   catch (e) { log.error("daemon.gateway.start.err", { error: (e as Error).message }); }
+
+  // Auto-start the dashboard unless explicitly disabled. Runs in
+  // this process so its lifetime matches the daemon — no orphan HTTP
+  // servers to chase down. Port conflicts are logged but non-fatal.
+  const cfgForDash = loadConfig(profile);
+  if (cfgForDash.dashboardAutostart !== false) {
+    const r = await startDashboardInProcess(profile);
+    if (r.ok) log.info("daemon.dashboard.ready", { port: r.port });
+    else log.warn("daemon.dashboard.skip", { port: r.port, error: r.error });
+  }
 
   // Channel-sourced tasks need a shorter poll — 60s would feel like
   // the bot is asleep. 3s when a gateway is wired, 60s otherwise.

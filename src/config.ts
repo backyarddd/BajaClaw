@@ -13,6 +13,7 @@ const DEFAULT: Partial<AgentConfig> = {
   // this; there is no separate --max-turns flag.
   effort: "high",
   dashboardPort: 7337,
+  dashboardAutostart: true,
   memorySync: false,
   // Default context window: 200k tokens (Sonnet/Haiku/Opus baseline).
   // Switch to `"1m"` here to opt into Opus's 1M window (API-key auth

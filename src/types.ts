@@ -72,6 +72,11 @@ export interface AgentConfig {
   allowedTools?: string[];
   disallowedTools?: string[];
   dashboardPort?: number;
+  // If true (default), the daemon starts the local dashboard HTTP
+  // server alongside the gateway when it boots. Set to false to opt
+  // out — e.g. if you prefer to run `bajaclaw dashboard` manually,
+  // or if the port conflicts with something you don't want evicted.
+  dashboardAutostart?: boolean;
   memorySync?: boolean;
   channels?: ChannelConfig[];
   // Per-profile context window. Default: 200k. Set to "1m" to opt in
