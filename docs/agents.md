@@ -20,7 +20,7 @@ An agent is a pairing of:
 ## Creating an agent
 
 ```
-npm install -g bajaclaw            # installs + auto-sets-up the default profile
+npm install -g github:backyarddd/BajaClaw   # installs + auto-sets-up the default profile
 bajaclaw init my-agent --template research               # additional named profile
 bajaclaw init my-agent --template research --model claude-opus-4-7
 ```

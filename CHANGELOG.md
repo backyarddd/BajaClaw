@@ -2,6 +2,24 @@
 
 ## 0.10.0
 
+**Install from GitHub.** BajaClaw isn't on the npm registry (yet), so
+the install command is now:
+
+```
+npm install -g github:backyarddd/BajaClaw
+```
+
+- Added `prepare: npm run build` so git installs build `dist/` before
+  packing.
+- Added `files` list in `package.json` so the packed tarball includes
+  `bin/`, `dist/`, `scripts/`, `skills/`, and `templates/` (and
+  excludes `src/`, `tests/`, `docs/`).
+- `bajaclaw update` now reinstalls from the GitHub slug instead of
+  `npm install -g bajaclaw@latest`. Override via `bajaclaw.installSpec`
+  or `bajaclaw.githubSlug` in `package.json` if you fork.
+- `install.sh`, `install.ps1`, README, docs/agents.md, docs/faq.md,
+  and the `setup-self-update` skill all point at the github URL.
+
 **Memory compaction — so the agent keeps learning without slowing
 down over time.** BajaClaw's cycles are stateless (each one rebuilds
 the prompt from scratch), so the model's context window never "fills

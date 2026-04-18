@@ -178,13 +178,19 @@ export async function performUpdate(info: UpdateInfo | null): Promise<UpdateResu
       message: build.status === 0 ? `updated to ${info?.latest ?? "HEAD"}` : (build.stderr || build.stdout),
     };
   }
-  // npm path
+  // npm path. BajaClaw isn't on the npm registry yet, so the default
+  // install target is the GitHub slug. If the package gets published
+  // later, set `bajaclaw.npmName` in package.json to switch to
+  // `<name>@latest`. Explicit override: `bajaclaw.installSpec`.
   const pkg = readPkg();
-  const npmName = String((pkg as { bajaclaw?: { npmName?: string } }).bajaclaw?.npmName ?? pkg.name ?? "bajaclaw");
-  const install = spawnSync("npm", ["install", "-g", `${npmName}@latest`], { encoding: "utf8" });
+  const cfg = (pkg as { bajaclaw?: { npmName?: string; installSpec?: string; githubSlug?: string } }).bajaclaw ?? {};
+  const installSpec = cfg.installSpec
+    ?? (cfg.githubSlug ? `github:${cfg.githubSlug}` : undefined)
+    ?? "github:backyarddd/BajaClaw";
+  const install = spawnSync("npm", ["install", "-g", installSpec], { encoding: "utf8" });
   return {
     ok: install.status === 0,
-    method: "npm install -g",
+    method: `npm install -g ${installSpec}`,
     message: install.status === 0 ? `updated to ${info?.latest ?? "latest"}` : (install.stderr || install.stdout),
   };
 }
