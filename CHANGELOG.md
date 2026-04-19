@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.14.16
+
+**Fix regression: 0.14.14/15's progress-chat block was making sonnet
+cycles stop halfway through multi-part tasks.**
+
+### Fixes
+
+1. **Progress instructions now subordinate to the task.** Previous
+   wording ("you're texting the person who asked you to do a thing,
+   not narrating a build log") put the agent in chat mode. On a
+   multi-step task like "add a model picker AND run the qwen tests
+   and give me findings", it would do part 1, send a `bajaclaw say`
+   update, then produce a final reply as if it were done - leaving
+   half the task unfinished. The block is rewritten to lead with
+   "CRITICAL: your job is to fully complete the task; the chat tool
+   does not replace doing the work", caps pings at 3 per cycle,
+   explicitly bans "announcing what you're about to do" ("on it!",
+   "starting now"), and reinforces that the final reply must cover
+   every part the user asked about.
+
 ## 0.14.15
 
 **Channel feedback sounds like a person now.**

@@ -463,29 +463,34 @@ interface AssembleInput {
 }
 
 export function buildProgressInstructions(): string {
-  return `# Talking to the user while you work
+  return `# Side-channel chat tool (do not let this distract from the actual task)
 
-This task came in from chat. They already got a quick reply from you acknowledging it. While you work, keep them in the loop by running \`bajaclaw say "<text>"\` from your Bash tool. It sends the text straight to their chat.
+CRITICAL: Your job is to fully complete the task in "# Current Task" below. If the task has multiple parts (a AND b AND c), finish all of them before your final reply. Do not stop halfway and summarize, do not defer parts to a follow-up, do not treat the chat as a substitute for doing the work. The user's complaint that tasks "get left unfinished" is a real regression - do not trigger it.
 
-Tone: same voice as the rest of your replies. You're texting the person who asked you to do a thing. Not narrating a build log. Not status-reporting.
+You have one extra tool available: \`bajaclaw say "<short text>"\` via your Bash tool. It sends a one-line message to the user's chat mid-flight without blocking you or ending the typing indicator. The user already got a quick acknowledgment before you started; this is for genuine mid-work pings only.
 
-Good moments to send one:
-- You just wrapped a real milestone and are moving on ("alright, scheduler's done, moving to the telegram handler")
-- You hit something surprising they'd want to know ("oh heads up, the migration is dirty, gonna fix it before continuing")
-- Something's about to take a bit and silence would feel off ("running the full test suite, this'll take a sec")
+Use it sparingly. Good reasons:
+- You hit something unexpected the user would want to know about ("heads up, the migration is dirty, fixing it first")
+- A long-running step is about to start and silence would look like a hang ("running the full test suite now")
+- You actually crossed a real milestone and are moving on ("scheduler's done, wiring up the telegram handler")
 
-Don't send one for:
-- Short/simple tasks. The final reply covers it.
-- Every tool call. Only when it actually matters to them.
-- Restating what you already said in the ack.
+Bad reasons (do NOT send these):
+- Announcing what you're about to do ("on it!", "starting now", "let me take a look"). Just do it.
+- Every tool call, file edit, or search.
+- Thinking out loud or self-narration.
+- Short or simple tasks. One final reply is enough.
+- Restating what the intake ack already said.
+- Filling silence. If you don't have something real to say, say nothing and keep working.
+
+Cap: at most 3 pings per cycle, and zero is a valid choice. If you're tempted to ping a fourth time, you're probably chatting instead of working - stop and finish the task.
 
 Per-message style:
-- Under 20 words. One short line of prose.
-- Lowercase is fine if the rest of your voice is lowercase. Match how you normally talk.
-- No "Update:", "Status:", "Progress:" prefixes. Just say the thing.
-- No em dashes, no emojis.
+- Under 20 words, one line of prose
+- Same voice as your final reply
+- No "Update:", "Status:", "Progress:" prefixes
+- No em dashes, no emojis
 
-Your final reply lands at cycle end and ends the typing indicator. These pings are mid-flight.`;
+Your final reply at cycle end is the actual deliverable. It must cover every part the user asked about: findings, results, file paths, errors, whatever they need. Pings are bonuses on top of that, never a replacement.`;
 }
 
 export function assemblePrompt(input: AssembleInput): string {
