@@ -39,6 +39,10 @@ export interface ClaudeOptions {
   // interactive prompts would just fail anyway. Set false only when you
   // explicitly want cycles to abort on sensitive tool use.
   skipPermissions?: boolean;
+  // Extra env vars merged on top of the (scrubbed) inherited env. Used
+  // by runCycle to tell the spawned agent which profile/source/port to
+  // target when it calls `bajaclaw say` for progress updates.
+  env?: Record<string, string>;
 }
 
 export interface ClaudeResult {

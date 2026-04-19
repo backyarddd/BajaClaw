@@ -29,7 +29,7 @@ import { shouldCompact, compact as compactMemory } from "./memory/compact.js";
 import { loadAllSkills } from "./skills/loader.js";
 import { matchSkills } from "./skills/matcher.js";
 import { synthesize as synthesizeSkill } from "./skills/auto-skiller.js";
-import { broadcastToProfile } from "./channels/gateway.js";
+import { broadcastToProfile, sendProgressToSource } from "./channels/gateway.js";
 import { buildMcpConfig } from "./mcp/consumer.js";
 import { pickModel, budgetFor } from "./model-picker.js";
 import { serialize } from "./concurrency.js";
@@ -150,9 +150,54 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     const sessionHistory = input.sessionHistory
       ?? (popped?.source ? loadSourceHistory(db, popped.source, popped.id, 8) : undefined);
 
+    // Live-feedback policy. For sonnet/opus cycles that originate
+    // from a channel (telegram, discord), the agent gets a prompt
+    // block telling it to call `bajaclaw say "..."` for intake + mid-
+    // flight progress. Skipped for haiku (short+trivial tasks stay
+    // snappy) and heartbeat cycles. Also skipped on dry runs.
+    const source = popped?.source;
+    const channelSource = source && (source.startsWith("telegram:") || source.startsWith("discord:"));
+    const liveFeedback = !isHeartbeat
+      && !input.dryRun
+      && channelSource
+      && (picked.tier === "sonnet" || picked.tier === "opus");
+
+    // Fire an intake ack before the main cycle starts. A fast haiku
+    // turn paraphrases what the user asked and states a plan, so the
+    // user sees confirmation within a second or two instead of
+    // waiting for the full sonnet/opus run. Fire-and-forget is NOT
+    // safe - if it lands after the final reply it looks backwards -
+    // so we await, but the call is cheap (haiku, ~50 words, <2s).
+    if (liveFeedback) {
+      try {
+        const ackPrompt = `You are BajaClaw's intake assistant. Another agent will do the actual work - you do NOT do it. Your job: in 1-3 short sentences, paraphrase what the user asked and state the plan you understand.
+
+Rules:
+- Max 50 words total
+- No em dashes, no emojis
+- No preamble ("Sure!", "Got it!"). Start with the paraphrase.
+- Format: "Heard: <paraphrase>. Plan: <1-3 bullets or short clauses>."
+
+User's message:
+${task}`;
+        const ack = await runOnce(ackPrompt, {
+          model: "claude-haiku-4-5",
+          effort: "low",
+          skipPermissions: true,
+          timeout: 20000,
+        });
+        if (ack.ok && ack.text.trim()) {
+          await sendProgressToSource(input.profile, source, ack.text.trim());
+        }
+      } catch (e) {
+        log.warn("intake-ack.fail", { error: (e as Error).message });
+      }
+    }
+
     const prompt = assemblePrompt({
       task,
       attachments,
+      progressInstructions: liveFeedback ? buildProgressInstructions() : "",
       memories: memories
         .map((m) => `- [${m.kind}] ${m.content.slice(0, budget.memoryCharsEach)}`)
         .join("\n"),
@@ -183,6 +228,17 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     // claude's --effort level is the real knob for "how much runway
     // does the agent get". No --max-turns flag exists in claude CLI;
     // `effort: "max"` gives the biggest internal turn budget.
+    // Env vars injected into the spawned claude subprocess so the
+    // agent can call `bajaclaw say "..."` from its Bash tool without
+    // us having to template them into the prompt. The `say` command
+    // POSTs to the dashboard's /api/progress endpoint running in the
+    // daemon, which forwards to the channel.
+    const spawnEnv: Record<string, string> = {
+      BAJACLAW_PROFILE: input.profile,
+      BAJACLAW_DASHBOARD_PORT: String(cfg.dashboardPort ?? 7337),
+    };
+    if (liveFeedback && source) spawnEnv.BAJACLAW_SOURCE = source;
+
     const opts: ClaudeOptions & { dryRun?: boolean } = {
       model: picked.model,
       effort: cfg.effort,
@@ -195,6 +251,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       context1M: cfg.contextWindow === "1m",
       maxBudgetUsd: cfg.maxBudgetUsd,
       dryRun: input.dryRun,
+      env: spawnEnv,
     };
 
     const result = await runOnce(prompt, opts);
@@ -392,6 +449,30 @@ interface AssembleInput {
   heartbeat: string;
   skills: string;
   recentChat?: string;
+  progressInstructions?: string;
+}
+
+export function buildProgressInstructions(): string {
+  return `# Live Progress Updates
+
+The user sent this task from a chat channel and is watching in real time. An intake acknowledgment has already been sent to them. While you work, keep them in the loop with \`bajaclaw say "<text>"\` from your Bash tool.
+
+When to call it:
+- After you finish a major phase and are moving to the next one
+- If a step will take noticeably long (large search, long command) and silence would feel like a hang
+
+When NOT to call it:
+- Short or trivial tasks. One final reply is enough.
+- Every single tool call. Only milestones.
+- To repeat what the intake ack already said.
+
+Format rules for each \`say\`:
+- Under 20 words
+- One line, no bullet lists, no headings
+- No em dashes, no emojis
+- Past tense for what you finished, present for what you're on: "Built the endpoint. Wiring it into the dashboard now."
+
+Your final reply to the user is separate - it lands at cycle end and is what ends the typing indicator. The \`bajaclaw say\` pings are mid-flight extras.`;
 }
 
 export function assemblePrompt(input: AssembleInput): string {
@@ -399,6 +480,7 @@ export function assemblePrompt(input: AssembleInput): string {
   if (input.soulMd.trim()) sections.push(`# Agent Identity\n${input.soulMd.trim()}`);
   if (input.agentMd.trim()) sections.push(`# Operating Guide\n${input.agentMd.trim()}`);
   if (input.heartbeat.trim()) sections.push(`# Heartbeat Schedule\n${input.heartbeat.trim()}`);
+  if (input.progressInstructions?.trim()) sections.push(input.progressInstructions.trim());
   if (input.memories.trim()) sections.push(`# Recalled Memories\n${input.memories.trim()}`);
   if (input.skills.trim()) sections.push(`# Active Skills\n${input.skills.trim()}`);
   if (input.recentChat?.trim()) sections.push(`# Recent Chat\n${input.recentChat.trim()}`);

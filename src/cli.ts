@@ -320,6 +320,27 @@ program.command("serve")
   }));
 
 // Banner
+// Progress-ping for running cycles. Invoked from inside a spawned
+// `claude` subprocess via the Bash tool. Reads context from the env
+// vars injected by runCycleInner (BAJACLAW_PROFILE, BAJACLAW_SOURCE,
+// BAJACLAW_DASHBOARD_PORT) and POSTs to the dashboard's /api/progress
+// endpoint. Fails silent: a failed progress ping must never surface
+// as a subprocess error to the agent.
+program.command("say")
+  .description("Send a progress update to the originating channel (used from inside cycles)")
+  .argument("<text>")
+  .action(async (text: string) => {
+    const port = process.env.BAJACLAW_DASHBOARD_PORT ?? "7337";
+    const source = process.env.BAJACLAW_SOURCE;
+    try {
+      await fetch(`http://127.0.0.1:${port}/api/progress`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text, source }),
+      });
+    } catch { /* silent */ }
+  });
+
 program.command("banner").description("Print the ASCII banner").action(() => {
   printBanner(pkg.version, { force: true });
 });

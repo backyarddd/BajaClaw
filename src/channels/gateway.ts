@@ -151,6 +151,23 @@ export function endTyping(source: string): void {
   try { stop(); } catch { /* ignore */ }
 }
 
+/** Send a progress update to the task's originating channel without
+ *  ending the typing indicator. Used by `bajaclaw say` from inside a
+ *  running cycle. Unlike `replyToSource`, this is a mid-flight ping -
+ *  the final reply still fires at cycle end and is the one that
+ *  clears typing. No-ops if source is not a channel or no adapter is
+ *  registered. */
+export async function sendProgressToSource(profile: string, source: string, text: string): Promise<void> {
+  const colon = source.indexOf(":");
+  if (colon < 0) return;
+  const kind = source.slice(0, colon);
+  const id = source.slice(colon + 1);
+  if (kind !== "telegram" && kind !== "discord") return;
+  const a = adapters.get(key(profile, kind));
+  if (!a) return;
+  await a.send(id, text);
+}
+
 /** Send a proactive notification to all active channels for a profile.
  *  Uses the last seen chat/channel ID per adapter. No-ops if no messages
  *  have arrived yet (no chatId to target). Fire-and-forget. */
