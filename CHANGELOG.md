@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.14.13
+
+**Image + video attachments land in channel tasks. Auto-skills go live
+immediately. Daemon stops inheriting Claude Desktop's OAuth token.**
+
+### Fixes
+
+1. **Desktop-managed env no longer poisons daemon subprocesses.**
+   When `bajaclaw daemon start` ran from a shell spawned by the Claude
+   Desktop app, the daemon inherited `CLAUDE_CODE_OAUTH_TOKEN`,
+   `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`, `CLAUDE_CODE_ENTRYPOINT`,
+   `CLAUDE_CODE_EXECPATH`, `CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH`, and
+   `CLAUDECODE`. Every `claude` subprocess the daemon spawned then
+   used the Desktop-managed OAuth token instead of the user's on-disk
+   credentials; once that token rotated, every cycle failed with
+   `401 Invalid authentication credentials` while the user's terminal
+   `claude` CLI still worked. `src/claude.ts` now scrubs those six
+   vars in every `runOnce` / `runStream` spawn, and
+   `src/commands/daemon.ts` scrubs them once when forking the detached
+   daemon so they never enter its process tree.
+
+### Features
+
+2. **Channel image + video attachments.** Telegram and Discord
+   adapters now download inline photos, image documents, videos,
+   video notes, and video documents into a tmp path and append the
+   local paths to the task. Videos are pre-processed with `ffmpeg` /
+   `ffprobe` into 8 evenly spaced frames. The agent receives an
+   `[Images attached - use the Read tool to view each file: ...]`
+   block appended to the task body. Stored per-task in the new
+   `tasks.attachments` column (JSON array, migration v2).
+3. **Auto-skills are live on write.** `src/skills/auto-skiller.ts`
+   used to drop candidates into `~/.bajaclaw/skills/auto/<name>/`
+   gated behind a `bajaclaw skill review` + `skill promote` step.
+   Now writes straight into the user skills dir so the matcher picks
+   them up on the next cycle. Daily cap still honored; we detect
+   auto-generated skills by the `auto_generated: true` frontmatter
+   marker, which the loader surfaces on the `Skill` type.
+4. **Proactive channel notifications.** `broadcastToProfile` sends a
+   one-liner to the last active chat when the agent activates a
+   matched auto-skill or writes a new one. Keeps the human in the
+   loop on what the agent is learning without asking for anything.
+
+## 0.14.12
+
+Published to npm but never committed to git - contents are folded
+into 0.14.13 above.
+
 ## 0.14.11
 
 **Chat prompt lands on the right line. Welcome is slimmer. Cycle fails

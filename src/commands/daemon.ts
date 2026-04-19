@@ -65,10 +65,25 @@ export async function cmdStart(profile: string, foreground = false): Promise<voi
 
   const bin = process.execPath;
   const out = openSync(logPath(profile), "a");
+  // Strip env vars injected by Claude Desktop into any process it
+  // launches. If `bajaclaw daemon start` is run from a desktop-spawned
+  // shell, these would poison every `claude` subprocess the daemon
+  // later spawns - the Desktop-managed OAuth token overrides on-disk
+  // credentials and breaks with 401 when it rotates. Scrubbing once
+  // here prevents them from ever entering the daemon's environment.
+  const daemonEnv: NodeJS.ProcessEnv = { ...process.env, BAJACLAW_DAEMON: "1" };
+  for (const k of [
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_EXECPATH",
+    "CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH",
+    "CLAUDECODE",
+  ]) delete daemonEnv[k];
   const child = spawn(bin, [LAUNCHER, "daemon", "run", profile], {
     detached: true,
     stdio: ["ignore", out, out],
-    env: { ...process.env, BAJACLAW_DAEMON: "1" },
+    env: daemonEnv,
   });
   writeFileSync(pidFile, String(child.pid));
   child.unref();
