@@ -782,7 +782,7 @@
           el("div", { class: "agent-stat" }, [el("span", { class: "agent-stat-label" }, "Last cycle"), el("span", { class: "agent-stat-value" }, a.lastCycleAt ? ago(a.lastCycleAt) : "never")]),
         ]),
         lastTask ? el("div", { class: "agent-card-last-task" }, [
-          el("span", { class: "badge " + (a.lastCycle?.status === "ok" ? "badge-success" : "badge-danger"), style: "margin-right:6px;" }, a.lastCycle?.status ?? "-"),
+          el("span", { class: "badge " + (a.lastCycle?.status === "ok" ? "badge-success" : a.lastCycle?.status === "running" ? "badge-info" : "badge-danger"), style: "margin-right:6px;" }, a.lastCycle?.status ?? "-"),
           lastMeta ? el("span", { class: "mono", style: "margin-right:6px; font-size:10px; color:var(--text-tertiary);" }, lastMeta) : null,
           lastTask,
         ]) : null,
@@ -1045,6 +1045,8 @@
   function cycleRow(c) {
     const tier = c.status === "ok"
       ? el("span", { class: "badge badge-success" }, "ok")
+      : c.status === "running"
+      ? el("span", { class: "badge badge-info" }, "running")
       : el("span", { class: "badge badge-danger" }, "fail");
     const task = (c.task ?? "").slice(0, 80);
     const meta = [
@@ -1074,7 +1076,7 @@
       }, [
         el("div", { style: "display:flex; justify-content:space-between; align-items:center; margin-bottom:16px" }, [
           el("div", { class: "card-title", style: "margin:0" }, [
-            el("span", { class: "badge " + (c.status === "ok" ? "badge-success" : "badge-danger") }, c.status ?? "?"),
+            el("span", { class: "badge " + (c.status === "ok" ? "badge-success" : c.status === "running" ? "badge-info" : "badge-danger") }, c.status ?? "?"),
             el("span", { style: "margin-left:10px" }, "Cycle #" + c.id),
           ]),
           el("button", { class: "btn btn-ghost", onclick: () => drawer.remove() }, "close"),
