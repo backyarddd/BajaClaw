@@ -435,6 +435,7 @@
         <button class="nav-item" data-view="schedules"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Schedules</button>
         <button class="nav-item" data-view="skills"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Skills</button>
         <button class="nav-item" data-view="channels"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Channels</button>
+        <button class="nav-item" data-view="logs"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Logs</button>
       </div>
     </div>
 
@@ -538,6 +539,24 @@
               <code class="mono">bajaclaw channel add default discord --token &lt;TOKEN&gt; --channel-id &lt;CHANNEL_ID&gt; --user-id &lt;USER_ID&gt;</code>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-logs">
+        <div class="card">
+          <div class="card-title">
+            Recent daemon log
+            <div style="display:flex; gap:8px; align-items:center">
+              <select class="select" id="log-level-filter" style="max-width:180px; padding:6px 10px">
+                <option value="">all levels</option>
+                <option value="info">info only</option>
+                <option value="warn,error">warn + error</option>
+                <option value="error">error only</option>
+              </select>
+              <button class="btn btn-secondary" id="logs-refresh" type="button">refresh</button>
+            </div>
+          </div>
+          <div id="logs-table" class="mono" style="font-size:12px; overflow-x:auto"></div>
         </div>
       </section>
 
@@ -685,6 +704,7 @@
     schedules: ["Schedules", "cron-like triggers"],
     skills: ["Skills", "active + inactive across all origins"],
     channels: ["Channels", "telegram, discord, etc"],
+    logs: ["Logs", "recent daemon log events"],
     settings: ["Settings", "profile configuration"],
   };
 
@@ -1032,12 +1052,77 @@
       c.turns != null ? c.turns + " turn" + (c.turns === 1 ? "" : "s") : null,
       ago(c.started_at),
     ].filter(Boolean).join(" · ");
-    return el("div", { class: "list-item" }, [
+    return el("div", { class: "list-item", style: "cursor:pointer", onclick: () => openCycleDetail(c.id) }, [
       el("div", { class: "list-item-main" }, [
         el("div", { class: "list-item-title" }, [tier, el("span", { style: "margin-left:8px" }, "#" + c.id), el("span", { class: "muted", style: "margin-left:6px" }, task)]),
         el("div", { class: "list-item-sub mono" }, meta),
       ]),
     ]);
+  }
+
+  async function openCycleDetail(id) {
+    let detail;
+    try { detail = await api("/api/cycles/" + id); }
+    catch (e) { alert("failed to load cycle: " + e.message); return; }
+    const c = detail.cycle;
+    const drawer = el("div", {
+      style: "position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:100; display:grid; place-items:center; padding:40px",
+      onclick: (ev) => { if (ev.target === drawer) drawer.remove(); },
+    }, [
+      el("div", {
+        style: "background:var(--bg-secondary); border:1px solid var(--border-default); border-radius:var(--radius-lg); max-width:860px; width:100%; max-height:90vh; overflow:auto; padding:24px",
+      }, [
+        el("div", { style: "display:flex; justify-content:space-between; align-items:center; margin-bottom:16px" }, [
+          el("div", { class: "card-title", style: "margin:0" }, [
+            el("span", { class: "badge " + (c.status === "ok" ? "badge-success" : "badge-danger") }, c.status ?? "?"),
+            el("span", { style: "margin-left:10px" }, "Cycle #" + c.id),
+          ]),
+          el("button", { class: "btn btn-ghost", onclick: () => drawer.remove() }, "close"),
+        ]),
+        kvBlock([
+          ["started", c.started_at ?? ""],
+          ["finished", c.finished_at ?? "(unfinished)"],
+          ["model", c.model ?? "—"],
+          ["cost", c.cost_usd != null ? usd(c.cost_usd) : "—"],
+          ["tokens", ((c.input_tokens ?? 0) + " in / " + (c.output_tokens ?? 0) + " out")],
+          ["turns", String(c.turns ?? "—")],
+        ]),
+        el("div", { style: "margin-top:16px" }, [
+          el("div", { class: "label" }, "Task"),
+          el("pre", { class: "mono", style: preStyle() }, c.task ?? ""),
+        ]),
+        c.prompt_preview ? el("div", { style: "margin-top:12px" }, [
+          el("div", { class: "label" }, "Prompt preview"),
+          el("pre", { class: "mono", style: preStyle() }, c.prompt_preview),
+        ]) : null,
+        c.response_preview ? el("div", { style: "margin-top:12px" }, [
+          el("div", { class: "label" }, "Response"),
+          el("pre", { class: "mono", style: preStyle() }, c.response_preview),
+        ]) : null,
+        c.error ? el("div", { style: "margin-top:12px" }, [
+          el("div", { class: "label", style: "color:var(--danger)" }, "Error"),
+          el("pre", { class: "mono", style: preStyle(true) }, c.error),
+        ]) : null,
+        detail.task ? el("div", { style: "margin-top:12px" }, [
+          el("div", { class: "label" }, "Source task"),
+          el("pre", { class: "mono", style: preStyle() }, JSON.stringify(detail.task, null, 2)),
+        ]) : null,
+      ]),
+    ]);
+    document.body.append(drawer);
+  }
+
+  function kvBlock(rows) {
+    return el("dl", { style: "display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; font-size:12px; margin:0" },
+      rows.flatMap(([k, v]) => [
+        el("dt", { style: "color:var(--text-secondary)" }, k),
+        el("dd", { class: "mono", style: "margin:0" }, String(v)),
+      ]));
+  }
+
+  function preStyle(isError) {
+    return "background:var(--bg-tertiary); border:1px solid " + (isError ? "rgba(239,68,68,0.3)" : "var(--border-subtle)") +
+      "; border-radius:var(--radius-md); padding:12px; max-height:320px; overflow:auto; font-size:12px; white-space:pre-wrap; word-wrap:break-word; margin:0";
   }
   function renderTasksPreview(rows) {
     const list = $("#tasks-preview");
@@ -1281,12 +1366,52 @@
       if (name === "schedules") await renderSchedules();
       if (name === "skills") await renderSkills();
       if (name === "channels") await renderChannels();
+      if (name === "logs") await renderLogs();
       if (name === "settings" && !state.settings) await renderSettings();
       if (name === "chat") renderChatHistory();
     } catch (e) {
       console.error("refresh failed:", e);
     }
   }
+
+  async function renderLogs() {
+    const level = $("#log-level-filter").value;
+    const url = "/api/logs?lines=300" + (level ? "&level=" + encodeURIComponent(level) : "");
+    const rows = await api(url);
+    const host = $("#logs-table");
+    host.innerHTML = "";
+    if (rows.length === 0) {
+      host.append(el("div", { class: "muted" }, "no log entries"));
+      return;
+    }
+    for (const r of rows) {
+      const cls = r.level === "error" ? "badge-danger"
+        : r.level === "warn" ? "badge-warning"
+        : r.level === "debug" ? "badge-muted"
+        : "badge-info";
+      const detailBits = Object.entries(r)
+        .filter(([k]) => !["ts","level","event","profile"].includes(k))
+        .map(([k, v]) => k + "=" + (typeof v === "string" ? v : JSON.stringify(v)))
+        .join("  ");
+      host.append(el("div", { style: "padding:4px 0; border-bottom:1px solid var(--border-subtle); display:grid; grid-template-columns:80px 60px 180px 1fr; gap:10px; font-size:11px" }, [
+        el("span", { class: "muted" }, timeShort(r.ts)),
+        el("span", { class: "badge " + cls }, r.level ?? "?"),
+        el("span", { style: "color:var(--text-primary)" }, r.event ?? ""),
+        el("span", { class: "muted", style: "overflow:hidden; text-overflow:ellipsis; white-space:nowrap" }, detailBits),
+      ]));
+    }
+  }
+
+  function timeShort(iso) {
+    if (!iso) return "";
+    try { return new Date(iso).toLocaleTimeString("en-US", { hour12: false }); }
+    catch { return iso.slice(11, 19); }
+  }
+
+  // Wire the logs refresh + filter controls (no-ops before the view
+  // exists on screen; fine to bind on load).
+  $("#logs-refresh")?.addEventListener("click", renderLogs);
+  $("#log-level-filter")?.addEventListener("change", renderLogs);
 
   async function refreshStatus() {
     try {

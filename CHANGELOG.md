@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.14.11
+
+**Chat prompt lands on the right line. Welcome is slimmer. Cycle fails
+are debuggable. Dashboard has a Logs view + clickable cycle drilldown.**
+
+### Fixes
+
+1. **Prompt sandwich scroll-safe.** 0.14.10 used CSI save/restore
+   cursor (`\x1b[s`/`\x1b[u`). If the terminal scrolled at the moment
+   the sandwich was drawn (common when welcome content pushes the
+   first prompt near the bottom of the viewport), the saved row
+   became stale and the cursor landed halfway up with the bottom
+   rule far below. Swap to relative moves: `\x1b[1F` (previous-line
+   col 0) + `\x1b[3C` (right 3 cols past " › "). Scroll doesn't
+   invalidate relative positions.
+2. **Skill inventory gone from welcome.** The two-column header
+   (identity + skill list) was noisy and, when the viewport was
+   narrow, forced the prompt to wrap awkwardly. Back to a single
+   column: agent name, model, profile, effort, context, version,
+   cwd, usage line. Skill inventory lives on the dashboard now.
+
+### Features
+
+3. **Detailed cycle-fail output in chat.** On `!r.ok` the chat now
+   prints:
+   - friendly summary (`formatCycleError`)
+   - `haiku · 4.2s · $0.0012 · 2 turns · #42` meta line
+   - `raw: <first line of error>` (up to 500 chars)
+   - `drill: open http://localhost:7337/ → cycle #42`
+4. **`/api/logs` endpoint.** `?lines=N&level=a,b` reads recent jsonl
+   log entries from the profile's log dir. Merges across rolled
+   files newest-first.
+5. **`/api/cycles/:id` endpoint.** Returns the full cycle row plus
+   the originating task row (if any). Powers the drill-down modal.
+6. **Dashboard Logs view.** New sidebar entry. Table of 300 most-
+   recent events: time, level badge, event name, detail bits. Level
+   filter (all / info / warn+error / error).
+7. **Clickable cycle rows.** Anywhere a cycle shows in the dashboard,
+   click it to open a modal with: status badge, started/finished,
+   model, cost, tokens, turns, full task, prompt preview, response
+   preview, raw error text (if any), source task JSON (if any).
+
 ## 0.14.10
 
 **Bottom rule actually renders now.** In 0.14.9 the bottom rule was

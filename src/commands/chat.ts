@@ -13,9 +13,13 @@
 // - Errors are surfaced with friendly context. Raw `exit 1` is
 //   translated into actionable text.
 
+import { spawnSync } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { PassThrough } from "node:stream";
 import { stdin, stdout } from "node:process";
+import { existsSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import chalk from "chalk";
 import { runCycle, type CycleOutput } from "../agent.js";
 import { loadConfig, saveConfig } from "../config.js";
@@ -23,7 +27,6 @@ import { openDb, type DB } from "../db.js";
 import { tierFor, budgetFor, AUTO, HAIKU, SONNET, OPUS } from "../model-picker.js";
 import { currentVersion } from "../updater.js";
 import { loadPersona } from "../persona-io.js";
-import { loadAllSkills } from "../skills/loader.js";
 import type { AgentConfig, ChatTurn } from "../types.js";
 
 const HISTORY_LIMIT = 10;
@@ -84,6 +87,7 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
   let modelOverride: string | undefined = opts.model ? resolveModelAlias(opts.model) : undefined;
   const history: ChatTurn[] = [];
+  const pendingAttachments: string[] = [];
   const stats: SessionStats = {
     started: Date.now(),
     turnCount: 0,
@@ -122,13 +126,16 @@ export async function runChat(opts: ChatOptions): Promise<void> {
     const width = Math.min(stdout.columns || 80, 120);
     const rule = chalk.dim("─".repeat(width));
     stdout.write(rule + "\n");
-    // CSI save-cursor (`\x1b[s`) and CSI restore-cursor (`\x1b[u`)
-    // get stripped cleanly by Node's `stripVTControlCharacters`, so
-    // readline's prompt-width calculation ignores them. That keeps
-    // cursor tracking accurate while the terminal still obeys the
-    // escape sequences to park the visible cursor on the prompt line.
+    // Build the prompt string so readline re-emits the bottom rule
+    // on every refresh. CSI save/restore cursor (`\x1b[s`/`\x1b[u`)
+    // uses absolute positions which break when the terminal scrolls
+    // writing the sandwich - the saved row gets stale. Use relative
+    // movement instead: `\x1b[1F` (cursor previous line, column 0)
+    // + `\x1b[3C` (right 3 columns to land after " › "). Both are
+    // CSI sequences that `stripVTControlCharacters` removes cleanly,
+    // so readline's prompt-width math stays correct.
     const promptWithBottomRule =
-      chalk.cyan(" › ") + "\x1b[s" + "\n" + rule + "\x1b[u";
+      chalk.cyan(" › ") + "\n" + rule + "\x1b[1F\x1b[3C";
 
     let input: string;
     try {
@@ -156,6 +163,7 @@ export async function runChat(opts: ChatOptions): Promise<void> {
         agentName,
         history,
         stats,
+        pendingAttachments,
         getModel: () => modelOverride,
         setModel: (m) => { modelOverride = m; },
       });
@@ -171,6 +179,8 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
     let r: CycleOutput | null = null;
     let caughtError: Error | null = null;
+    const turnAttachments = pendingAttachments.length > 0 ? [...pendingAttachments] : undefined;
+    pendingAttachments.length = 0;
     try {
       const recent = history.slice(-HISTORY_LIMIT - 1, -1);
       r = await runCycle({
@@ -178,6 +188,7 @@ export async function runChat(opts: ChatOptions): Promise<void> {
         task: input,
         modelOverride,
         sessionHistory: recent,
+        attachments: turnAttachments,
       });
     } catch (e) {
       caughtError = e as Error;
@@ -188,13 +199,32 @@ export async function runChat(opts: ChatOptions): Promise<void> {
     stdout.write("\x1b[1A\x1b[2K");
 
     if (caughtError) {
-      stdout.write(chalk.red("● error: ") + caughtError.message + "\n\n");
+      stdout.write(chalk.red("● error: ") + caughtError.message + "\n");
+      stdout.write(chalk.dim("  (thrown before cycle started - check claude CLI install)\n\n"));
       history.pop();
       continue;
     }
 
     if (!r || !r.ok) {
-      stdout.write(chalk.red("● ") + chalk.red(formatCycleError(r)) + "\n\n");
+      // Show the full picture: friendly summary, raw error, model +
+      // duration, cycle id for drilldown in the dashboard. Users
+      // asked for "why it failed"; dump everything the cycle knows.
+      stdout.write(chalk.red("● ") + chalk.red(formatCycleError(r)) + "\n");
+      if (r) {
+        const metaBits: string[] = [];
+        if (r.model) metaBits.push(shortModel(r.model));
+        metaBits.push(`${(r.durationMs / 1000).toFixed(1)}s`);
+        if (r.costUsd != null) metaBits.push(`$${r.costUsd.toFixed(4)}`);
+        if (r.turns != null) metaBits.push(`${r.turns} turn${r.turns === 1 ? "" : "s"}`);
+        metaBits.push(`#${r.cycleId}`);
+        stdout.write("  " + chalk.dim(metaBits.join(" · ")) + "\n");
+        if (r.error) {
+          const rawFirstLine = r.error.split("\n")[0]!.slice(0, 500);
+          stdout.write("  " + chalk.dim(`raw: ${rawFirstLine}`) + "\n");
+        }
+        stdout.write("  " + chalk.dim(`drill: open http://localhost:${cfg.dashboardPort ?? 7337}/ → cycle #${r.cycleId}`) + "\n");
+      }
+      stdout.write("\n");
       history.pop();
       continue;
     }
@@ -342,37 +372,22 @@ function printHeader(
     ? chalk.green("1M") + chalk.dim(" (beta)")
     : formatNum(ctxTokens);
 
-  // Hermes-inspired: banner on top, two-column info below (agent
-  // identity + session on the left, capabilities inventory on the
-  // right), usage line last. Keeps the first-screen real estate
-  // dense without the old bordered-box feel.
   const version = currentVersion();
 
   console.log("");
-  // "BAJACLAW" in a compact block-letter style (matches Hermes'
-  // ASCII banner aesthetic; width-safe for 80-col terminals).
   for (const line of BANNER) console.log(chalk.cyan(line));
   console.log("");
 
-  // Two-column block. Left = identity, right = inventory.
-  const { skillNames, scopeCounts } = summarizeSkills(profile);
-  const left: string[] = [
-    `${chalk.bold(agentName)} ${chalk.dim("·")} ${chalk.cyan(modelDisplay)}`,
-    `${chalk.dim("profile:")} ${profile}  ${chalk.dim("effort:")} ${cfg.effort}  ${chalk.dim("ctx:")} ${ctxLabel}`,
-    `${chalk.dim("version:")} ${version}`,
-    "",
-    chalk.dim(`cwd: ${process.cwd()}`),
-  ];
+  // Single-column identity block. (Skills inventory moved to the
+  // `/help`/dashboard; the welcome is for session identity only.)
+  console.log(`  ${chalk.bold(agentName)} ${chalk.dim("·")} ${chalk.cyan(modelDisplay)}`);
+  console.log(`  ${chalk.dim("profile:")} ${profile}  ${chalk.dim("effort:")} ${cfg.effort}  ${chalk.dim("ctx:")} ${ctxLabel}`);
+  console.log(`  ${chalk.dim("version:")} ${version}`);
   if (cfg.maxBudgetUsd != null) {
-    left.splice(3, 0, `${chalk.dim("budget:")} $${cfg.maxBudgetUsd.toFixed(2)}/cycle`);
+    console.log(`  ${chalk.dim("budget:")} $${cfg.maxBudgetUsd.toFixed(2)}/cycle`);
   }
-
-  const right: string[] = [
-    chalk.bold("Available Skills"),
-    ...skillLinesGrouped(skillNames, scopeCounts),
-  ];
-
-  renderTwoColumns(left, right);
+  console.log("");
+  console.log(`  ${chalk.dim("cwd:")} ${process.cwd()}`);
   console.log("");
 
   // Usage line (5h + week) as a single muted row.
@@ -381,13 +396,13 @@ function printHeader(
     const fiveH = usageWindow(db, 5);
     const week = usageWindow(db, 24 * 7);
     console.log(
-      chalk.dim(`usage  5h: ${fiveH.cycles} cycles · ${formatNum(fiveH.inputTokens + fiveH.outputTokens)} tok · $${fiveH.costUsd.toFixed(4)}`) +
+      chalk.dim(`  usage  5h: ${fiveH.cycles} cycles · ${formatNum(fiveH.inputTokens + fiveH.outputTokens)} tok · $${fiveH.costUsd.toFixed(4)}`) +
       chalk.dim(`    week: ${week.cycles} cycles · ${formatNum(week.inputTokens + week.outputTokens)} tok · $${week.costUsd.toFixed(4)}`)
     );
   } finally {
     db.close();
   }
-  console.log(chalk.dim("/help for commands  ·  /exit or Ctrl-D to quit"));
+  console.log(chalk.dim("  /help for commands  ·  /exit or Ctrl-D to quit"));
   console.log("");
 }
 
@@ -401,54 +416,6 @@ const BANNER = [
   " ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝",
   " ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝",
 ];
-
-function summarizeSkills(profile: string): {
-  skillNames: string[];
-  scopeCounts: { bajaclaw: number; openclaw: number; hermes: number };
-} {
-  const skills = loadAllSkills(profile);
-  const counts = { bajaclaw: 0, openclaw: 0, hermes: 0 };
-  for (const s of skills) {
-    const origin = s.origin ?? "bajaclaw";
-    if (origin in counts) counts[origin as keyof typeof counts] += 1;
-  }
-  return { skillNames: skills.map((s) => s.name).sort(), scopeCounts: counts };
-}
-
-function skillLinesGrouped(names: string[], scopeCounts: {bajaclaw:number;openclaw:number;hermes:number}): string[] {
-  // Up to 6 names inline, then "(+N more)". Stack scope counts below.
-  const lines: string[] = [];
-  if (names.length === 0) {
-    lines.push(chalk.dim("  (none loaded)"));
-  } else {
-    const shown = names.slice(0, 6);
-    const extra = names.length - shown.length;
-    lines.push("  " + shown.map((n) => chalk.cyan(n)).join(chalk.dim(", ")) + (extra > 0 ? chalk.dim(` +${extra} more`) : ""));
-  }
-  const parts = [
-    scopeCounts.bajaclaw > 0 ? chalk.cyan(`${scopeCounts.bajaclaw} bajaclaw`) : "",
-    scopeCounts.openclaw > 0 ? chalk.yellow(`${scopeCounts.openclaw} openclaw`) : "",
-    scopeCounts.hermes > 0 ? chalk.magenta(`${scopeCounts.hermes} hermes`) : "",
-  ].filter(Boolean);
-  if (parts.length > 0) lines.push("  " + parts.join(chalk.dim(" · ")));
-  return lines;
-}
-
-function renderTwoColumns(left: string[], right: string[]): void {
-  // Strip ANSI for width calculations so colors don't break alignment.
-  const leftWidth = 40;
-  const maxRows = Math.max(left.length, right.length);
-  for (let i = 0; i < maxRows; i++) {
-    const l = left[i] ?? "";
-    const r = right[i] ?? "";
-    const pad = Math.max(0, leftWidth - visibleLength(l));
-    console.log("  " + l + " ".repeat(pad) + "  " + r);
-  }
-}
-
-function visibleLength(s: string): number {
-  return s.replace(/\x1b\[[0-9;]*m/g, "").length;
-}
 
 function printStatusLine(r: CycleOutput, cfg: AgentConfig): void {
   // Rendered directly under the agent's `●` response line, indented
@@ -478,6 +445,35 @@ function printSessionSummary(stats: SessionStats): void {
 }
 
 // ───────────────────────────────────────────────────────────────
+// Video frame extraction
+// ───────────────────────────────────────────────────────────────
+
+function extractFrames(videoPath: string, frameCount = 8): string[] {
+  let interval = 2;
+  const probe = spawnSync("ffprobe", [
+    "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", videoPath,
+  ], { encoding: "utf8" });
+  if (probe.status === 0) {
+    const dur = parseFloat(probe.stdout.trim());
+    if (dur > 0) interval = Math.max(0.5, dur / frameCount);
+  }
+  const ts = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const pattern = join(tmpdir(), `bajaclaw-video-${ts}-frame-%03d.jpg`);
+  spawnSync("ffmpeg", [
+    "-i", videoPath,
+    "-vf", `fps=1/${interval.toFixed(2)}`,
+    "-frames:v", String(frameCount),
+    pattern,
+  ]);
+  const frames: string[] = [];
+  for (let i = 1; i <= frameCount; i++) {
+    const fp = pattern.replace("%03d", String(i).padStart(3, "0"));
+    try { if (statSync(fp).isFile()) frames.push(fp); } catch { /* skip */ }
+  }
+  return frames;
+}
+
+// ───────────────────────────────────────────────────────────────
 // Slash commands
 // ───────────────────────────────────────────────────────────────
 
@@ -487,6 +483,7 @@ interface SlashCtx {
   agentName: string;
   history: ChatTurn[];
   stats: SessionStats;
+  pendingAttachments: string[];
   getModel: () => string | undefined;
   setModel: (m: string | undefined) => void;
 }
@@ -585,6 +582,61 @@ async function handleSlash(input: string, ctx: SlashCtx): Promise<"exit" | "cont
       console.log("");
       return "continue";
     }
+    case "image":
+    case "img": {
+      if (!arg) {
+        if (ctx.pendingAttachments.length === 0) {
+          console.log(chalk.dim("no images queued. usage: /image <path>"));
+        } else {
+          console.log(chalk.bold(`queued images (${ctx.pendingAttachments.length}):`));
+          for (const p of ctx.pendingAttachments) console.log(`  ${chalk.cyan(p)}`);
+        }
+        console.log("");
+        return "continue";
+      }
+      const imgPath = arg.trim();
+      if (!existsSync(imgPath) || !statSync(imgPath).isFile()) {
+        console.log(chalk.red(`file not found: ${imgPath}`));
+        console.log("");
+        return "continue";
+      }
+      ctx.pendingAttachments.push(imgPath);
+      console.log(chalk.green(`✓ image queued: ${imgPath}`));
+      console.log(chalk.dim("  it will be attached to your next message"));
+      console.log("");
+      return "continue";
+    }
+    case "video":
+    case "vid": {
+      if (!arg) {
+        if (ctx.pendingAttachments.length === 0) {
+          console.log(chalk.dim("no frames queued. usage: /video <path>"));
+        } else {
+          console.log(chalk.bold(`queued attachments (${ctx.pendingAttachments.length}):`));
+          for (const p of ctx.pendingAttachments) console.log(`  ${chalk.cyan(p)}`);
+        }
+        console.log("");
+        return "continue";
+      }
+      const vidPath = arg.trim();
+      if (!existsSync(vidPath) || !statSync(vidPath).isFile()) {
+        console.log(chalk.red(`file not found: ${vidPath}`));
+        console.log("");
+        return "continue";
+      }
+      console.log(chalk.dim("extracting frames..."));
+      const frames = extractFrames(vidPath);
+      if (frames.length === 0) {
+        console.log(chalk.red("frame extraction failed - is ffmpeg installed?"));
+        console.log("");
+        return "continue";
+      }
+      ctx.pendingAttachments.push(...frames);
+      console.log(chalk.green(`\u2713 ${frames.length} frames queued from ${vidPath}`));
+      console.log(chalk.dim("  they will be attached to your next message"));
+      console.log("");
+      return "continue";
+    }
     case "compact": {
       const { compact, shouldCompact } = await import("../memory/compact.js");
       const db = openDb(ctx.profile);
@@ -635,6 +687,8 @@ function printHelp(): void {
   console.log(`  ${chalk.cyan("/context [200k|1m]")}   show or set context window (1m is beta)`);
   console.log(`  ${chalk.cyan("/compact")}              run memory compaction now`);
   console.log(`  ${chalk.cyan("/history")}              dump this session's turns`);
+  console.log(`  ${chalk.cyan("/image <path>")}         queue a local image file to attach to your next message`);
+  console.log(`  ${chalk.cyan("/video <path>")}         extract frames from a video and queue them for your next message`);
   console.log("");
 }
 

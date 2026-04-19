@@ -1,10 +1,10 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { loadConfig, saveConfig } from "../config.js";
-import { bajaclawHome } from "../paths.js";
+import { bajaclawHome, profileLogDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
 import { runCycle } from "../agent.js";
@@ -248,6 +248,32 @@ async function dispatchApi(
     return;
   }
 
+  // GET /api/logs?lines=200&level=error,warn - read recent jsonl log
+  // entries from the profile's log dir. Merges across the latest
+  // files so a mid-night roll-over doesn't hide context.
+  if (url.startsWith("/api/logs") && method === "GET") {
+    const q = new URL(url, "http://x").searchParams;
+    const lines = Math.min(1000, Math.max(1, parseInt(q.get("lines") ?? "200", 10)));
+    const levels = (q.get("level") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    json(res, readRecentLogs(profile, lines, levels));
+    return;
+  }
+
+  // GET /api/cycles/:id - full detail for one cycle. Include prompt
+  // preview, response preview, raw error text, timing, cost.
+  const cycleIdMatch = url.match(/^\/api\/cycles\/(\d+)$/);
+  if (cycleIdMatch && method === "GET") {
+    const id = Number(cycleIdMatch[1]);
+    const cdb = openDb(profile);
+    try {
+      const row = cdb.prepare("SELECT * FROM cycles WHERE id = ?").get(id);
+      if (!row) { json(res, { error: "not found" }, 404); return; }
+      const task = cdb.prepare("SELECT * FROM tasks WHERE cycle_id = ?").get(id);
+      json(res, { cycle: row, task });
+    } finally { cdb.close(); }
+    return;
+  }
+
   // Existing DB-backed read endpoints.
   const db = openDb(profile);
   try {
@@ -408,4 +434,46 @@ function maskChannel(c: ChannelConfig): object {
     channelId: c.channelId,
     allowlist: c.allowlist,
   };
+}
+
+// ── Log reader ─────────────────────────────────────────────────────
+
+interface LogEntry {
+  ts: string;
+  level: string;
+  event: string;
+  profile: string;
+  [k: string]: unknown;
+}
+
+function readRecentLogs(profile: string, lines: number, levels: string[]): LogEntry[] {
+  const dir = profileLogDir(profile);
+  if (!existsSync(dir)) return [];
+  let files: string[];
+  try {
+    files = readdirSync(dir)
+      .filter((f) => f.endsWith(".jsonl"))
+      .map((f) => ({ f, mtime: statSync(join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime)
+      .map((x) => x.f);
+  } catch { return []; }
+
+  const out: LogEntry[] = [];
+  // Walk files newest-to-oldest, collect lines until we have `lines` entries.
+  for (const f of files) {
+    if (out.length >= lines) break;
+    let raw: string;
+    try { raw = readFileSync(join(dir, f), "utf8"); } catch { continue; }
+    const rows = raw.split("\n").filter(Boolean).reverse();
+    for (const line of rows) {
+      if (out.length >= lines) break;
+      try {
+        const entry = JSON.parse(line) as LogEntry;
+        if (levels.length > 0 && !levels.includes(entry.level)) continue;
+        out.push(entry);
+      } catch { /* skip malformed */ }
+    }
+  }
+  // Return chronological order (oldest first) so the UI can append.
+  return out.reverse();
 }
