@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.18
+
+**Running cycles no longer display as "fail" on the dashboard.**
+
+### Fixes
+
+1. **Cycle status badge handles the `running` state.** Three sites
+   in the dashboard treated any non-"ok" status as a failure: the
+   Overview recent-cycles list, the cycle-detail drawer header, and
+   the agents list's last-cycle badge. In-flight cycles (`status =
+   "running"`) were rendered as red "fail" badges, which was
+   alarming and wrong. All three now render running cycles as a
+   blue `badge-info` labeled "running".
+
 ## 0.14.17
 
 **Kill the duplicate-reply pattern: fold plan acknowledgment into

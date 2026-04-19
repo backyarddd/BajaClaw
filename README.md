@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.14.17
+          autonomous agents on your terms  ·  MIT  ·  v0.14.18
 ```
 
 **BajaClaw is a long-running agent runtime for the `claude` CLI.** It turns
