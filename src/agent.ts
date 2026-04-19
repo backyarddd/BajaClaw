@@ -162,47 +162,16 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       && channelSource
       && (picked.tier === "sonnet" || picked.tier === "opus");
 
-    // Fire an intake ack before the main cycle starts. A fast haiku
-    // turn replies to the user in the agent's own voice so they see
-    // confirmation within a second or two instead of waiting for the
-    // full sonnet/opus run. Awaited (not fire-and-forget) so it
-    // can't land after the final reply and look backwards. Cheap:
-    // haiku, <40 words, <2s.
-    if (liveFeedback) {
-      try {
-        const identity = systemDocs.soul.trim();
-        const ackPrompt = `${identity ? `${identity}\n\n---\n\n` : ""}The user just sent you the message below in chat. You are about to start working on it, but that work happens in a separate step. Right now, just reply to them the way you normally would in chat. One short, natural message. Sound like a person, not a form letter.
-
-Do:
-- Talk like you're texting them back. Casual, warm, concise.
-- Show you understood. If it's multi-part, naturally weave it into a sentence.
-- Max ~35 words. Shorter is fine. Shorter is usually better.
-
-Do NOT:
-- Start with "Heard:", "Plan:", "Got it!", "Sure!", "Alright!", or any canned opener
-- Use em dashes (use a comma, colon, or rephrase)
-- Use emojis
-- Restate every detail back at them verbatim
-- Promise a timeline ("I'll be right back", "give me a minute")
-- Use bullets or headings - write prose
-
-Just the reply. Nothing else.
-
-The user's message:
-${task}`;
-        const ack = await runOnce(ackPrompt, {
-          model: "claude-haiku-4-5",
-          effort: "low",
-          skipPermissions: true,
-          timeout: 20000,
-        });
-        if (ack.ok && ack.text.trim()) {
-          await sendProgressToSource(input.profile, source, ack.text.trim());
-        }
-      } catch (e) {
-        log.warn("intake-ack.fail", { error: (e as Error).message });
-      }
-    }
+    // No separate intake-ack backend call. The older design fired a
+    // haiku pass before the main cycle to produce a quick "got it"
+    // reply; it had two problems: (1) the haiku didn't get session
+    // history, so follow-up messages got clueless replies ("which
+    // model for what part?"), and (2) the user saw two messages per
+    // task - the ack AND the main reply - which felt like spam.
+    // Instead, the progress-instructions block below tells the main
+    // agent (which HAS full session history) to emit its own plan
+    // ack via `bajaclaw say` as its first action on multi-part
+    // tasks. One cycle, one voice, one source of truth.
 
     const prompt = assemblePrompt({
       task,
@@ -465,32 +434,49 @@ interface AssembleInput {
 export function buildProgressInstructions(): string {
   return `# Side-channel chat tool (do not let this distract from the actual task)
 
-CRITICAL: Your job is to fully complete the task in "# Current Task" below. If the task has multiple parts (a AND b AND c), finish all of them before your final reply. Do not stop halfway and summarize, do not defer parts to a follow-up, do not treat the chat as a substitute for doing the work. The user's complaint that tasks "get left unfinished" is a real regression - do not trigger it.
+CRITICAL: Your job is to fully complete the task in "# Current Task" below. If it has multiple parts (a AND b AND c), finish all of them before your final reply. Do not stop halfway and summarize, do not defer parts to a follow-up, do not treat the chat as a substitute for doing the work.
 
-You have one extra tool available: \`bajaclaw say "<short text>"\` via your Bash tool. It sends a one-line message to the user's chat mid-flight without blocking you or ending the typing indicator. The user already got a quick acknowledgment before you started; this is for genuine mid-work pings only.
+You have one extra tool: \`bajaclaw say "<short text>"\` via your Bash tool. It sends a line to the user's chat mid-flight without blocking or ending the typing indicator.
 
-Use it sparingly. Good reasons:
-- You hit something unexpected the user would want to know about ("heads up, the migration is dirty, fixing it first")
-- A long-running step is about to start and silence would look like a hang ("running the full test suite now")
-- You actually crossed a real milestone and are moving on ("scheduler's done, wiring up the telegram handler")
+## When to send the first ping (plan ack)
 
-Bad reasons (do NOT send these):
+ONLY if the task is genuinely multi-part or will take noticeable time to complete. Examples:
+- "add X, then test Y, then ship Z"
+- "investigate this bug, find the root cause, and fix it"
+- "scaffold a new agent named Shirty, run the dev server, tell me when ready"
+
+For multi-part tasks: before your first real tool call, send ONE short ping acknowledging the plan in your own voice. Natural, under 20 words. Look at Recent Chat to understand what the user means (e.g. if they say "that" or "the model", figure out what they're referring to from context).
+
+For single-question tasks, do NOT ack. The typing indicator is enough; go straight to your final reply. Examples that need NO ack:
+- "what model are you using?"
+- "is the server up?"
+- "summarize what you just did"
+
+## When to send mid-flight pings
+
+Only for genuine milestones on long tasks:
+- You hit something unexpected the user should know ("heads up, migration is dirty, fixing first")
+- A long step is about to start and silence would look like a hang ("running the full test suite")
+- You crossed a real phase boundary ("scaffolding done, wiring up the handler")
+
+## When to stay quiet
+
 - Announcing what you're about to do ("on it!", "starting now", "let me take a look"). Just do it.
 - Every tool call, file edit, or search.
-- Thinking out loud or self-narration.
-- Short or simple tasks. One final reply is enough.
-- Restating what the intake ack already said.
-- Filling silence. If you don't have something real to say, say nothing and keep working.
+- Thinking out loud.
+- Short or simple tasks.
+- Filling silence when you don't have something real to say.
 
-Cap: at most 3 pings per cycle, and zero is a valid choice. If you're tempted to ping a fourth time, you're probably chatting instead of working - stop and finish the task.
+Hard cap: at most 3 \`bajaclaw say\` calls per cycle (including the plan ack if you send one). Zero is fine. If you're tempted to ping a fourth time, you're chatting instead of working - stop and finish the task.
 
-Per-message style:
+## Style for pings
+
 - Under 20 words, one line of prose
 - Same voice as your final reply
-- No "Update:", "Status:", "Progress:" prefixes
+- No "Update:", "Status:", "Plan:" prefixes - just say the thing
 - No em dashes, no emojis
 
-Your final reply at cycle end is the actual deliverable. It must cover every part the user asked about: findings, results, file paths, errors, whatever they need. Pings are bonuses on top of that, never a replacement.`;
+Your final reply at cycle end is the deliverable. It must cover every part the user asked about: findings, results, file paths, errors, whatever they need. Pings are bonuses on top of that, never a replacement.`;
 }
 
 export function assemblePrompt(input: AssembleInput): string {

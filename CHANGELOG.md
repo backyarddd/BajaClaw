@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.14.17
+
+**Kill the duplicate-reply pattern: fold plan acknowledgment into
+the main cycle instead of firing a separate haiku pass.**
+
+### Fixes
+
+1. **No more double messages on follow-up questions.** 0.14.14
+   introduced a separate haiku "intake ack" call that ran before the
+   main cycle and sent a short "got it" message to the chat. Two
+   problems: (1) the haiku call did NOT receive session history, so
+   on a follow-up like "which model did you use for bajaclaw's?" it
+   would ask a clueless clarifying question ("which model for what
+   part?") while the main sonnet reply right after had the actual
+   contextual answer, and (2) every task produced two messages which
+   felt like spam. Removed the separate backend call entirely.
+2. **Plan ack now happens inside the main cycle.** The progress
+   instructions block now tells the main agent (which has full
+   session history, memories, skills, and the user's soul) that on
+   genuinely multi-part tasks it should emit its plan ack via
+   \`bajaclaw say\` as its first action - then do the work. For
+   simple single-question tasks it skips the ack entirely and goes
+   straight to the final reply. One cycle, one voice, one reply.
+3. **Hard cap of 3 \`bajaclaw say\` calls per cycle** (including the
+   plan ack). Zero is valid.
+
 ## 0.14.16
 
 **Fix regression: 0.14.14/15's progress-chat block was making sonnet
