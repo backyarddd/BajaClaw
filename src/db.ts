@@ -95,6 +95,10 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `ALTER TABLE tasks ADD COLUMN attachments TEXT DEFAULT NULL;`,
+  },
 ];
 
 export function openDb(profile: string): DB {

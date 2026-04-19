@@ -4,6 +4,28 @@ import type { ClaudeEvent, ClaudeOptions, ClaudeResult } from "./types.js";
 
 const DEFAULT_TIMEOUT = 10 * 60 * 1000;
 
+// Env vars injected by the Claude Desktop app into any process it
+// launches. If BajaClaw's daemon was started from within the desktop
+// app (or any claude-code session), these get inherited and then
+// poison every spawned `claude` subprocess: the Desktop-managed OAuth
+// token overrides the user's own on-disk credentials, and when it
+// rotates BajaClaw silently breaks with 401s. We scrub them so the
+// spawned CLI falls back to its normal credential lookup.
+const DESKTOP_MANAGED_ENV_VARS = [
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+  "CLAUDE_CODE_ENTRYPOINT",
+  "CLAUDE_CODE_EXECPATH",
+  "CLAUDE_CODE_SDK_HAS_OAUTH_REFRESH",
+  "CLAUDECODE",
+] as const;
+
+function cleanSpawnEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const k of DESKTOP_MANAGED_ENV_VARS) delete env[k];
+  return env;
+}
+
 let cachedBinary: string | null | undefined;
 let cachedSupportsJson: boolean | undefined;
 
@@ -127,6 +149,7 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
       // warning that contaminates stdout). Closing stdin tells it
       // "the prompt on -p is complete - don't wait for more".
       stdin: "ignore",
+      env: cleanSpawnEnv(),
     });
     return parseResult(r.stdout, r.stderr, r.exitCode ?? 0, start, jsonSupported, ["claude", ...cmd]);
   } catch (e) {
@@ -148,6 +171,7 @@ export function runStream(prompt: string, opts: ClaudeOptions = {}): ResultPromi
   return execa(bin, [...cmd, "--output-format", "stream-json"], {
     cwd: opts.workdir,
     stdio: ["ignore", "pipe", "pipe"],
+    env: cleanSpawnEnv(),
   });
 }
 
