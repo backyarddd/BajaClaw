@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.14.14
+
+**Live feedback on channel cycles. Agent confirms what it heard,
+then keeps you posted while it works.**
+
+### Features
+
+1. **Intake ack on sonnet/opus channel cycles.** When a task lands
+   from telegram or discord and routes to sonnet or opus, a fast
+   haiku pass paraphrases the request and states a plan ("Heard: X.
+   Plan: Y.") and sends it to the channel before the main cycle
+   starts. User gets confirmation in ~1-2s instead of staring at a
+   typing indicator wondering if anything is happening. Haiku tasks
+   and heartbeats skip it (already fast) and dry runs skip it (no
+   spending).
+2. **Mid-flight progress via `bajaclaw say`.** New CLI command that
+   POSTs a short update to the dashboard's `/api/progress` endpoint.
+   The daemon's gateway forwards it to the originating channel
+   without ending the typing indicator. For sonnet/opus channel
+   cycles, a prompt block instructs the agent to call this between
+   major phases ("Built the endpoint. Wiring it into the dashboard
+   now.") and skip it on short tasks. Context passed via env vars
+   (`BAJACLAW_PROFILE`, `BAJACLAW_SOURCE`, `BAJACLAW_DASHBOARD_PORT`)
+   injected into the claude spawn, so the agent invokes it through
+   its regular Bash tool - no MCP plumbing needed.
+3. **`ClaudeOptions.env` passthrough.** Per-spawn env merging on top
+   of the scrubbed inherit-env from 0.14.13, used by the progress
+   plumbing above. Generalizes to any future per-cycle context that
+   needs to reach the subprocess.
+
 ## 0.14.13
 
 **Image + video attachments land in channel tasks. Auto-skills go live

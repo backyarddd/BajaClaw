@@ -149,7 +149,7 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
       // warning that contaminates stdout). Closing stdin tells it
       // "the prompt on -p is complete - don't wait for more".
       stdin: "ignore",
-      env: cleanSpawnEnv(),
+      env: { ...cleanSpawnEnv(), ...(opts.env ?? {}) },
     });
     return parseResult(r.stdout, r.stderr, r.exitCode ?? 0, start, jsonSupported, ["claude", ...cmd]);
   } catch (e) {
@@ -171,7 +171,7 @@ export function runStream(prompt: string, opts: ClaudeOptions = {}): ResultPromi
   return execa(bin, [...cmd, "--output-format", "stream-json"], {
     cwd: opts.workdir,
     stdio: ["ignore", "pipe", "pipe"],
-    env: cleanSpawnEnv(),
+    env: { ...cleanSpawnEnv(), ...(opts.env ?? {}) },
   });
 }
 

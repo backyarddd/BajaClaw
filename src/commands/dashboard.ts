@@ -8,6 +8,7 @@ import { bajaclawHome, profileLogDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
 import { runCycle } from "../agent.js";
+import { sendProgressToSource, broadcastToProfile } from "../channels/gateway.js";
 import { loadAllSkillsRaw, runtimeSkipReason } from "../skills/loader.js";
 import { currentVersion } from "../updater.js";
 import type { AgentConfig, ChannelConfig } from "../types.js";
@@ -102,6 +103,24 @@ async function dispatchApi(
       tier: out.tier,
       error: out.error,
     });
+    return;
+  }
+
+  // POST /api/progress - invoked by `bajaclaw say` from within a
+  // running cycle. Forwards a short progress line back to the
+  // originating channel so the user sees live updates without
+  // waiting for the cycle to finish. Silently no-ops if the source
+  // is missing or not a channel - dashboard/REPL cycles just drop it.
+  if (url === "/api/progress" && method === "POST") {
+    const body = await readJson(req) as { text?: string; source?: string };
+    const text = (body.text ?? "").trim();
+    if (!text) { json(res, { ok: false, error: "empty text" }, 400); return; }
+    if (body.source) {
+      sendProgressToSource(profile, body.source, text).catch(() => undefined);
+    } else {
+      broadcastToProfile(profile, text);
+    }
+    json(res, { ok: true });
     return;
   }
 
