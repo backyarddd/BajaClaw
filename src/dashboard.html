@@ -324,6 +324,91 @@
     .nav-list { flex-direction: row; gap: 4px; }
     .nav-item { white-space: nowrap; padding: 6px 10px; }
   }
+
+  /* ── Agent fleet grid ──────────────────────────────────────── */
+  .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .agent-card {
+    background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg); padding: 18px;
+    display: flex; flex-direction: column; gap: 14px;
+    transition: border-color 0.15s ease;
+  }
+  .agent-card:hover { border-color: var(--border-default); }
+  .agent-card-header { display: flex; align-items: center; gap: 10px; }
+  .agent-status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-muted); flex-shrink: 0;
+  }
+  .agent-status-dot.live { background: var(--success); box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+  .agent-card-name { font-weight: 600; font-size: 14px; flex: 1; }
+  .agent-card-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .agent-stat { display: flex; flex-direction: column; gap: 3px; }
+  .agent-stat-label { font-size: 11px; color: var(--text-tertiary); }
+  .agent-stat-value { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+  .agent-card-footer { display: flex; gap: 8px; justify-content: flex-end; }
+  .agent-card-last-task {
+    font-size: 11px; color: var(--text-tertiary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border-top: 1px solid var(--border-subtle); padding-top: 10px;
+  }
+  .agent-card-task-row { display: flex; gap: 6px; align-items: center; }
+  .agent-card-task-row .input { font-size: 11px; padding: 5px 8px; height: 30px; }
+  .agent-running-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 7px; border-radius: var(--radius-sm);
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(20,214,206,0.35);
+  }
+  .agent-running-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent); animation: run-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes run-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(0.7); } }
+
+  /* ── Floating chatbox ──────────────────────────────────────── */
+  .floatbox {
+    position: fixed; bottom: 20px; left: 20px; width: 380px;
+    background: var(--bg-secondary); border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg); box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 1000; display: flex; flex-direction: column;
+    overflow: hidden; transition: height 0.2s ease;
+  }
+  .floatbox:not(.minimized) { height: 460px; }
+  .floatbox.minimized { height: 48px; }
+  .floatbox-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border-subtle);
+    cursor: pointer; flex-shrink: 0; user-select: none;
+  }
+  .floatbox.minimized .floatbox-header { border-bottom-color: transparent; }
+  .floatbox-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--accent); }
+  .floatbox-controls { display: flex; align-items: center; gap: 6px; }
+  .floatbox-agent-sel {
+    background: var(--bg-tertiary); border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm); padding: 3px 6px;
+    font-size: 11px; color: var(--text-secondary); max-width: 130px;
+  }
+  .floatbox-min-btn {
+    background: transparent; border: none; color: var(--text-secondary);
+    cursor: pointer; padding: 3px; border-radius: var(--radius-sm); line-height: 1; display: flex;
+  }
+  .floatbox-min-btn:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+  .floatbox-body { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+  .floatbox-chat { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .floatbox-msg { padding: 8px 12px; border-radius: var(--radius-md); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; max-width: 90%; }
+  .floatbox-msg-user { align-self: flex-end; background: var(--accent-soft); border: 1px solid rgba(20,214,206,0.3); color: var(--text-primary); }
+  .floatbox-msg-agent { align-self: flex-start; background: var(--bg-tertiary); border: 1px solid var(--border-subtle); }
+  .floatbox-msg-system { align-self: center; background: transparent; color: var(--text-tertiary); font-size: 11px; font-style: italic; border: none; padding: 4px 0; }
+  .floatbox-msg-error { align-self: flex-start; background: var(--danger-soft); border: 1px solid rgba(239,68,68,0.3); color: var(--danger); }
+  .floatbox-msg-meta { font-size: 10px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; margin-top: 3px; }
+  .floatbox-input-wrap { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border-subtle); align-items: flex-end; flex-shrink: 0; }
+  .floatbox-input {
+    flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-default);
+    border-radius: var(--radius-md); padding: 7px 10px; color: var(--text-primary);
+    resize: none; outline: none; font-size: 12px; max-height: 100px; font-family: inherit;
+  }
+  .floatbox-input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(20,214,206,0.14); }
+  .floatbox-send { padding: 7px 12px; font-size: 14px; line-height: 1; }
 </style>
 </head>
 <body>
@@ -342,6 +427,7 @@
       <div class="nav-section-label">Workspace</div>
       <div class="nav-list">
         <button class="nav-item" data-view="overview"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Overview</button>
+        <button class="nav-item" data-view="agents"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><circle cx="20" cy="8" r="2"/><path d="M23 18v-1a3 3 0 0 0-3-3"/><circle cx="4" cy="8" r="2"/><path d="M1 18v-1a3 3 0 0 1 3-3"/></svg>Agents</button>
         <button class="nav-item" data-view="chat"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</button>
         <button class="nav-item" data-view="cycles"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Cycles</button>
         <button class="nav-item" data-view="memory"><svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Memory</button>
@@ -376,6 +462,10 @@
     </header>
 
     <div class="content">
+
+      <section class="view" id="view-agents">
+        <div class="agents-grid" id="agents-grid"></div>
+      </section>
 
       <section class="view active" id="view-overview">
         <div class="stats-grid" id="stats"></div>
@@ -514,6 +604,29 @@
   </main>
 </div>
 
+<!-- Floating global chatbox -->
+<div class="floatbox minimized" id="floatbox">
+  <div class="floatbox-header" id="floatbox-header">
+    <div class="floatbox-title">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>Agent Chat</span>
+    </div>
+    <div class="floatbox-controls">
+      <select class="floatbox-agent-sel" id="floatbox-agent-sel"></select>
+      <button class="floatbox-min-btn" id="floatbox-min-btn" title="Minimize/expand">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="floatbox-body" id="floatbox-body">
+    <div class="floatbox-chat" id="floatbox-chat"></div>
+    <div class="floatbox-input-wrap">
+      <textarea class="floatbox-input" id="floatbox-input" rows="1" placeholder="Message or /help for commands…"></textarea>
+      <button class="btn btn-primary floatbox-send" id="floatbox-send">&#8593;</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (() => {
   const state = {
@@ -564,6 +677,7 @@
 
   const VIEW_TITLES = {
     overview: ["Overview", "daemon stats, recent activity"],
+    agents: ["Agents", "all profiles running on this machine"],
     chat: ["Chat", "send messages to the agent"],
     cycles: ["Cycles", "every cycle this profile has run"],
     memory: ["Memory", "extracted durable memories"],
@@ -585,6 +699,288 @@
   }
 
   $$(".nav-item").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+
+  // ── Agent fleet view ──────────────────────────────────────────
+  async function renderAgents() {
+    const agents = await api("/api/profiles");
+    floatState.agents = agents;
+    syncFloatAgentSelect();
+    const grid = $("#agents-grid");
+    grid.innerHTML = "";
+    if (!agents.length) {
+      grid.append(el("div", { class: "muted" }, "No profiles found. Run `bajaclaw init` to create one."));
+      return;
+    }
+    for (const a of agents) {
+      const live = a.running || (a.lastCycleAt && (Date.now() - new Date(a.lastCycleAt).getTime() < 300000));
+      const lastTask = a.lastCycle?.task ? String(a.lastCycle.task).slice(0, 100) : null;
+      const lastMeta = a.lastCycle ? [
+        a.lastCycle.status === "ok" ? "ok" : "err",
+        a.lastCycle.cost_usd != null ? usd(a.lastCycle.cost_usd) : null,
+        a.lastCycle.turns != null ? a.lastCycle.turns + "t" : null,
+      ].filter(Boolean).join(" · ") : null;
+
+      const taskInputId = "qi-" + a.name;
+      const runBtn = el("button", {
+        class: "btn btn-secondary",
+        style: "font-size:11px; padding:5px 10px; white-space:nowrap; flex-shrink:0;",
+        onclick: async (e) => {
+          const inp = document.getElementById(taskInputId);
+          const task = inp.value.trim();
+          if (!task) return;
+          inp.value = "";
+          const btn = e.currentTarget;
+          btn.textContent = "Queued!";
+          btn.disabled = true;
+          try {
+            await api("/api/profile/" + encodeURIComponent(a.name) + "/task", { method: "POST", body: { task } });
+          } catch (err) { btn.textContent = "Error"; }
+          setTimeout(() => { btn.textContent = "Run"; btn.disabled = false; }, 2000);
+        },
+      }, "Run");
+
+      const taskInput = el("input", {
+        class: "input",
+        id: taskInputId,
+        placeholder: "Quick task...",
+        style: "font-size:11px; padding:5px 8px; height:30px;",
+      });
+      taskInput.addEventListener("keydown", (e) => { if (e.key === "Enter") runBtn.click(); });
+
+      grid.append(el("div", { class: "agent-card" }, [
+        el("div", { class: "agent-card-header" }, [
+          el("div", { class: "agent-status-dot" + (live ? " live" : "") }),
+          el("div", { class: "agent-card-name" }, a.agentName ?? a.name),
+          a.running
+            ? el("span", { class: "agent-running-badge" }, [el("span", { class: "agent-running-dot" }), "running"])
+            : el("span", { class: "badge badge-muted mono" }, a.name),
+        ]),
+        el("div", { class: "agent-card-stats" }, [
+          el("div", { class: "agent-stat" }, [el("span", { class: "agent-stat-label" }, "Model"), el("span", { class: "agent-stat-value mono" }, a.model)]),
+          el("div", { class: "agent-stat" }, [el("span", { class: "agent-stat-label" }, "Cycles today"), el("span", { class: "agent-stat-value" }, String(a.cyclesDay))]),
+          el("div", { class: "agent-stat" }, [el("span", { class: "agent-stat-label" }, "Pending"), el("span", { class: "agent-stat-value" }, String(a.pendingTasks))]),
+          el("div", { class: "agent-stat" }, [el("span", { class: "agent-stat-label" }, "Last cycle"), el("span", { class: "agent-stat-value" }, a.lastCycleAt ? ago(a.lastCycleAt) : "never")]),
+        ]),
+        lastTask ? el("div", { class: "agent-card-last-task" }, [
+          el("span", { class: "badge " + (a.lastCycle?.status === "ok" ? "badge-success" : "badge-danger"), style: "margin-right:6px;" }, a.lastCycle?.status ?? "-"),
+          lastMeta ? el("span", { class: "mono", style: "margin-right:6px; font-size:10px; color:var(--text-tertiary);" }, lastMeta) : null,
+          lastTask,
+        ]) : null,
+        el("div", { class: "agent-card-task-row" }, [taskInput, runBtn]),
+        el("div", { class: "agent-card-footer" }, [
+          el("button", {
+            class: "btn btn-ghost",
+            style: "font-size:11px; padding:5px 10px;",
+            onclick: () => {
+              floatState.selectedAgent = a.name;
+              if ($("#floatbox-agent-sel")) $("#floatbox-agent-sel").value = a.name;
+              if (floatState.minimized) toggleFloatbox();
+              setTimeout(() => $("#floatbox-input")?.focus(), 50);
+            },
+          }, "Chat"),
+        ]),
+      ]));
+    }
+  }
+
+  // ── Floating chatbox ─────────────────────────────────────────
+  const floatState = {
+    minimized: true,
+    selectedAgent: state.profile,
+    agents: [],
+    chat: JSON.parse(localStorage.getItem("bajaclaw-floatchat") ?? "[]"),
+    sending: false,
+  };
+
+  function syncFloatAgentSelect() {
+    const sel = $("#floatbox-agent-sel");
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = "";
+    for (const a of floatState.agents) {
+      const opt = document.createElement("option");
+      opt.value = a.name;
+      opt.textContent = a.agentName ?? a.name;
+      if (a.name === (cur || floatState.selectedAgent || state.profile)) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    if (sel.value) floatState.selectedAgent = sel.value;
+  }
+
+  async function loadFloatAgents() {
+    try {
+      floatState.agents = await api("/api/profiles");
+      syncFloatAgentSelect();
+    } catch (e) { console.error("loadFloatAgents:", e); }
+  }
+
+  function toggleFloatbox() {
+    floatState.minimized = !floatState.minimized;
+    const fb = $("#floatbox");
+    fb.classList.toggle("minimized", floatState.minimized);
+    const btn = $("#floatbox-min-btn");
+    btn.innerHTML = floatState.minimized
+      ? `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>`
+      : `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>`;
+  }
+
+  function renderFloatChat() {
+    const chat = $("#floatbox-chat");
+    chat.innerHTML = "";
+    if (!floatState.chat.length) {
+      chat.append(el("div", { class: "floatbox-msg floatbox-msg-system" }, "Type a message or /help for commands"));
+      return;
+    }
+    for (const m of floatState.chat) {
+      const cls = m.role === "user" ? "floatbox-msg-user"
+        : m.role === "system" ? "floatbox-msg-system"
+        : m.error ? "floatbox-msg-error" : "floatbox-msg-agent";
+      const msgEl = el("div", { class: "floatbox-msg " + cls }, m.text);
+      chat.append(msgEl);
+      if (m.meta) msgEl.append(el("div", { class: "floatbox-msg-meta" }, m.meta));
+    }
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function appendFloatMsg(entry) {
+    floatState.chat.push(entry);
+    if (floatState.chat.length > 100) floatState.chat = floatState.chat.slice(-100);
+    localStorage.setItem("bajaclaw-floatchat", JSON.stringify(floatState.chat));
+    renderFloatChat();
+  }
+
+  function handleFloatCommand(cmd) {
+    const parts = cmd.slice(1).trim().split(/\s+/);
+    const name = parts[0].toLowerCase();
+    const args = parts.slice(1).join(" ");
+    if (name === "help" || name === "h") {
+      appendFloatMsg({ role: "system", text: "Commands:\n/agent <name>    switch active agent\n/agents          list all agents\n/status          active agent info\n/run <task>      enqueue task (non-blocking)\n/task @<a> <t>   enqueue on specific agent\n/clear           clear history\n\nOr just type to chat with the active agent." });
+      return true;
+    }
+    if (name === "clear") {
+      floatState.chat = [];
+      localStorage.removeItem("bajaclaw-floatchat");
+      renderFloatChat();
+      return true;
+    }
+    if (name === "agents" || name === "list") {
+      const lines = floatState.agents.map((a) =>
+        (a.name === floatState.selectedAgent ? "* " : "  ") + (a.agentName ?? a.name) + " (" + a.name + ") - " + a.cyclesDay + " cycles today, " + a.pendingTasks + " pending"
+      ).join("\n");
+      appendFloatMsg({ role: "system", text: lines || "no agents found" });
+      return true;
+    }
+    if (name === "agent" || name === "switch") {
+      if (!args) { appendFloatMsg({ role: "system", text: "Usage: /agent <profile-name>" }); return true; }
+      const found = floatState.agents.find((a) => a.name === args || (a.agentName ?? "").toLowerCase() === args.toLowerCase());
+      if (!found) { appendFloatMsg({ role: "system", text: 'Agent "' + args + '" not found. Use /agents to list.' }); return true; }
+      floatState.selectedAgent = found.name;
+      if ($("#floatbox-agent-sel")) $("#floatbox-agent-sel").value = found.name;
+      appendFloatMsg({ role: "system", text: "Switched to " + (found.agentName ?? found.name) });
+      return true;
+    }
+    if (name === "status") {
+      const a = floatState.agents.find((x) => x.name === floatState.selectedAgent);
+      if (a) {
+        const lines = [
+          (a.agentName ?? a.name) + " (" + a.name + ")",
+          "Model: " + a.model,
+          "Status: " + (a.running ? "running cycle" : "idle"),
+          "Last cycle: " + (a.lastCycleAt ? ago(a.lastCycleAt) : "never"),
+          "Cycles today: " + a.cyclesDay,
+          "Pending: " + a.pendingTasks,
+        ];
+        if (a.lastCycle?.task) lines.push("Last task: " + String(a.lastCycle.task).slice(0, 120));
+        appendFloatMsg({ role: "system", text: lines.join("\n") });
+      } else {
+        appendFloatMsg({ role: "system", text: "No agent selected" });
+      }
+      return true;
+    }
+    if (name === "run") {
+      if (!args) { appendFloatMsg({ role: "system", text: "Usage: /run <task text>" }); return true; }
+      const target = floatState.selectedAgent || state.profile;
+      (async () => {
+        try {
+          const r = await api("/api/profile/" + encodeURIComponent(target) + "/task", { method: "POST", body: { task: args } });
+          appendFloatMsg({ role: "system", text: "Task queued on " + target + " (id " + r.taskId + ")" });
+        } catch (e) {
+          appendFloatMsg({ role: "system", text: "Failed to queue: " + e.message, error: true });
+        }
+      })();
+      return true;
+    }
+    if (name === "task") {
+      const atMatch = args.match(/^@(\S+)\s+(.+)$/);
+      if (!atMatch) { appendFloatMsg({ role: "system", text: "Usage: /task @<agent> <task text>" }); return true; }
+      const [, agentName, taskText] = atMatch;
+      const found = floatState.agents.find((a) => a.name === agentName || (a.agentName ?? "").toLowerCase() === agentName.toLowerCase());
+      const targetName = found ? found.name : agentName;
+      (async () => {
+        try {
+          const r = await api("/api/profile/" + encodeURIComponent(targetName) + "/task", { method: "POST", body: { task: taskText } });
+          appendFloatMsg({ role: "system", text: "Task queued on " + targetName + " (id " + r.taskId + ")" });
+        } catch (e) {
+          appendFloatMsg({ role: "system", text: "Failed to queue: " + e.message, error: true });
+        }
+      })();
+      return true;
+    }
+    return false;
+  }
+
+  async function sendFloatMessage() {
+    if (floatState.sending) return;
+    const input = $("#floatbox-input");
+    const txt = input.value.trim();
+    if (!txt) return;
+    input.value = "";
+    input.style.height = "auto";
+    if (txt.startsWith("/") && handleFloatCommand(txt)) return;
+    const target = floatState.selectedAgent || state.profile;
+    appendFloatMsg({ role: "user", text: txt });
+    const thinkEl = el("div", { class: "floatbox-msg floatbox-msg-system" }, "running cycle...");
+    $("#floatbox-chat").append(thinkEl);
+    $("#floatbox-chat").scrollTop = $("#floatbox-chat").scrollHeight;
+    floatState.sending = true;
+    $("#floatbox-send").disabled = true;
+    try {
+      const endpoint = target === state.profile ? "/api/chat" : "/api/profile/" + encodeURIComponent(target) + "/chat";
+      const r = await api(endpoint, { method: "POST", body: { message: txt } });
+      thinkEl.remove();
+      if (r.ok) {
+        const meta = [r.model?.replace(/^claude-/, ""), (r.durationMs / 1000).toFixed(1) + "s", r.costUsd != null ? usd(r.costUsd) : "", r.turns != null ? r.turns + " turn" + (r.turns === 1 ? "" : "s") : ""].filter(Boolean).join(" · ");
+        appendFloatMsg({ role: "agent", text: r.text, meta });
+      } else {
+        appendFloatMsg({ role: "agent", text: r.error ?? "cycle failed", error: true });
+      }
+    } catch (e) {
+      thinkEl.remove();
+      appendFloatMsg({ role: "agent", text: "error: " + e.message, error: true });
+    } finally {
+      floatState.sending = false;
+      $("#floatbox-send").disabled = false;
+      input.focus();
+    }
+  }
+
+  $("#floatbox-header").addEventListener("click", (e) => {
+    if (e.target.closest(".floatbox-controls")) return;
+    toggleFloatbox();
+  });
+  $("#floatbox-min-btn").addEventListener("click", (e) => { e.stopPropagation(); toggleFloatbox(); });
+  $("#floatbox-agent-sel").addEventListener("change", (e) => { floatState.selectedAgent = e.target.value; });
+  $("#floatbox-send").addEventListener("click", sendFloatMessage);
+  $("#floatbox-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendFloatMessage(); }
+  });
+  $("#floatbox-input").addEventListener("input", function() {
+    this.style.height = "auto";
+    this.style.height = Math.min(this.scrollHeight, 100) + "px";
+  });
+
+  renderFloatChat();
+  loadFloatAgents();
 
   async function renderOverview() {
     const [summary, cycles, tasks] = await Promise.all([
@@ -878,6 +1274,7 @@
   async function refreshForView(name) {
     try {
       if (name === "overview") await renderOverview();
+      if (name === "agents") await renderAgents();
       if (name === "cycles") await renderCyclesFull();
       if (name === "memory") await renderMemory();
       if (name === "tasks") await renderTasksFull();

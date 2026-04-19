@@ -1,9 +1,10 @@
 import { createServer, IncomingMessage, ServerResponse } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { loadConfig, saveConfig } from "../config.js";
+import { bajaclawHome } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
 import { runCycle } from "../agent.js";
@@ -167,6 +168,83 @@ async function dispatchApi(
       inactive: !!runtimeSkipReason(s),
       inactiveReason: runtimeSkipReason(s),
     })));
+    return;
+  }
+
+  // GET /api/profiles - list all profiles with summary stats.
+  if (url === "/api/profiles" && method === "GET") {
+    const profilesDir = join(bajaclawHome(), "profiles");
+    const profiles: object[] = [];
+    if (existsSync(profilesDir)) {
+      const entries = readdirSync(profilesDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const name = entry.name;
+        try {
+          const cfg = loadConfig(name);
+          const pdb = openDb(name);
+          const since24 = new Date(Date.now() - 86400000).toISOString();
+          const lastCycle = pdb.prepare(
+            "SELECT id, started_at, finished_at, status, task, cost_usd, turns FROM cycles ORDER BY id DESC LIMIT 1"
+          ).get() as Record<string, unknown> | undefined;
+          const pending = (pdb.prepare("SELECT COUNT(*) c FROM tasks WHERE status='pending'").get() as { c: number }).c;
+          const cyclesDay = (pdb.prepare("SELECT COUNT(*) c FROM cycles WHERE status='ok' AND started_at > ?").get(since24) as { c: number }).c;
+          const running = (pdb.prepare("SELECT COUNT(*) c FROM cycles WHERE status='running'").get() as { c: number }).c > 0;
+          pdb.close();
+          profiles.push({
+            name,
+            agentName: cfg.name,
+            model: String(cfg.model ?? "auto"),
+            lastCycle: lastCycle ?? null,
+            lastCycleAt: lastCycle ? (lastCycle.started_at as string) : null,
+            pendingTasks: pending,
+            cyclesDay,
+            running,
+          });
+        } catch { /* skip invalid profiles */ }
+      }
+    }
+    return json(res, profiles);
+  }
+
+  // POST /api/profile/:name/chat - run a cycle on any profile from the UI.
+  const profileChatMatch = url.match(/^\/api\/profile\/([^/]+)\/chat$/);
+  if (profileChatMatch && method === "POST") {
+    const targetProfile = decodeURIComponent(profileChatMatch[1] ?? "");
+    const body = await readJson(req) as { message?: string };
+    const task = (body.message ?? "").trim();
+    if (!task) { json(res, { error: "empty message" }, 400); return; }
+    const out = await runCycle({ profile: targetProfile, task });
+    json(res, {
+      ok: out.ok,
+      text: out.text,
+      cycleId: out.cycleId,
+      costUsd: out.costUsd,
+      inputTokens: out.inputTokens,
+      outputTokens: out.outputTokens,
+      turns: out.turns,
+      durationMs: out.durationMs,
+      model: out.model,
+      tier: out.tier,
+      error: out.error,
+    });
+    return;
+  }
+
+  // POST /api/profile/:name/task - enqueue a task without waiting.
+  const profileTaskMatch = url.match(/^\/api\/profile\/([^/]+)\/task$/);
+  if (profileTaskMatch && method === "POST") {
+    const targetProfile = decodeURIComponent(profileTaskMatch[1] ?? "");
+    const body = await readJson(req) as { task?: string; priority?: string };
+    const task = (body.task ?? "").trim();
+    if (!task) { json(res, { error: "empty task" }, 400); return; }
+    const tdb = openDb(targetProfile);
+    try {
+      const result = tdb.prepare(
+        "INSERT INTO tasks (created_at, priority, status, body, source) VALUES (?, ?, 'pending', ?, 'dashboard')"
+      ).run(new Date().toISOString(), body.priority ?? "normal", task);
+      json(res, { ok: true, taskId: result.lastInsertRowid });
+    } finally { tdb.close(); }
     return;
   }
 
