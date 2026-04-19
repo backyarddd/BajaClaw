@@ -163,22 +163,32 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       && (picked.tier === "sonnet" || picked.tier === "opus");
 
     // Fire an intake ack before the main cycle starts. A fast haiku
-    // turn paraphrases what the user asked and states a plan, so the
-    // user sees confirmation within a second or two instead of
-    // waiting for the full sonnet/opus run. Fire-and-forget is NOT
-    // safe - if it lands after the final reply it looks backwards -
-    // so we await, but the call is cheap (haiku, ~50 words, <2s).
+    // turn replies to the user in the agent's own voice so they see
+    // confirmation within a second or two instead of waiting for the
+    // full sonnet/opus run. Awaited (not fire-and-forget) so it
+    // can't land after the final reply and look backwards. Cheap:
+    // haiku, <40 words, <2s.
     if (liveFeedback) {
       try {
-        const ackPrompt = `You are BajaClaw's intake assistant. Another agent will do the actual work - you do NOT do it. Your job: in 1-3 short sentences, paraphrase what the user asked and state the plan you understand.
+        const identity = systemDocs.soul.trim();
+        const ackPrompt = `${identity ? `${identity}\n\n---\n\n` : ""}The user just sent you the message below in chat. You are about to start working on it, but that work happens in a separate step. Right now, just reply to them the way you normally would in chat. One short, natural message. Sound like a person, not a form letter.
 
-Rules:
-- Max 50 words total
-- No em dashes, no emojis
-- No preamble ("Sure!", "Got it!"). Start with the paraphrase.
-- Format: "Heard: <paraphrase>. Plan: <1-3 bullets or short clauses>."
+Do:
+- Talk like you're texting them back. Casual, warm, concise.
+- Show you understood. If it's multi-part, naturally weave it into a sentence.
+- Max ~35 words. Shorter is fine. Shorter is usually better.
 
-User's message:
+Do NOT:
+- Start with "Heard:", "Plan:", "Got it!", "Sure!", "Alright!", or any canned opener
+- Use em dashes (use a comma, colon, or rephrase)
+- Use emojis
+- Restate every detail back at them verbatim
+- Promise a timeline ("I'll be right back", "give me a minute")
+- Use bullets or headings - write prose
+
+Just the reply. Nothing else.
+
+The user's message:
 ${task}`;
         const ack = await runOnce(ackPrompt, {
           model: "claude-haiku-4-5",
@@ -453,26 +463,29 @@ interface AssembleInput {
 }
 
 export function buildProgressInstructions(): string {
-  return `# Live Progress Updates
+  return `# Talking to the user while you work
 
-The user sent this task from a chat channel and is watching in real time. An intake acknowledgment has already been sent to them. While you work, keep them in the loop with \`bajaclaw say "<text>"\` from your Bash tool.
+This task came in from chat. They already got a quick reply from you acknowledging it. While you work, keep them in the loop by running \`bajaclaw say "<text>"\` from your Bash tool. It sends the text straight to their chat.
 
-When to call it:
-- After you finish a major phase and are moving to the next one
-- If a step will take noticeably long (large search, long command) and silence would feel like a hang
+Tone: same voice as the rest of your replies. You're texting the person who asked you to do a thing. Not narrating a build log. Not status-reporting.
 
-When NOT to call it:
-- Short or trivial tasks. One final reply is enough.
-- Every single tool call. Only milestones.
-- To repeat what the intake ack already said.
+Good moments to send one:
+- You just wrapped a real milestone and are moving on ("alright, scheduler's done, moving to the telegram handler")
+- You hit something surprising they'd want to know ("oh heads up, the migration is dirty, gonna fix it before continuing")
+- Something's about to take a bit and silence would feel off ("running the full test suite, this'll take a sec")
 
-Format rules for each \`say\`:
-- Under 20 words
-- One line, no bullet lists, no headings
-- No em dashes, no emojis
-- Past tense for what you finished, present for what you're on: "Built the endpoint. Wiring it into the dashboard now."
+Don't send one for:
+- Short/simple tasks. The final reply covers it.
+- Every tool call. Only when it actually matters to them.
+- Restating what you already said in the ack.
 
-Your final reply to the user is separate - it lands at cycle end and is what ends the typing indicator. The \`bajaclaw say\` pings are mid-flight extras.`;
+Per-message style:
+- Under 20 words. One short line of prose.
+- Lowercase is fine if the rest of your voice is lowercase. Match how you normally talk.
+- No "Update:", "Status:", "Progress:" prefixes. Just say the thing.
+- No em dashes, no emojis.
+
+Your final reply lands at cycle end and ends the typing indicator. These pings are mid-flight.`;
 }
 
 export function assemblePrompt(input: AssembleInput): string {

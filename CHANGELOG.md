@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.14.15
+
+**Channel feedback sounds like a person now.**
+
+### Fixes
+
+1. **Intake ack drops the "Heard: X. Plan: Y." template.** 0.14.14
+   shipped with a rigid structured ack that felt robotic. The intake
+   haiku call now receives the profile's SOUL.md as identity context
+   and is prompted to reply the way the user would actually text
+   back - one natural short message, same voice as the rest of the
+   agent's chat replies. Bullet lists, section headings, and canned
+   openers ("Sure!", "Got it!") are explicitly out.
+2. **Progress pings read like chat messages, not status lines.** The
+   `bajaclaw say` prompt block was rewritten to describe tone
+   ("you're texting the person who asked you to do a thing, not
+   narrating a build log") and drops the formulaic "Built X. Wiring
+   Y now." examples. Past/present tense is no longer mandated; the
+   agent matches its own voice.
+
 ## 0.14.14
 
 **Live feedback on channel cycles. Agent confirms what it heard,
