@@ -1,6 +1,6 @@
 {
   "name": "bajaclaw",
-  "version": "0.14.23",
+  "version": "0.14.24",
   "description": "BajaClaw - autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {
@@ -43,7 +43,11 @@
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
     "execa": "^9.5.0",
+    "ink": "^7.0.1",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
     "ora": "^8.1.0",
+    "react": "^19.2.5",
     "yaml": "^2.8.3"
   },
   "optionalDependencies": {
@@ -54,6 +58,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.0",
     "@types/node-telegram-bot-api": "^0.64.10",
+    "@types/react": "^19.2.14",
     "tsx": "^4.21.0",
     "typescript": "^5.9.0"
   }
