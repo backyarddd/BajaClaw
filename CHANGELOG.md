@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.14.25
+
+**Chat UI polish: slash autocomplete, dedupe'd status bar, input
+history, context-aware hints.**
+
+### Features
+
+1. **Slash-command autocomplete.** Typing `/` opens a dropdown under
+   the composer listing every command with its usage hint and args.
+   Typing more filters the list. `↑/↓` selects, `Tab` completes to
+   the highlighted command (adds a trailing space so args flow
+   naturally), `Enter` submits, `Esc` dismisses. Shows up to 8 at a
+   time with a "… N more" footer if more match.
+2. **Input history.** `↑` and `↓` recall prior submitted inputs when
+   the autocomplete isn't open. Scrolls through a bounded ring
+   (newest-last, 100 entries max, consecutive dupes dropped). In-
+   progress input is preserved when scrolling and restored when you
+   hit `↓` past the newest entry.
+3. **Status bar no longer duplicates the header.** Intro already
+   shows model / effort / ctx at mount; the status bar now shows
+   only session-level totals (turns, tokens, cost) and a 📎 badge
+   when attachments are queued. Model or effort only re-appear in the
+   status bar if they've changed mid-session via `/model` or
+   `/effort` — otherwise they're redundant.
+4. **Context-aware hint footer.** Dim line under the status bar that
+   changes its shortcut cheatsheet based on state: `↑↓ recall · /
+   commands · Ctrl-D quit` when idle, `Enter send · ←→ edit · Ctrl-D
+   quit` while typing free text, `↑↓ select · Tab complete · Enter
+   submit · Esc dismiss` while the autocomplete is open.
+
 ## 0.14.24
 
 **Chat UI rewritten on React + Ink. Bordered composer box, live
