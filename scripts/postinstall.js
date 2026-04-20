@@ -1,13 +1,17 @@
 #!/usr/bin/env node
-// npm postinstall - global-install scaffold + install-status notice.
+// npm postinstall - global-install scaffold + interactive first-run setup.
 //
 // npm v7+ captures postinstall stdout by default (`foreground-scripts: false`),
-// so the full welcome screen runs on the FIRST `bajaclaw` invocation
-// instead (see src/cli.ts first-run hook). This script stays quick and
-// quiet: scaffold the default profile in silent mode, verify critical
-// native deps, and emit a single-line notice to stderr (usually visible).
+// which breaks normal interactive prompts. We work around that on unix
+// by opening `/dev/tty` directly and piping the setup wizard through
+// it - that bypasses npm's stdout capture and talks to the user's real
+// terminal. On Windows, CI, or when /dev/tty is unavailable, we fall
+// back to a silent scaffold and point the user at `bajaclaw setup`.
+// The first-run hook in `src/cli.ts` also launches the wizard on the
+// first interactive `bajaclaw` invocation, so the wizard can't be
+// missed even if the postinstall path falls back to silent.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, openSync, closeSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,9 +64,36 @@ try {
 const claudeCheck = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["claude"], { encoding: "utf8" });
 const claudeOK = claudeCheck.status === 0 && claudeCheck.stdout.trim().length > 0;
 
-// --- Silent profile scaffold ------------------------------------------
+// --- Interactive wizard (unix) or silent scaffold (fallback) ---------
+//
+// On unix, try to open /dev/tty and run the full interactive wizard
+// through it. npm captures our stdout/stderr, but /dev/tty is the
+// user's real controlling terminal and bypasses that capture. If
+// /dev/tty can't be opened (e.g. bare container, cron, noninteractive
+// ssh), fall back to a silent scaffold and let `bajaclaw`'s first-run
+// hook run the wizard on the next interactive invocation.
 const launcher = join(root, "bin", "bajaclaw.js");
-if (existsSync(launcher) && sqliteOK) {
+let interactiveRan = false;
+if (existsSync(launcher) && sqliteOK && process.platform !== "win32") {
+  let ttyFd = null;
+  try {
+    ttyFd = openSync("/dev/tty", "r+");
+  } catch { /* no controlling terminal */ }
+  if (ttyFd !== null) {
+    process.stderr.write("\n\x1b[32m✓\x1b[0m BajaClaw v" + version + " installed. Starting interactive setup...\n\n");
+    const r = spawnSync(process.execPath, [launcher, "setup", "--interactive"], {
+      stdio: [ttyFd, ttyFd, ttyFd],
+      env: { ...process.env, BAJACLAW_NO_UPDATE_NOTICE: "1" },
+      timeout: 10 * 60_000,
+    });
+    try { closeSync(ttyFd); } catch { /* ignore */ }
+    interactiveRan = r.status === 0;
+  }
+}
+
+// Fallback path: silent scaffold only. The first `bajaclaw` run on an
+// interactive terminal will fire the wizard then.
+if (!interactiveRan && existsSync(launcher) && sqliteOK) {
   try {
     spawnSync(process.execPath, [launcher, "setup", "--silent", "--non-interactive"], {
       stdio: "ignore",
@@ -82,7 +113,11 @@ const green = c(32), yellow = c(33), red = c(31), bold = c(1), dim = c(90);
 
 const lines = [];
 lines.push("");
-lines.push(green("✓") + ` BajaClaw v${version} installed. Run ` + bold("bajaclaw") + " to finish setup.");
+if (interactiveRan) {
+  lines.push(green("✓") + ` BajaClaw v${version} installed and set up. Run ` + bold("bajaclaw chat") + " to start.");
+} else {
+  lines.push(green("✓") + ` BajaClaw v${version} installed. Run ` + bold("bajaclaw") + " to finish interactive setup.");
+}
 
 if (!sqliteOK) {
   lines.push("");
