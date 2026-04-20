@@ -48,6 +48,39 @@ import type { AgentConfig, ChatTurn } from "../types.js";
 
 const HISTORY_LIMIT = 10;
 
+// Slash command catalog, driven the autocomplete popover. The `name`
+// is the token typed after the `/`; `hint` is what each dropdown row
+// shows; `args` is an optional usage suffix (e.g. "[200k|1m]").
+interface SlashDef {
+  name: string;
+  aliases?: string[];
+  hint: string;
+  args?: string;
+}
+
+const SLASH_COMMANDS: SlashDef[] = [
+  { name: "help", aliases: ["?"], hint: "list all commands" },
+  { name: "exit", aliases: ["quit", "q"], hint: "end the session" },
+  { name: "clear", hint: "clear session history (memory DB untouched)" },
+  { name: "stats", hint: "session totals + 5h/24h/7d usage" },
+  { name: "context", aliases: ["ctx"], hint: "show or set context window", args: "[200k|1m]" },
+  { name: "model", hint: "show or set session model", args: "[auto|haiku|sonnet|opus]" },
+  { name: "effort", hint: "show or set effort level", args: "[low|medium|high|xhigh|max]" },
+  { name: "compact", hint: "run memory compaction now" },
+  { name: "image", aliases: ["img"], hint: "queue an image for your next message", args: "<path>" },
+  { name: "video", aliases: ["vid"], hint: "extract video frames and queue them", args: "<path>" },
+  { name: "history", hint: "reminder pointer to the dashboard" },
+];
+
+// Return the commands that match the currently typed prefix. `/` on
+// its own shows everything; `/mo` narrows to `model`.
+function matchCommands(token: string): SlashDef[] {
+  const lower = token.toLowerCase();
+  return SLASH_COMMANDS.filter((c) =>
+    c.name.startsWith(lower) || (c.aliases?.some((a) => a.startsWith(lower)) ?? false),
+  );
+}
+
 const MODEL_ALIAS: Record<string, string> = {
   auto: AUTO,
   haiku: HAIKU,
@@ -147,6 +180,9 @@ export function ChatApp({
   const [thinkingStart, setThinkingStart] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([]);
+  // Ring of submitted inputs for ↑/↓ recall. Newest-last, slash
+  // commands included so users can re-run `/stats` with one keystroke.
+  const [commandHistory, setCommandHistory] = useState<string[]>([]);
 
   const historyRef = useRef<ChatTurn[]>([]);
   const statsRef = useRef<SessionStats>({
@@ -191,6 +227,15 @@ export function ChatApp({
     const trimmed = rawInput.trim();
     setInput("");
     if (!trimmed) return;
+
+    // Record in the input-history ring (for ↑/↓ recall). Dedupe
+    // consecutive duplicates so repeated Enters don't bloat the ring.
+    setCommandHistory((prev) => {
+      if (prev[prev.length - 1] === trimmed) return prev;
+      const next = [...prev, trimmed];
+      // Keep a bounded ring so long sessions don't leak.
+      return next.length > 100 ? next.slice(next.length - 100) : next;
+    });
 
     // Log the user input as its own turn entry so it lands in scrollback.
     appendTurn({ id: nextId(turnIdRef), kind: "user", text: trimmed });
@@ -316,14 +361,19 @@ export function ChatApp({
           onSubmit={handleSubmit}
           pendingAttachments={pendingAttachments}
           active={!thinking}
+          commandHistory={commandHistory}
         />
       )}
 
       <StatusBar
-        cfg={cfg}
-        modelOverride={modelOverride}
         stats={statsRef.current}
+        pendingAttachments={pendingAttachments.length}
+        modelOverride={modelOverride}
+        initialModel={initialCfg.model}
+        initialEffort={initialCfg.effort}
+        cfg={cfg}
       />
+      <HintFooter hasInput={input.length > 0} isSlash={input.startsWith("/")} />
     </Box>
   );
 }
@@ -457,34 +507,127 @@ interface ComposerProps {
   onSubmit: (v: string) => void | Promise<void>;
   pendingAttachments: string[];
   active: boolean;
+  commandHistory: string[];
 }
 
-// Single-line input handled by `useInput` directly. We treat `\r`
-// AND `\n` as submit because pty line-discipline can deliver either
-// depending on `icrnl`/`icanon` state; a raw `\n` in a piped/paste
-// stream lands as `key.enter` in ink, a terminal Enter lands as
-// `key.return`. Both mean "submit" for our purposes.
-function Composer({ input, setInput, onSubmit, pendingAttachments, active }: ComposerProps): React.ReactElement {
+// Composer with slash-command autocomplete + input history.
+//
+// - When the input starts with "/", a dropdown of matching commands
+//   renders below the box. Up/Down select, Tab completes to the
+//   highlighted command, Enter submits.
+// - When the input is empty OR doesn't start with "/", Up/Down cycles
+//   through prior submitted inputs (like bash history).
+//
+// We own the cursor locally so arrow-left/right move within the line
+// without the parent re-rendering. `input`/`setInput` are still
+// controlled externally so the parent can clear on submit.
+function Composer({ input, setInput, onSubmit, pendingAttachments, active, commandHistory }: ComposerProps): React.ReactElement {
   const [cursor, setCursor] = useState<number>(input.length);
+  const [suggestIdx, setSuggestIdx] = useState<number>(0);
+  const [historyIdx, setHistoryIdx] = useState<number | null>(null);
+  const draftRef = useRef<string>(""); // remembers in-progress input when scrolling history
+
+  // Reset cursor/selection when the parent clears the input (after submit).
+  useEffect(() => {
+    if (input === "") {
+      setCursor(0);
+      setSuggestIdx(0);
+      setHistoryIdx(null);
+      draftRef.current = "";
+    }
+  }, [input]);
+
+  // Compute autocomplete matches based on whether input looks like a slash token.
+  const slashToken = input.startsWith("/") ? input.slice(1).split(/\s/)[0] ?? "" : null;
+  const showSuggest = slashToken !== null;
+  const matches = showSuggest ? matchCommands(slashToken) : [];
+  const visibleMatches = matches.slice(0, 8);
+  const hasSuggestions = showSuggest && visibleMatches.length > 0;
+  // Clamp selected index when the match list shrinks.
+  useEffect(() => {
+    if (suggestIdx >= visibleMatches.length && visibleMatches.length > 0) {
+      setSuggestIdx(0);
+    }
+  }, [suggestIdx, visibleMatches.length]);
+
+  const applySuggestion = (cmd: SlashDef): void => {
+    const next = `/${cmd.name} `;
+    setInput(next);
+    setCursor(next.length);
+    setSuggestIdx(0);
+    setHistoryIdx(null);
+  };
 
   useInput((rawInput, key) => {
     // ctrl-c / ctrl-d are handled one level up (App).
     if (key.ctrl && (rawInput === "c" || rawInput === "d")) return;
 
-    // Enter handling. Ink maps a bare `\r` keypress to
-    // `key.return=true` (input=""), and a bare `\n` to
-    // `keypress.name="enter"` - but useInput's `key` object does NOT
-    // expose `enter`, so `\n` slips through as regular text. For
-    // robustness AND to handle the multi-byte batches we get in tests
-    // and in some paste/pipe scenarios, we also look at the input
-    // string itself: any embedded `\r`/`\n` is treated as "submit
-    // everything before it, drop the rest". That way a batched
-    // "hello\r" correctly submits "hello".
+    // Enter handling. See v0.14.24 landmine: Ink maps `\r` to
+    // `key.return=true` and `\n` to `name="enter"` which isn't on the
+    // `key` object, so we also scan the raw input for embedded
+    // newlines to survive paste/pty batches.
     if (key.return) {
+      // If the autocomplete is open with an exact-match highlight and
+      // the user has typed nothing past the command name, submit as
+      // the full `/command` rather than forcing them to Tab first.
       onSubmit(input);
       setCursor(0);
+      setSuggestIdx(0);
+      setHistoryIdx(null);
       return;
     }
+
+    // Autocomplete: Tab completes.
+    if (key.tab) {
+      if (hasSuggestions) {
+        const sel = visibleMatches[suggestIdx] ?? visibleMatches[0]!;
+        applySuggestion(sel);
+      }
+      return;
+    }
+
+    // Up/Down: when autocomplete is open, navigate suggestions.
+    // Otherwise cycle through the input-history ring.
+    if (key.upArrow) {
+      if (hasSuggestions) {
+        setSuggestIdx((i) => Math.max(0, i - 1));
+      } else if (commandHistory.length > 0) {
+        if (historyIdx === null) {
+          draftRef.current = input;
+          const next = commandHistory.length - 1;
+          setHistoryIdx(next);
+          const v = commandHistory[next]!;
+          setInput(v);
+          setCursor(v.length);
+        } else if (historyIdx > 0) {
+          const next = historyIdx - 1;
+          setHistoryIdx(next);
+          const v = commandHistory[next]!;
+          setInput(v);
+          setCursor(v.length);
+        }
+      }
+      return;
+    }
+    if (key.downArrow) {
+      if (hasSuggestions) {
+        setSuggestIdx((i) => Math.min(visibleMatches.length - 1, i + 1));
+      } else if (historyIdx !== null) {
+        const next = historyIdx + 1;
+        if (next >= commandHistory.length) {
+          setHistoryIdx(null);
+          setInput(draftRef.current);
+          setCursor(draftRef.current.length);
+        } else {
+          setHistoryIdx(next);
+          const v = commandHistory[next]!;
+          setInput(v);
+          setCursor(v.length);
+        }
+      }
+      return;
+    }
+
     if (key.leftArrow) {
       setCursor((c) => Math.max(0, c - 1));
       return;
@@ -493,42 +636,57 @@ function Composer({ input, setInput, onSubmit, pendingAttachments, active }: Com
       setCursor((c) => Math.min(input.length, c + 1));
       return;
     }
-    if (key.upArrow || key.downArrow || key.tab) return;
     if (key.backspace || key.delete) {
       if (cursor > 0) {
         const next = input.slice(0, cursor - 1) + input.slice(cursor);
         setInput(next);
         setCursor((c) => Math.max(0, c - 1));
+        setHistoryIdx(null);
       }
       return;
     }
-    if (key.escape) return;
+    if (key.escape) {
+      if (hasSuggestions) {
+        // Collapse the autocomplete: clear the `/` prefix so the
+        // popover disappears while preserving what was typed after
+        // the command name (rare, but let's be nice about it).
+        if (input.startsWith("/")) {
+          const afterSpace = input.indexOf(" ");
+          const rest = afterSpace >= 0 ? input.slice(afterSpace + 1) : "";
+          setInput(rest);
+          setCursor(rest.length);
+          setSuggestIdx(0);
+        }
+      }
+      return;
+    }
     if (!rawInput) return;
 
     // Strip bracketed-paste wrappers if the terminal sent them.
     const cleaned = rawInput.replace(/\x1b\[20[01]~/g, "");
     if (!cleaned) return;
 
-    // If the input contains a newline, treat it as submit. Everything
-    // before the newline is appended then submitted; anything after is
-    // dropped (avoids sneaky second-message injection from a paste).
+    // Paste with embedded newline = submit everything before the
+    // newline; drop the rest (avoids second-message injection).
     const nlIndex = cleaned.search(/[\r\n]/);
     if (nlIndex >= 0) {
       const before = cleaned.slice(0, nlIndex);
       const merged = input.slice(0, cursor) + before + input.slice(cursor);
       onSubmit(merged);
       setCursor(0);
+      setSuggestIdx(0);
+      setHistoryIdx(null);
       return;
     }
 
     const next = input.slice(0, cursor) + cleaned + input.slice(cursor);
     setInput(next);
     setCursor((c) => c + cleaned.length);
+    setHistoryIdx(null);
   }, { isActive: active });
 
   // Render the value with an inverse-video block as a fake cursor.
-  const value = input;
-  const display = renderWithCursor(value, cursor, active);
+  const display = renderWithCursor(input, cursor, active);
 
   return (
     <Box flexDirection="column">
@@ -543,6 +701,47 @@ function Composer({ input, setInput, onSubmit, pendingAttachments, active }: Com
         <Text color="cyan">› </Text>
         <Text>{display}</Text>
       </Box>
+      {hasSuggestions && (
+        <SuggestionList matches={visibleMatches} selectedIdx={suggestIdx} total={matches.length} />
+      )}
+    </Box>
+  );
+}
+
+interface SuggestionListProps {
+  matches: SlashDef[];
+  selectedIdx: number;
+  total: number;
+}
+
+function SuggestionList({ matches, selectedIdx, total }: SuggestionListProps): React.ReactElement {
+  // Pad command names to a consistent width so the hints align.
+  const nameWidth = Math.max(...matches.map((m) => m.name.length)) + 1;
+  return (
+    <Box flexDirection="column" marginLeft={1} marginTop={0}>
+      {matches.map((m, i) => {
+        const selected = i === selectedIdx;
+        const prefix = selected ? "▸ " : "  ";
+        const padded = ("/" + m.name).padEnd(nameWidth + 1, " ");
+        return (
+          <Box key={m.name}>
+            <Text color={selected ? "cyan" : undefined} dimColor={!selected}>
+              {prefix}
+            </Text>
+            <Text color={selected ? "cyan" : undefined} bold={selected}>
+              {padded}
+            </Text>
+            {m.args && (
+              <Text dimColor>{m.args} </Text>
+            )}
+            <Text dimColor>{m.hint}</Text>
+          </Box>
+        );
+      })}
+      {total > matches.length && (
+        <Text dimColor>  … {total - matches.length} more. keep typing to narrow.</Text>
+      )}
+      <Text dimColor>  ↑↓ select · Tab complete · Esc dismiss</Text>
     </Box>
   );
 }
@@ -569,21 +768,60 @@ function renderWithCursor(value: string, cursor: number, active: boolean): strin
 interface StatusBarProps {
   cfg: AgentConfig;
   modelOverride: string | undefined;
+  initialModel: string;
+  initialEffort: string;
   stats: SessionStats;
+  pendingAttachments: number;
 }
 
-function StatusBar({ cfg, modelOverride, stats }: StatusBarProps): React.ReactElement {
-  const display = modelOverride ?? cfg.model;
-  const tier = tierFor(display === AUTO ? SONNET : display);
-  const ctxTokens = cfg.contextWindow === "1m" ? CTX_TOKENS_1M : CTX_TOKENS_200K[tier];
-  const ctx = cfg.contextWindow === "1m" ? "1M" : formatNum(ctxTokens);
+// Session-only status. The intro block already shows model/effort/ctx
+// at mount; we only surface those again here when they've changed
+// mid-session (via `/model` or `/effort`). Otherwise the line is pure
+// running totals: turns, tokens, cost, attachment badge.
+function StatusBar({
+  cfg,
+  modelOverride,
+  initialModel,
+  initialEffort,
+  stats,
+  pendingAttachments,
+}: StatusBarProps): React.ReactElement {
+  const currentModel = modelOverride ?? cfg.model;
+  const modelChanged = currentModel !== initialModel;
+  const effortChanged = cfg.effort !== initialEffort;
   const total = stats.inputTokens + stats.outputTokens;
+  const bits: string[] = [];
+  if (modelChanged) bits.push(`model: ${currentModel}`);
+  if (effortChanged) bits.push(`effort: ${cfg.effort}`);
+  bits.push(`${stats.turnCount} turn${stats.turnCount === 1 ? "" : "s"}`);
+  bits.push(`${formatNum(total)} tok`);
+  bits.push(`$${stats.costUsd.toFixed(4)}`);
   return (
     <Box>
-      <Text dimColor>
-        {` ${display} · ${cfg.effort} · ctx ${ctx} · `}
-        {stats.turnCount} turn{stats.turnCount === 1 ? "" : "s"} · {formatNum(total)} tok · ${stats.costUsd.toFixed(4)}
-      </Text>
+      <Text dimColor>{" " + bits.join(" · ")}</Text>
+      {pendingAttachments > 0 && (
+        <Text color="cyan"> · 📎 {pendingAttachments}</Text>
+      )}
+    </Box>
+  );
+}
+
+// ── Hint footer ────────────────────────────────────────────────────
+
+function HintFooter({ hasInput, isSlash }: { hasInput: boolean; isSlash: boolean }): React.ReactElement {
+  // Change hints based on context so they actually feel useful rather
+  // than being a static clutter line.
+  let hint: string;
+  if (isSlash) {
+    hint = "↑↓ select · Tab complete · Enter submit · Esc dismiss";
+  } else if (hasInput) {
+    hint = "Enter send · ←→ edit · Ctrl-D quit";
+  } else {
+    hint = "↑↓ recall · / commands · Ctrl-D quit";
+  }
+  return (
+    <Box>
+      <Text dimColor>{" " + hint}</Text>
     </Box>
   );
 }
