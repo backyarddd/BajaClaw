@@ -16,7 +16,21 @@ import { currentVersion } from "../updater.js";
 import type { AgentConfig, ChannelConfig } from "../types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DASHBOARD_HTML = join(__dirname, "..", "..", "src", "dashboard.html");
+
+// Candidate locations for dashboard.html, resolved per-request so HTML
+// edits hot-reload (see `sendHtml` below — no cache on the body).
+//
+// - When running from the dev checkout, the TypeScript source sits in
+//   `src/` while the compiled JS lands in `dist/`. We prefer
+//   `src/dashboard.html` so unsaved edits in the checkout land in the
+//   served page on the next refresh, no build step needed.
+// - The npm tarball only ships `dist/` (see package.json `files`), so
+//   we also look under `dist/`. `scripts/copy-static.js` copies
+//   `src/dashboard.html` into `dist/` at build time.
+const DASHBOARD_HTML_CANDIDATES = [
+  join(__dirname, "..", "..", "src", "dashboard.html"),
+  join(__dirname, "..", "dashboard.html"),
+];
 
 // Daemon start time - when the dashboard starts in-process, we capture
 // it for the /api/status uptime readout.
@@ -378,11 +392,18 @@ function json(res: ServerResponse, data: unknown, status = 200): void {
 }
 
 function sendHtml(res: ServerResponse): void {
-  const body = existsSync(DASHBOARD_HTML)
-    ? readFileSync(DASHBOARD_HTML, "utf8")
-    : fallbackHtml();
+  // Re-resolved every request. Supports hot-reloading HTML edits in
+  // the dev checkout (no daemon restart needed) and still works from
+  // the npm package where the file is shipped under `dist/`.
+  let body: string | undefined;
+  for (const path of DASHBOARD_HTML_CANDIDATES) {
+    if (existsSync(path)) {
+      body = readFileSync(path, "utf8");
+      break;
+    }
+  }
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-  res.end(body);
+  res.end(body ?? fallbackHtml());
 }
 
 function fallbackHtml(): string {
