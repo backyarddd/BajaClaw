@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.14.20
+
+**README rewrite.** Cut from 649 lines to ~210. Shorter prose, first
+person, instructions before prose, detail pushed to `docs/`. Every
+feature section links out to the matching doc file. Zero em dashes.
+No code changes in this release.
+
+## 0.14.19
+
+**Error logging and timeout handling across the codebase.**
+
+### Fixes
+
+1. **Silent failures become visible.** `config.ts` throws with JSON
+   parse error detail. `db.ts` logs migration failures before
+   re-throwing. `memory/extract.ts` and `memory/compact.ts` throw on
+   backend failure so the caller logs it instead of swallowing it.
+   `mcp/consumer.ts` logs JSON parse errors in MCP configs to stderr
+   instead of silently falling back to empty. `skills/loader.ts` logs
+   skill parse errors instead of silently skipping them.
+   `skills/auto-skiller.ts` includes backend error detail in the
+   synth-fail log line. `channels/gateway.ts` logs attachment
+   download failures for photos, docs, and videos.
+2. **Cycle-subprocess timeout errors surface cleanly.** `claude.ts`
+   now detects execa's `timedOut` flag and emits a clear message
+   naming the configured timeout and pointing at `cycleTimeoutMs` in
+   `config.json`. Previously the timeout looked like a generic
+   "backend exited N" with no hint that the cap was hit.
+3. **`cycleTimeoutMs` is now a real config knob.** Defaults to
+   600000ms (10 min). Increase for tasks that run long shell
+   commands or installs.
+4. **Daemon fork handles missing pid.** `commands/daemon.ts` handles
+   the edge case where `child.pid` is undefined on spawn failure
+   instead of writing "undefined" to the pid file.
+
 ## 0.14.18
 
 **Running cycles no longer display as "fail" on the dashboard.**
