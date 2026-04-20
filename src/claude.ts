@@ -139,10 +139,11 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
     };
   }
 
+  const effectiveTimeout = opts.timeout ?? DEFAULT_TIMEOUT;
   try {
     const r = await execa(bin, cmd, {
       cwd: opts.workdir,
-      timeout: opts.timeout ?? DEFAULT_TIMEOUT,
+      timeout: effectiveTimeout,
       reject: false,
       // Explicitly close stdin. Without this, the claude CLI waits 3s
       // for piped input before proceeding (and treats the wait as a
@@ -153,11 +154,19 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
     });
     return parseResult(r.stdout, r.stderr, r.exitCode ?? 0, start, jsonSupported, ["claude", ...cmd]);
   } catch (e) {
+    const err = e as Error & { timedOut?: boolean; exitCode?: number; stderr?: string };
+    let msg = err.message;
+    if (err.timedOut) {
+      msg = `backend timed out after ${Math.round(effectiveTimeout / 1000)}s (cycleTimeoutMs=${effectiveTimeout}). Increase cycleTimeoutMs in config.json for long-running tasks.`;
+    } else if (err.exitCode !== undefined) {
+      const detail = err.stderr?.trim().slice(0, 200);
+      msg = `backend exited ${err.exitCode}${detail ? `: ${detail}` : " with no output"}`;
+    }
     return {
       ok: false,
       text: "",
       events: [],
-      error: (e as Error).message,
+      error: msg,
       durationMs: Date.now() - start,
       command: ["claude", ...cmd],
     };

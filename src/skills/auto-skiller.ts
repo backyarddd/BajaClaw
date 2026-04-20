@@ -119,7 +119,11 @@ export async function synthesize(
     disallowedTools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch", "WebFetch"],
   });
 
-  if (!r.ok || !r.text) return { wrote: null, reason: "synth call failed" };
+  if (!r.ok || !r.text) {
+    const reason = r.error ? `synth call failed: ${r.error}` : "synth call failed (no output)";
+    log?.warn("auto-skill.synth.fail", { cycleId: input.cycleId, error: r.error });
+    return { wrote: null, reason };
+  }
   const text = r.text.trim();
   if (text === "NONE" || !text.startsWith("---")) {
     return { wrote: null, reason: "no reusable procedure detected" };

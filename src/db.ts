@@ -124,6 +124,7 @@ function migrate(db: DB): void {
         db.exec("COMMIT");
       } catch (e) {
         db.exec("ROLLBACK");
+        process.stderr.write(`[error] db migration v${m.version} failed: ${(e as Error).message}\n`);
         throw e;
       }
     }

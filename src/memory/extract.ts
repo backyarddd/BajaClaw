@@ -33,7 +33,10 @@ export async function extract(
     disallowedTools: ["Bash", "Write", "Edit", "Read", "Grep", "Glob", "WebSearch", "WebFetch"],
   });
 
-  if (!r.ok || !r.text) return 0;
+  if (!r.ok) {
+    throw new Error(`extraction backend failed: ${r.error ?? "no output"}`);
+  }
+  if (!r.text) return 0;
 
   const json = firstJson(r.text);
   if (!json) return 0;

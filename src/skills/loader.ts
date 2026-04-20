@@ -88,7 +88,9 @@ function scanDir(dir: string, scope: SkillScope): Skill[] {
       const raw = readFileSync(skillFile, "utf8");
       const parsed = parseSkill(raw, full, scope);
       if (parsed) out.push(parsed);
-    } catch { /* ignore */ }
+    } catch (e) {
+      process.stderr.write(`[warn] skill parse error in ${skillFile}: ${(e as Error).message}\n`);
+    }
   }
   return out;
 }

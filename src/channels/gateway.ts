@@ -212,33 +212,33 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
         const url = await bot.getFileLink(largest.file_id);
         const tmpPath = await downloadToTmp(String(url), ".jpg");
         if (tmpPath) attachmentPaths.push(tmpPath);
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "photo", error: (e as Error).message }); }
     } else if (hasDoc && msg.document) {
       const ext = extname(msg.document.file_name ?? ".jpg") || ".jpg";
       try {
         const url = await bot.getFileLink(msg.document.file_id);
         const tmpPath = await downloadToTmp(String(url), ext);
         if (tmpPath) attachmentPaths.push(tmpPath);
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "document", error: (e as Error).message }); }
     } else if (hasVideo && msg.video) {
       try {
         const url = await bot.getFileLink(msg.video.file_id);
         const tmpPath = await downloadToTmp(String(url), ".mp4");
         if (tmpPath) attachmentPaths.push(...extractFrames(tmpPath));
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "video", error: (e as Error).message }); }
     } else if (hasVideoNote && msg.video_note) {
       try {
         const url = await bot.getFileLink(msg.video_note.file_id);
         const tmpPath = await downloadToTmp(String(url), ".mp4");
         if (tmpPath) attachmentPaths.push(...extractFrames(tmpPath));
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "video_note", error: (e as Error).message }); }
     } else if (hasVideoDoc && msg.document) {
       const ext = extname(msg.document.file_name ?? ".mp4") || ".mp4";
       try {
         const url = await bot.getFileLink(msg.document.file_id);
         const tmpPath = await downloadToTmp(String(url), ext);
         if (tmpPath) attachmentPaths.push(...extractFrames(tmpPath));
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "video_doc", error: (e as Error).message }); }
     }
 
     const db = openDb(profile);
@@ -310,14 +310,14 @@ async function startDiscord(profile: string, c: ChannelConfig, log: Logger): Pro
       try {
         const tmpPath = await downloadToTmp(att.url, ext);
         if (tmpPath) attachmentPaths.push(tmpPath);
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.discord.download.fail", { type: "image", name: att.name, error: (e as Error).message }); }
     }
     for (const att of videoAttachments) {
       const ext = att.name.includes(".") ? `.${att.name.split(".").pop()!}` : ".mp4";
       try {
         const tmpPath = await downloadToTmp(att.url, ext);
         if (tmpPath) attachmentPaths.push(...extractFrames(tmpPath));
-      } catch { /* best-effort */ }
+      } catch (e) { log.warn("gateway.discord.download.fail", { type: "video", name: att.name, error: (e as Error).message }); }
     }
 
     const db = openDb(profile);

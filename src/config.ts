@@ -38,8 +38,13 @@ export function loadConfig(profile: string): AgentConfig {
   if (!existsSync(path)) {
     throw new Error(`Profile not found: ${profile} (expected ${path}). Run \`bajaclaw init\`.`);
   }
-  const raw = JSON.parse(readFileSync(path, "utf8"));
-  return { ...DEFAULT, ...raw, profile } as AgentConfig;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8"));
+  } catch (e) {
+    throw new Error(`config.json parse error in ${path}: ${(e as Error).message}`);
+  }
+  return { ...DEFAULT, ...(raw as object), profile } as AgentConfig;
 }
 
 export function saveConfig(cfg: AgentConfig): void {

@@ -225,7 +225,8 @@ ${joined}`;
     printMode: true,
     disallowedTools: ["Bash", "Write", "Edit", "Read", "Grep", "Glob", "WebSearch", "WebFetch"],
   });
-  if (!r.ok || !r.text) return null;
+  if (!r.ok) throw new Error(`summarize backend failed: ${r.error ?? "no output"}`);
+  if (!r.text) return null;
   const t = r.text.trim();
   return t.length > 0 ? t.slice(0, 600) : null;
 }
