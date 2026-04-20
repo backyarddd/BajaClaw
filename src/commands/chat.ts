@@ -123,7 +123,16 @@ export async function runChat(opts: ChatOptions): Promise<void> {
   // DECSC/DECRC (`\x1b7` save / `\x1b8` restore), so readline re-emits
   // it as part of every refresh.
   while (true) {
-    const width = Math.min(stdout.columns || 80, 120);
+    // Rule must be STRICTLY narrower than the terminal. If it fills the full
+    // column count, the terminal auto-wraps after the last char and readline's
+    // `_getDisplayPos` returns `{cols: 0, rows: +1}` instead of `{cols: width,
+    // rows: 0}` for the end of the prompt. The resulting mismatch between
+    // readline's internal cursor model and the physical cursor (parked on
+    // the ` › ` line by our `\x1b[1F\x1b[3C` moves) makes the cursor land
+    // before the `›` on first keystroke and makes backspace erase whole
+    // lines up above the prompt on refresh. Subtract 1 and the rule never
+    // wraps; the sandwich renders identically but the math stays sane.
+    const width = Math.min((stdout.columns || 80) - 1, 120);
     const rule = chalk.dim("─".repeat(width));
     stdout.write(rule + "\n");
     // Build the prompt string so readline re-emits the bottom rule
