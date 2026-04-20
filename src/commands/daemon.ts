@@ -19,6 +19,15 @@ const LAUNCHER = join(__dirname, "..", "..", "bin", "bajaclaw.js");
 function pidPath(profile: string): string {
   return join(profileDir(profile), "daemon.pid");
 }
+
+// Cross-module probe: is the daemon for this profile currently alive?
+// Reads the profile's pidfile and checks with `kill(pid, 0)`. Returns
+// false for missing pidfile, stale pidfile, or any error. Used by the
+// dashboard to light the "running" badge on each agent card.
+export function isDaemonRunning(profile: string): boolean {
+  const pid = readReferencedPid(profile);
+  return pid > 0 && isRunning(pid);
+}
 function logPath(profile: string): string {
   return join(profileDir(profile), "daemon.log");
 }
