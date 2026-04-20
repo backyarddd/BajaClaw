@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.22
+
+**Chat prompt cursor lands correctly + backspace stops nuking lines.**
+
+### Fixes
+
+1. **Rule is now strictly narrower than the terminal.** The active-prompt
+   sandwich built a top/bottom rule exactly `stdout.columns` wide. When
+   the rule filled the full column count, the terminal auto-wrapped
+   after the last char and Node's readline `_getDisplayPos` reported
+   the end of the prompt as `{cols: 0, rows: +1}` instead of
+   `{cols: width, rows: 0}`. That mismatch between readline's internal
+   cursor model and the physical cursor (which our `\x1b[1F\x1b[3C`
+   parks on the ` › ` line) made the cursor land before the `›` on
+   first keystroke and made backspace's `_refreshLine` clear upward
+   into the banner area. Rule width is now
+   `min(stdout.columns - 1, 120)`. No more wrap, no more model drift.
+
 ## 0.14.21
 
 **Interactive setup at install time. README rewrite covering every
