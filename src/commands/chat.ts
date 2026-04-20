@@ -112,57 +112,37 @@ export async function runChat(opts: ChatOptions): Promise<void> {
 
   // Main loop. One turn at a time, no concurrency.
   //
-  // Active-prompt sandwich:
-  //   ───────────────        ← top rule
-  //    › user types here     ← cursor inside the sandwich
-  //   ───────────────        ← bottom rule (drawn below cursor during typing)
+  // Rendering rule: never fight readline. Prior versions wrapped the
+  // active prompt in a top + bottom rule "sandwich" and CSI-parked the
+  // cursor on the prompt row via `\x1b[1F\x1b[3C`. readline's own
+  // `_refreshLine` ignored those park moves and repositioned the
+  // cursor every keystroke based on its internal prompt-width model.
+  // The physical cursor and the model drifted apart: first keystroke
+  // overwrote the `›`, backspace cleared upward into the banner, and
+  // the top rule vanished as soon as you typed. Hermes-agent solves
+  // this by rendering input through a React TUI (Ink) - we don't need
+  // a TUI framework, we just need to stop asking readline to draw a
+  // multi-line prompt with a parked cursor.
   //
-  // Tricky bit: readline's `_refreshLine` clears the screen below the
-  // prompt on every keystroke. That wipes a separately-printed bottom
-  // rule. Fix: embed the bottom rule INSIDE the prompt string via
-  // DECSC/DECRC (`\x1b7` save / `\x1b8` restore), so readline re-emits
-  // it as part of every refresh.
+  // Layout now: a single separator rule printed between turns, a
+  // plain ` › ` one-line prompt handed to `rl.question`. After submit
+  // the user's typed line stays on screen as-is (readline echoed it)
+  // and becomes the "history" row for that turn. No erase dance, no
+  // CSI cursor math.
   while (true) {
-    // Rule must be STRICTLY narrower than the terminal. If it fills the full
-    // column count, the terminal auto-wraps after the last char and readline's
-    // `_getDisplayPos` returns `{cols: 0, rows: +1}` instead of `{cols: width,
-    // rows: 0}` for the end of the prompt. The resulting mismatch between
-    // readline's internal cursor model and the physical cursor (parked on
-    // the ` › ` line by our `\x1b[1F\x1b[3C` moves) makes the cursor land
-    // before the `›` on first keystroke and makes backspace erase whole
-    // lines up above the prompt on refresh. Subtract 1 and the rule never
-    // wraps; the sandwich renders identically but the math stays sane.
     const width = Math.min((stdout.columns || 80) - 1, 120);
     const rule = chalk.dim("─".repeat(width));
     stdout.write(rule + "\n");
-    // Build the prompt string so readline re-emits the bottom rule
-    // on every refresh. CSI save/restore cursor (`\x1b[s`/`\x1b[u`)
-    // uses absolute positions which break when the terminal scrolls
-    // writing the sandwich - the saved row gets stale. Use relative
-    // movement instead: `\x1b[1F` (cursor previous line, column 0)
-    // + `\x1b[3C` (right 3 columns to land after " › "). Both are
-    // CSI sequences that `stripVTControlCharacters` removes cleanly,
-    // so readline's prompt-width math stays correct.
-    const promptWithBottomRule =
-      chalk.cyan(" › ") + "\n" + rule + "\x1b[1F\x1b[3C";
 
     let input: string;
     try {
-      const raw = await rl.question(promptWithBottomRule);
+      const raw = await rl.question(chalk.cyan(" › "));
       input = raw.replace(/\x16/g, "\n").trim();
     } catch {
       break; // rl closed (EOF / Ctrl-D)
     }
 
-    // Erase the full sandwich (top rule + prompt line + bottom rule).
-    // After rl.question resolves, cursor is on the line below the
-    // bottom rule. Go up 3 rows, back to column 0, clear to end of
-    // screen. Then reprint the user input as plain history.
-    stdout.write("\x1b[3A\r\x1b[0J");
-
     if (!input) continue;
-
-    stdout.write(chalk.cyan(" › ") + input + "\n");
 
     // Slash commands
     if (input.startsWith("/")) {

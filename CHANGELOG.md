@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.14.23
+
+**Drop the chat "sandwich" prompt. Single-line `rl.question` prompt
+that readline actually handles correctly.**
+
+### Fixes
+
+1. **Chat no longer eats the top rule / `›` / lines on backspace.**
+   v0.14.11's "sandwich" layout fed `rl.question` a two-line prompt
+   (top rule + ` › ` + bottom rule embedded) and CSI-parked the
+   cursor on the prompt row with `\x1b[1F\x1b[3C`. readline's
+   `_refreshLine` ignored those park moves and repositioned the
+   cursor every keystroke based on its own prompt-width model.
+   Physical cursor and readline's model drifted apart, so the first
+   keystroke landed before the `›`, backspace's `clearScreenDown`
+   fired from a row above the prompt and wiped the banner, and the
+   top rule vanished the moment you typed. v0.14.22's "narrower rule"
+   patch only addressed the wrap edge case - the model/physical drift
+   from the parked cursor remained. New layout: one separator rule
+   between turns, a plain ` › ` one-line prompt handed to
+   `rl.question`. readline draws it natively, echoes the typed line,
+   and leaves it on screen as the history row for that turn. No CSI
+   cursor math, no multi-line prompt, no erase dance. Hermes-agent
+   builds a box composer on top of Ink (React TUI); we don't need a
+   TUI framework for this, we just need to stop asking readline to
+   do something it wasn't built for.
+
 ## 0.14.22
 
 **Chat prompt cursor lands correctly + backspace stops nuking lines.**
