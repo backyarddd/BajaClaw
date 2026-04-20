@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.14.24
+
+**Chat UI rewritten on React + Ink. Bordered composer box, live
+thinking spinner, status bar, Static-backed scrollback.**
+
+### Features
+
+1. **Bordered composer box.** Round-cornered cyan frame around the
+   input with a fake-cursor block (reverse-video space). Placeholder
+   text (`type a message, / for commands`) shows when the box is
+   empty. Single-line input; multi-line pastes collapse to one line
+   (same limit as the old readline prompt).
+2. **Live thinking indicator.** While a cycle runs, the composer is
+   replaced by a spinner + elapsed seconds + model tier (`● thinking
+   · sonnet · 3.4s`). Ticks every 100ms.
+3. **Persistent status bar.** One dim line under the composer shows
+   current model · effort · context window · session turn count ·
+   token total · cost. Updates after every turn.
+4. **Scrollback via Ink `<Static>`.** Each completed turn (user
+   input, agent response + stats, error with drill-down, slash
+   command output, intro/banner) is an entry in a single Static list
+   so Ink writes it to the terminal once and never re-renders it.
+   Dynamic footer (spinner / composer / status bar) updates freely
+   without clobbering anything above.
+
+### Kept from the old REPL
+
+Banner ASCII art, identity block (agent, model, effort, ctx,
+version, cwd), 5h + weekly usage line, all slash commands (`/help`,
+`/exit`, `/clear`, `/stats`, `/context`, `/model`, `/effort`,
+`/compact`, `/image`, `/video`, `/history`), attachment queuing
+(images + ffmpeg video frame extraction), bracketed-paste stripping,
+Ctrl-C / Ctrl-D to quit with session summary.
+
+### Notes
+
+Ink 7 renders only the LAST `<Static>` component in the tree, so the
+intro (banner + header) is seeded into the same Static list as the
+turns rather than kept in its own component. The composer uses a
+custom `useInput` handler instead of `ink-text-input` — we need to
+treat both `\r` (`key.return`) and embedded `\n` (which Ink 7 routes
+as `keypress.name="enter"` but doesn't surface on the `key` object)
+as submit, to work reliably across terminals, ptys, and paste
+buffers.
+
+### Deps
+
+Adds `ink`, `react`, `ink-spinner` as runtime deps; `@types/react`
+as a dev dep. Install size grows ~1 MB.
+
 ## 0.14.23
 
 **Drop the chat "sandwich" prompt. Single-line `rl.question` prompt
