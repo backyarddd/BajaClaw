@@ -88,6 +88,9 @@ export interface AgentConfig {
   contextWindow?: ContextWindow;
   // Per-cycle cost ceiling in USD. `undefined` = no cap.
   maxBudgetUsd?: number;
+  // Cycle subprocess timeout in milliseconds. Default: 10 minutes (600000).
+  // Increase for tasks that run long shell commands or installs.
+  cycleTimeoutMs?: number;
   // Extra claude beta flags to include verbatim.
   betas?: string[];
   // When true, the desktop CLI's MCP config is merged into the cycle

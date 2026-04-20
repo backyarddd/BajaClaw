@@ -85,6 +85,10 @@ export async function cmdStart(profile: string, foreground = false): Promise<voi
     stdio: ["ignore", out, out],
     env: daemonEnv,
   });
+  if (!child.pid) {
+    console.error(chalk.red(`daemon spawn failed - check ${logPath(profile)} for details`));
+    return;
+  }
   writeFileSync(pidFile, String(child.pid));
   child.unref();
   console.log(chalk.green(`✓ daemon started (pid ${child.pid}). logs: ${logPath(profile)}`));

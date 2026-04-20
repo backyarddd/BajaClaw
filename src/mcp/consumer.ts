@@ -16,7 +16,10 @@ export interface McpConfigFile {
 export function readMcpFile(path: string): McpConfigFile {
   if (!existsSync(path)) return {};
   try { return JSON.parse(readFileSync(path, "utf8")) as McpConfigFile; }
-  catch { return {}; }
+  catch (e) {
+    process.stderr.write(`[warn] mcp config parse error in ${path}: ${(e as Error).message}\n`);
+    return {};
+  }
 }
 
 export function userMcpPath(): string {

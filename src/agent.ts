@@ -229,6 +229,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       betas: cfg.betas,
       context1M: cfg.contextWindow === "1m",
       maxBudgetUsd: cfg.maxBudgetUsd,
+      timeout: cfg.cycleTimeoutMs,
       dryRun: input.dryRun,
       env: spawnEnv,
     };
