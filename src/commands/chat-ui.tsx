@@ -183,6 +183,11 @@ export function ChatApp({
   // Ring of submitted inputs for ↑/↓ recall. Newest-last, slash
   // commands included so users can re-run `/stats` with one keystroke.
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
+  // Local message queue. If the user hits Enter while a cycle is in
+  // flight, the message lands here instead of forcing them to wait.
+  // Drained FIFO as soon as `thinking` flips false — see the useEffect
+  // below.
+  const [messageQueue, setMessageQueue] = useState<string[]>([]);
 
   const historyRef = useRef<ChatTurn[]>([]);
   const statsRef = useRef<SessionStats>({
@@ -194,6 +199,10 @@ export function ChatApp({
   });
   const turnIdRef = useRef(1); // intro consumed id 1
   const thinkingModelRef = useRef<string>(modelOverride ?? cfg.model);
+  // Thinking flag mirrored to a ref so handleSubmit (which closes over
+  // the current render's state) always sees the live value when the
+  // user types into the composer mid-cycle.
+  const thinkingRef = useRef(false);
 
   // Tick elapsed time while a cycle is running, for the live
   // "thinking" indicator.
@@ -223,25 +232,15 @@ export function ChatApp({
     appendTurn({ id: nextId(turnIdRef), kind: "system", lines });
   };
 
-  const handleSubmit = async (rawInput: string): Promise<void> => {
-    const trimmed = rawInput.trim();
-    setInput("");
-    if (!trimmed) return;
-
-    // Record in the input-history ring (for ↑/↓ recall). Dedupe
-    // consecutive duplicates so repeated Enters don't bloat the ring.
-    setCommandHistory((prev) => {
-      if (prev[prev.length - 1] === trimmed) return prev;
-      const next = [...prev, trimmed];
-      // Keep a bounded ring so long sessions don't leak.
-      return next.length > 100 ? next.slice(next.length - 100) : next;
-    });
-
-    // Log the user input as its own turn entry so it lands in scrollback.
+  // Run one chat turn: append the user entry, kick off the cycle,
+  // append the agent response. Called either directly from submit
+  // (when idle) or from the queue-drain effect (when the previous
+  // cycle finishes with queued messages waiting).
+  const runTurn = async (trimmed: string): Promise<void> => {
     appendTurn({ id: nextId(turnIdRef), kind: "user", text: trimmed });
 
     if (trimmed.startsWith("/")) {
-      const result = await handleSlash(trimmed, {
+      await handleSlash(trimmed, {
         profile,
         cfg,
         setCfg,
@@ -267,6 +266,7 @@ export function ChatApp({
 
     const effectiveModel = modelOverride ?? cfg.model;
     thinkingModelRef.current = effectiveModel;
+    thinkingRef.current = true;
     setThinking(true);
     setThinkingStart(Date.now());
     setElapsed(0);
@@ -286,6 +286,7 @@ export function ChatApp({
       caughtError = e as Error;
     }
 
+    thinkingRef.current = false;
     setThinking(false);
 
     if (caughtError) {
@@ -335,17 +336,59 @@ export function ChatApp({
     statsRef.current.costUsd += r.costUsd ?? 0;
   };
 
+  // Submit dispatcher. Idle → run immediately; mid-cycle → enqueue.
+  // The queued message is NOT appended to the turn scrollback yet (we
+  // want the ordering to match reality: it'll appear as a user turn
+  // right before its own cycle fires, drained by the effect below).
+  const handleSubmit = (rawInput: string): void => {
+    const trimmed = rawInput.trim();
+    setInput("");
+    if (!trimmed) return;
+
+    setCommandHistory((prev) => {
+      if (prev[prev.length - 1] === trimmed) return prev;
+      const next = [...prev, trimmed];
+      return next.length > 100 ? next.slice(next.length - 100) : next;
+    });
+
+    if (thinkingRef.current) {
+      setMessageQueue((prev) => [...prev, trimmed]);
+      return;
+    }
+
+    void runTurn(trimmed);
+  };
+
+  // Drain the queue when the current cycle finishes. Pull one message
+  // off the front, fire it, and let the next `thinking` transition
+  // trigger us again for the rest.
+  useEffect(() => {
+    if (thinking) return;
+    if (messageQueue.length === 0) return;
+    const [next, ...rest] = messageQueue;
+    if (next === undefined) return;
+    setMessageQueue(rest);
+    void runTurn(next);
+    // runTurn is stable-enough for our purposes; listing it as a dep
+    // would recreate it every render and infinite-loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thinking, messageQueue]);
+
   return (
     <Box flexDirection="column">
       {/* Intro + turn history. <Static> appends each new entry once
           and never re-renders prior entries. The intro entry was
-          seeded into state on mount. */}
+          seeded into state on mount. The second arg to the render
+          function is the item's index — we use it to skip the
+          separator on the very first turn after the intro. */}
       <Static items={turns}>
-        {(t) => <TurnView key={t.id} turn={t} />}
+        {(t, i) => <TurnView key={t.id} turn={t} showSeparator={i > 0} />}
       </Static>
 
-      {/* Dynamic footer: thinking indicator + composer + status bar. */}
-      {thinking ? (
+      {/* Thinking indicator lives ABOVE the composer now so the box
+          stays visible for the whole cycle. Typing while thinking
+          enqueues the message (see `handleSubmit`). */}
+      {thinking && (
         <Box>
           <Text color="magenta">
             <Spinner type="dots" />
@@ -353,17 +396,34 @@ export function ChatApp({
           <Text dimColor> thinking · </Text>
           <Text dimColor>{shortModel(thinkingModelRef.current === AUTO ? SONNET : thinkingModelRef.current)}</Text>
           <Text dimColor> · {(elapsed / 1000).toFixed(1)}s</Text>
+          {messageQueue.length > 0 && (
+            <Text color="cyan"> · {messageQueue.length} queued</Text>
+          )}
         </Box>
-      ) : (
-        <Composer
-          input={input}
-          setInput={setInput}
-          onSubmit={handleSubmit}
-          pendingAttachments={pendingAttachments}
-          active={!thinking}
-          commandHistory={commandHistory}
-        />
       )}
+
+      {/* Show queued messages as dim preview lines so the user can see
+          what's waiting to run. Indented to match the ` › ` prefix. */}
+      {messageQueue.length > 0 && (
+        <Box flexDirection="column">
+          {messageQueue.map((m, i) => (
+            <Box key={`queued-${i}`}>
+              <Text color="cyan" dimColor>⧗ </Text>
+              <Text dimColor>{m}</Text>
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      <Composer
+        input={input}
+        setInput={setInput}
+        onSubmit={handleSubmit}
+        pendingAttachments={pendingAttachments}
+        active={true}
+        commandHistory={commandHistory}
+        thinking={thinking}
+      />
 
       <StatusBar
         stats={statsRef.current}
@@ -372,37 +432,57 @@ export function ChatApp({
         initialModel={initialCfg.model}
         initialEffort={initialCfg.effort}
         cfg={cfg}
+        queueLength={messageQueue.length}
       />
-      <HintFooter hasInput={input.length > 0} isSlash={input.startsWith("/")} />
+      <HintFooter hasInput={input.length > 0} isSlash={input.startsWith("/")} thinking={thinking} />
     </Box>
   );
 }
 
 // ── Turn rendering ─────────────────────────────────────────────────
 
-function TurnView({ turn }: { turn: TurnEntry }): React.ReactElement {
+// Each turn group (user input + agent response + stats, or a slash
+// output block, or an error block) is separated from the previous by
+// a dim horizontal rule so the wall of text doesn't blur together.
+// The rule is NOT drawn above the first turn (the intro block below
+// it already has its own trailing whitespace).
+function TurnView({ turn, showSeparator }: { turn: TurnEntry; showSeparator: boolean }): React.ReactElement {
+  const { stdout } = useStdout();
+  // Ink's Static renders items detached from the main tree and
+  // `useStdout().stdout.columns` can come back as 0 in that context.
+  // Clamp to a sane floor so `.repeat(n)` never sees a negative.
+  const rawCols = stdout?.columns ?? 80;
+  const width = Math.max(20, Math.min(rawCols > 0 ? rawCols - 1 : 79, 120));
+  const separator = showSeparator && turn.kind !== "intro"
+    ? <Text dimColor>{"─".repeat(width)}</Text>
+    : null;
+
+  let body: React.ReactElement;
   switch (turn.kind) {
     case "intro":
-      return <Intro {...turn} />;
+      body = <Intro {...turn} />;
+      break;
     case "user":
-      return (
+      body = (
         <Box>
           <Text color="cyan"> › </Text>
           <Text>{turn.text}</Text>
         </Box>
       );
+      break;
     case "agent":
-      return (
+      body = (
         <Box flexDirection="column">
           <Box>
             <Text color="cyan">● </Text>
             <Text>{turn.text}</Text>
           </Box>
-          <Text>  {turn.meta}</Text>
+          <Text dimColor>  {turn.meta}</Text>
         </Box>
       );
+      break;
     case "error":
-      return (
+      body = (
         <Box flexDirection="column">
           <Box>
             <Text color="red">● {turn.text}</Text>
@@ -412,8 +492,9 @@ function TurnView({ turn }: { turn: TurnEntry }): React.ReactElement {
           {turn.drill && <Text dimColor>  {turn.drill}</Text>}
         </Box>
       );
+      break;
     case "system":
-      return (
+      body = (
         <Box flexDirection="column">
           {turn.lines.map((line, i) => (
             <Text
@@ -426,7 +507,15 @@ function TurnView({ turn }: { turn: TurnEntry }): React.ReactElement {
           ))}
         </Box>
       );
+      break;
   }
+
+  return (
+    <Box flexDirection="column">
+      {separator}
+      {body}
+    </Box>
+  );
 }
 
 // ── Intro block ───────────────────────────────────────────────────
@@ -508,6 +597,7 @@ interface ComposerProps {
   pendingAttachments: string[];
   active: boolean;
   commandHistory: string[];
+  thinking: boolean;
 }
 
 // Composer with slash-command autocomplete + input history.
@@ -521,7 +611,7 @@ interface ComposerProps {
 // We own the cursor locally so arrow-left/right move within the line
 // without the parent re-rendering. `input`/`setInput` are still
 // controlled externally so the parent can clear on submit.
-function Composer({ input, setInput, onSubmit, pendingAttachments, active, commandHistory }: ComposerProps): React.ReactElement {
+function Composer({ input, setInput, onSubmit, pendingAttachments, active, commandHistory, thinking }: ComposerProps): React.ReactElement {
   const [cursor, setCursor] = useState<number>(input.length);
   const [suggestIdx, setSuggestIdx] = useState<number>(0);
   const [historyIdx, setHistoryIdx] = useState<number | null>(null);
@@ -686,7 +776,11 @@ function Composer({ input, setInput, onSubmit, pendingAttachments, active, comma
   }, { isActive: active });
 
   // Render the value with an inverse-video block as a fake cursor.
-  const display = renderWithCursor(input, cursor, active);
+  // While `thinking` is true, the box stays visible and accepts input,
+  // but we swap the border color + placeholder text to signal that the
+  // next submit will be queued rather than run immediately.
+  const display = renderWithCursor(input, cursor, active, thinking);
+  const borderColor = thinking ? "magenta" : "cyan";
 
   return (
     <Box flexDirection="column">
@@ -697,8 +791,8 @@ function Composer({ input, setInput, onSubmit, pendingAttachments, active, comma
           </Text>
         </Box>
       )}
-      <Box borderStyle="round" borderColor="cyan" paddingX={1}>
-        <Text color="cyan">› </Text>
+      <Box borderStyle="round" borderColor={borderColor} paddingX={1}>
+        <Text color={borderColor}>› </Text>
         <Text>{display}</Text>
       </Box>
       {hasSuggestions && (
@@ -746,7 +840,7 @@ function SuggestionList({ matches, selectedIdx, total }: SuggestionListProps): R
   );
 }
 
-function renderWithCursor(value: string, cursor: number, active: boolean): string {
+function renderWithCursor(value: string, cursor: number, active: boolean, thinking: boolean): string {
   if (!active) {
     return value || " ";
   }
@@ -755,7 +849,10 @@ function renderWithCursor(value: string, cursor: number, active: boolean): strin
   const DIM = "\x1b[2m";
   const DIM_OFF = "\x1b[22m";
   if (value.length === 0) {
-    return `${INV} ${RST}${DIM}type a message, / for commands${DIM_OFF}`;
+    const placeholder = thinking
+      ? "queue a message while the agent is thinking…"
+      : "type a message, / for commands";
+    return `${INV} ${RST}${DIM}${placeholder}${DIM_OFF}`;
   }
   if (cursor >= value.length) {
     return `${value}${INV} ${RST}`;
@@ -772,12 +869,13 @@ interface StatusBarProps {
   initialEffort: string;
   stats: SessionStats;
   pendingAttachments: number;
+  queueLength: number;
 }
 
 // Session-only status. The intro block already shows model/effort/ctx
 // at mount; we only surface those again here when they've changed
 // mid-session (via `/model` or `/effort`). Otherwise the line is pure
-// running totals: turns, tokens, cost, attachment badge.
+// running totals: turns, tokens, cost, attachment badge, queue depth.
 function StatusBar({
   cfg,
   modelOverride,
@@ -785,6 +883,7 @@ function StatusBar({
   initialEffort,
   stats,
   pendingAttachments,
+  queueLength,
 }: StatusBarProps): React.ReactElement {
   const currentModel = modelOverride ?? cfg.model;
   const modelChanged = currentModel !== initialModel;
@@ -802,18 +901,25 @@ function StatusBar({
       {pendingAttachments > 0 && (
         <Text color="cyan"> · 📎 {pendingAttachments}</Text>
       )}
+      {queueLength > 0 && (
+        <Text color="magenta"> · ⧗ {queueLength} queued</Text>
+      )}
     </Box>
   );
 }
 
 // ── Hint footer ────────────────────────────────────────────────────
 
-function HintFooter({ hasInput, isSlash }: { hasInput: boolean; isSlash: boolean }): React.ReactElement {
+function HintFooter({ hasInput, isSlash, thinking }: { hasInput: boolean; isSlash: boolean; thinking: boolean }): React.ReactElement {
   // Change hints based on context so they actually feel useful rather
   // than being a static clutter line.
   let hint: string;
   if (isSlash) {
     hint = "↑↓ select · Tab complete · Enter submit · Esc dismiss";
+  } else if (thinking) {
+    hint = hasInput
+      ? "Enter queues message · ←→ edit · Ctrl-D quit"
+      : "type to queue while thinking · Ctrl-D quit";
   } else if (hasInput) {
     hint = "Enter send · ←→ edit · Ctrl-D quit";
   } else {

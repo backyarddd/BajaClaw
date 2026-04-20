@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.14.27
+
+**Chat: turn separators, persistent composer with live message queue,
+and a `dashboard:dev` script with hot-reloaded HTML.**
+
+### Features
+
+1. **Thin separator between turn groups.** Every turn entry after the
+   intro gets a dim horizontal rule above it, so user/agent/stats
+   blocks, slash-command output, and error blocks don't blur into
+   one wall of text.
+2. **Composer stays visible during cycles.** The bordered input box
+   no longer gets replaced by the thinking indicator - the spinner +
+   elapsed + model line now renders ABOVE the composer, and the
+   composer remains interactive. Border color shifts cyan → magenta
+   while a cycle is in flight to signal the different submit
+   behavior.
+3. **Local message queue.** Hitting Enter mid-cycle adds the message
+   to a FIFO queue instead of forcing you to wait. Queued messages
+   render as dim `⧗ …` lines above the composer, and the status bar
+   carries a `⧗ N queued` badge. When the current cycle finishes,
+   the next queued message fires automatically; the chain continues
+   until the queue drains. Works for slash commands too (they run
+   in order between real cycles). Telegram/Discord already queued
+   via the `tasks` table and `concurrency.serialize()`, so no change
+   was needed on the channel side.
+4. **Dashboard hot-reload for HTML.** `sendHtml` re-resolves
+   `dashboard.html` per-request from either `src/` (dev checkout) or
+   `dist/` (npm package). Saving HTML edits in the checkout shows up
+   on the next browser refresh without a daemon restart. A new
+   `scripts/copy-static.js` copies `src/dashboard.html` into `dist/`
+   during `npm run build` so the npm-installed version renders the
+   real dashboard instead of the fallback page.
+5. **`npm run dashboard:dev`.** New script that runs `tsx watch
+   src/cli.ts dashboard` — the dashboard restarts on any backend
+   TypeScript change, HTML hot-reloads on refresh, runs standalone
+   (no daemon required).
+
+### Context-aware hint footer
+
+The bottom cheatsheet line now has a fourth mode. While a cycle is in
+flight:
+
+- Empty composer → `type to queue while thinking · Ctrl-D quit`
+- Has draft → `Enter queues message · ←→ edit · Ctrl-D quit`
+
 ## 0.14.26
 
 **Dashboard Agents view: "running" badge now tracks the daemon
