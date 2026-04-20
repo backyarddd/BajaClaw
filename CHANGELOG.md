@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.14.21
+
+**Interactive setup at install time. README rewrite covering every
+feature with examples.**
+
+### Features
+
+1. **Postinstall now runs the interactive wizard on unix.** The
+   `scripts/postinstall.js` script opens `/dev/tty` directly and pipes
+   the setup wizard through the user's real controlling terminal,
+   bypassing npm's stdout capture. On Windows, CI, root-sudo, or
+   environments without `/dev/tty`, it falls back to the silent
+   scaffold as before.
+2. **First-run hook runs the wizard too.** `src/cli.ts` first-run
+   behavior used to just print a welcome banner. Now: if the persona
+   wizard has not been completed AND stdin/stdout are a TTY, the
+   full interactive setup wizard runs on the user's first
+   `bajaclaw` invocation. The welcome banner still shows when setup
+   is already done. Net effect: the wizard runs either at
+   postinstall or on first use, whichever is interactive first.
+3. **Wizard asks about channels and model/effort.** The existing
+   wizard asks for agent name, tone, focus, interests, don'ts, and
+   compaction. Three new prompt groups: (a) default model routing
+   (auto/opus/sonnet/haiku), (b) effort level
+   (low/medium/high/xhigh/max), (c) Telegram + Discord channel setup
+   (bot tokens, allowlist IDs). Each is skippable with enter. New
+   `confirm` helper in `src/prompt.ts` for y/N questions.
+4. **README rewrite.** Third-person documentation tone. Opening
+   section now explains what BajaClaw actually does: an agentic
+   wrapper around the `claude` CLI that uses the same Anthropic
+   account, adds memory/skills/scheduling/channels/dashboard/MCP
+   around the subprocess, and can self-configure via built-in
+   guides. Every feature has an example or command snippet. Zero em
+   dashes.
+
 ## 0.14.20
 
 **README rewrite.** Cut from 649 lines to ~210. Shorter prose, first

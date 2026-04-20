@@ -19,7 +19,7 @@ import { runHealth } from "../health-check.js";
 import { printBanner } from "../banner.js";
 import { currentVersion } from "../updater.js";
 import { cmdRegister } from "./mcp.js";
-import { ask, askChoice, askList, detectTimezone, isInteractive } from "../prompt.js";
+import { ask, askChoice, askList, confirm, detectTimezone, isInteractive } from "../prompt.js";
 import { loadPersona, savePersona } from "../persona-io.js";
 import { TONE_OPTIONS, type Persona } from "../persona.js";
 import { loadConfig, saveConfig } from "../config.js";
@@ -89,6 +89,18 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
       console.log(chalk.green(`✓ compaction policy saved`));
     } catch (e) {
       if (!opts.silent) console.log(chalk.yellow(`(skipped compaction setup: ${(e as Error).message})`));
+    }
+
+    try {
+      await promptModelEffort(name);
+    } catch (e) {
+      if (!opts.silent) console.log(chalk.yellow(`(skipped model/effort setup: ${(e as Error).message})`));
+    }
+
+    try {
+      await promptChannels(name);
+    } catch (e) {
+      if (!opts.silent) console.log(chalk.yellow(`(skipped channel setup: ${(e as Error).message})`));
     }
   }
 
@@ -227,6 +239,87 @@ async function promptCompaction(profile: string): Promise<CompactionConfig> {
     keepRecentPerKind: base.keepRecentPerKind,
     pruneCycleDays: base.pruneCycleDays,
   };
+}
+
+async function promptModelEffort(profile: string): Promise<void> {
+  console.log("");
+  console.log(chalk.dim("Model routing. `auto` picks Haiku/Sonnet/Opus per task. Pin a model if"));
+  console.log(chalk.dim("you always want a specific one."));
+  console.log("");
+  const modelChoice = await askChoice(
+    chalk.bold("Model:"),
+    [
+      "auto (recommended)",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5",
+    ],
+    "auto (recommended)",
+  );
+  const model = modelChoice.startsWith("auto") ? "auto" : modelChoice;
+
+  console.log("");
+  console.log(chalk.dim("Effort sets how much runway each cycle gets. Higher = more turns,"));
+  console.log(chalk.dim("more tokens, higher cost. `max` is generous; `medium` is balanced."));
+  console.log("");
+  const effort = await askChoice(
+    chalk.bold("Effort:"),
+    ["low", "medium", "high", "xhigh", "max"],
+    "max",
+  );
+
+  const cfg = loadConfig(profile);
+  cfg.model = model as typeof cfg.model;
+  cfg.effort = effort as typeof cfg.effort;
+  saveConfig(cfg);
+  console.log(chalk.green(`✓ model=${model}, effort=${effort}`));
+}
+
+async function promptChannels(profile: string): Promise<void> {
+  console.log("");
+  console.log(chalk.bold("Channels (optional)"));
+  console.log(chalk.dim("Connect your agent to telegram or discord so you can chat from your phone."));
+  console.log(chalk.dim("Skip now and add later with `bajaclaw channel add`."));
+  console.log("");
+
+  const wantTg = await confirm("Set up Telegram now?", false);
+  if (wantTg) {
+    console.log(chalk.dim("You'll need a bot token from @BotFather and your numeric user id from @userinfobot."));
+    const token = (await ask(chalk.bold("Telegram bot token:"))).trim();
+    const userId = (await ask(chalk.bold("Your Telegram user id (for allowlist):"))).trim();
+    if (token) {
+      const cfg = loadConfig(profile);
+      const allowlist: (string | number)[] = [];
+      if (userId && /^\d+$/.test(userId)) allowlist.push(Number(userId));
+      cfg.channels = [...(cfg.channels ?? []).filter((c) => c.kind !== "telegram"),
+        { kind: "telegram", token, allowlist }];
+      saveConfig(cfg);
+      console.log(chalk.green(`✓ telegram channel added`));
+      if (allowlist.length === 0) {
+        console.log(chalk.yellow("  note: no user id provided - anyone with the bot token can message"));
+      }
+    } else {
+      console.log(chalk.yellow("(skipped telegram: no token)"));
+    }
+  }
+
+  const wantDc = await confirm("Set up Discord now?", false);
+  if (wantDc) {
+    console.log(chalk.dim("You'll need a bot token from the Discord Developer Portal."));
+    const token = (await ask(chalk.bold("Discord bot token:"))).trim();
+    const channelId = (await ask(chalk.bold("Discord channel id (optional, blank for any channel):"))).trim();
+    const userId = (await ask(chalk.bold("Your Discord user id (optional, for allowlist):"))).trim();
+    if (token) {
+      const cfg = loadConfig(profile);
+      const allowlist: (string | number)[] = userId ? [userId] : [];
+      cfg.channels = [...(cfg.channels ?? []).filter((c) => c.kind !== "discord"),
+        { kind: "discord", token, channelId: channelId || undefined, allowlist }];
+      saveConfig(cfg);
+      console.log(chalk.green(`✓ discord channel added`));
+    } else {
+      console.log(chalk.yellow("(skipped discord: no token)"));
+    }
+  }
 }
 
 function ensureAgentDescriptor(profile: string): void {

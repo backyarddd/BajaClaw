@@ -11,6 +11,7 @@ import { runDashboard } from "./commands/dashboard.js";
 import { runTrigger } from "./commands/trigger.js";
 import { runUpdate, maybeNoticeAtExit } from "./commands/update.js";
 import { runSetup, autoBootstrapIfNeeded, DEFAULT_PROFILE_NAME, isFirstRun, markFirstRunDone } from "./commands/setup.js";
+import { loadPersona } from "./persona-io.js";
 import { runHealth } from "./health-check.js";
 import chalk from "chalk";
 import { runUninstall } from "./commands/uninstall.js";
@@ -396,22 +397,33 @@ async function printWelcome(opts: { force?: boolean } = {}): Promise<void> {
   void opts.force;
 }
 
-// First-run hook: show the welcome before the user's first command.
+// First-run hook: on the user's first interactive invocation, run the
+// full interactive setup wizard if one hasn't been completed yet.
 // Marks done so it only fires once per install.
 async function maybeShowWelcome(): Promise<void> {
   if (!isFirstRun()) return;
-  // Only show when stdout is a TTY. npm captures postinstall output,
-  // so firing the welcome during `npm install` prints to the void and
-  // then marks done - defeating the point. Non-TTY: silent no-op, don't
-  // even mark done, so the next interactive run still gets the welcome.
-  if (!process.stdout.isTTY) return;
+  // Only fire when stdout+stdin are a TTY. npm captures postinstall
+  // output, and non-interactive shells can't answer prompts. Non-TTY:
+  // silent no-op; don't even mark done so the next interactive run
+  // still gets the wizard.
+  if (!process.stdout.isTTY || !process.stdin.isTTY) return;
   const cmd = process.argv[2];
   const skip = new Set([
     "uninstall", "update", "banner", "welcome", "setup", "init",
     "--version", "-V", "--help", "-h",
   ]);
   if (cmd && skip.has(cmd)) { markFirstRunDone(); return; }
-  await printWelcome();
+  // If the user already completed the persona wizard (e.g. via `bajaclaw
+  // setup` during postinstall on a TTY-capable unix system), just show
+  // the welcome screen. Otherwise run the full interactive wizard so
+  // they get agent name, tone, compaction, model, effort, and channels
+  // in one pass.
+  const personaDone = !!loadPersona(DEFAULT_PROFILE_NAME);
+  if (personaDone) {
+    await printWelcome();
+  } else {
+    await runSetup({ interactive: true });
+  }
   markFirstRunDone();
 }
 

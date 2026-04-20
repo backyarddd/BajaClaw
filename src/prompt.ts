@@ -48,6 +48,19 @@ export async function askList(question: string, separator = ","): Promise<string
   return raw.split(separator).map((s) => s.trim()).filter(Boolean);
 }
 
+export async function confirm(question: string, fallback = false): Promise<boolean> {
+  if (!isInteractive()) return fallback;
+  const suffix = fallback ? " \x1b[90m[Y/n]\x1b[0m " : " \x1b[90m[y/N]\x1b[0m ";
+  const rl = createInterface({ input: stdin, output: stdout });
+  try {
+    const raw = (await rl.question(`${question}${suffix}`)).trim().toLowerCase();
+    if (!raw) return fallback;
+    return raw === "y" || raw === "yes";
+  } finally {
+    rl.close();
+  }
+}
+
 export function detectTimezone(): string {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; }
 }
