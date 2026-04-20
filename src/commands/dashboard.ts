@@ -4,6 +4,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { loadConfig, saveConfig } from "../config.js";
+import { loadPersona } from "../persona-io.js";
+import { isDaemonRunning } from "./daemon.js";
 import { bajaclawHome, profileLogDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
@@ -201,6 +203,7 @@ async function dispatchApi(
         const name = entry.name;
         try {
           const cfg = loadConfig(name);
+          const persona = loadPersona(name);
           const pdb = openDb(name);
           const since24 = new Date(Date.now() - 86400000).toISOString();
           const lastCycle = pdb.prepare(
@@ -208,17 +211,33 @@ async function dispatchApi(
           ).get() as Record<string, unknown> | undefined;
           const pending = (pdb.prepare("SELECT COUNT(*) c FROM tasks WHERE status='pending'").get() as { c: number }).c;
           const cyclesDay = (pdb.prepare("SELECT COUNT(*) c FROM cycles WHERE status='ok' AND started_at > ?").get(since24) as { c: number }).c;
-          const running = (pdb.prepare("SELECT COUNT(*) c FROM cycles WHERE status='running'").get() as { c: number }).c > 0;
+          // "cycle mid-flight" - transient, useful for the spinner but
+          // NOT the right signal for the "running" badge. Time-box
+          // against 15m so a cycle row that got wedged in 'running'
+          // state (daemon crash, chat Ctrl-C mid-cycle, etc.) doesn't
+          // spuriously light the indicator forever.
+          const inflightSince = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+          const cycleInFlight = (pdb.prepare(
+            "SELECT COUNT(*) c FROM cycles WHERE status='running' AND started_at > ?"
+          ).get(inflightSince) as { c: number }).c > 0;
           pdb.close();
+          // `running` now means "the daemon process for this profile
+          // is alive" - a persistent state, not the blink-and-miss-it
+          // window between `started_at` and `finished_at`. Prior to
+          // v0.14.26 this was tied to the in-flight cycle count, so
+          // the badge lit up for a profile that happened to have a
+          // stale cycle row and was dark for a profile whose daemon
+          // was running but idle.
           profiles.push({
             name,
-            agentName: cfg.name,
+            agentName: persona?.agentName ?? cfg.name,
             model: String(cfg.model ?? "auto"),
             lastCycle: lastCycle ?? null,
             lastCycleAt: lastCycle ? (lastCycle.started_at as string) : null,
             pendingTasks: pending,
             cyclesDay,
-            running,
+            running: isDaemonRunning(name),
+            cycleInFlight,
           });
         } catch { /* skip invalid profiles */ }
       }

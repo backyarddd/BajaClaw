@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.14.26
+
+**Dashboard Agents view: "running" badge now tracks the daemon
+process, cards show the persona name.**
+
+### Fixes
+
+1. **Agent card "running" badge reflects daemon status, not in-flight
+   cycles.** Before: the green `● running` badge on each card was
+   wired to `SELECT COUNT(*) FROM cycles WHERE status='running'`.
+   That fires true for the blink-and-miss-it window between
+   `started_at` and `finished_at` on any cycle, AND stays true for
+   any cycle row that got wedged in `running` (daemon crash, chat
+   Ctrl-C mid-cycle). Result: a profile with a stale cycle row showed
+   the badge lit even though the daemon wasn't running, while a
+   profile whose daemon was actually running but currently idle
+   showed the badge dark. `/api/profiles.running` now comes from
+   `isDaemonRunning()` which reads `~/.bajaclaw/profiles/<p>/
+   daemon.pid` and probes it with `kill(pid, 0)`. A new
+   `cycleInFlight` field (time-boxed to 15m to dodge stale rows) is
+   surfaced separately; the card badge reads `"in cycle"` when true,
+   `"running"` otherwise. Floatbox `status` line now distinguishes
+   `daemon running (idle)` / `in-flight cycle` / `daemon stopped`.
+2. **Agent card title uses the persona name.** `/api/profiles` now
+   calls `loadPersona(name)` and returns `persona.agentName` (e.g.
+   "Emily") as `agentName`, falling back to the profile directory
+   name when no `persona.json` exists. The card title already renders
+   `a.agentName ?? a.name`, so this surfaces the right identity
+   without any frontend changes.
+
 ## 0.14.25
 
 **Chat UI polish: slash autocomplete, dedupe'd status bar, input

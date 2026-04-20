@@ -772,7 +772,10 @@
           el("div", { class: "agent-status-dot" + (live ? " live" : "") }),
           el("div", { class: "agent-card-name" }, a.agentName ?? a.name),
           a.running
-            ? el("span", { class: "agent-running-badge" }, [el("span", { class: "agent-running-dot" }), "running"])
+            ? el("span", { class: "agent-running-badge" }, [
+                el("span", { class: "agent-running-dot" }),
+                a.cycleInFlight ? "in cycle" : "running",
+              ])
             : el("span", { class: "badge badge-muted mono" }, a.name),
         ]),
         el("div", { class: "agent-card-stats" }, [
@@ -905,7 +908,7 @@
         const lines = [
           (a.agentName ?? a.name) + " (" + a.name + ")",
           "Model: " + a.model,
-          "Status: " + (a.running ? "running cycle" : "idle"),
+          "Status: " + (a.cycleInFlight ? "in-flight cycle" : a.running ? "daemon running (idle)" : "daemon stopped"),
           "Last cycle: " + (a.lastCycleAt ? ago(a.lastCycleAt) : "never"),
           "Cycles today: " + a.cyclesDay,
           "Pending: " + a.pendingTasks,
