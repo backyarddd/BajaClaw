@@ -37,6 +37,7 @@ import { runScreenshotCommand } from "./commands/screenshot.js";
 import { cmdBrowserEnable, cmdBrowserDisable, cmdBrowserStatus } from "./commands/browser.js";
 import { cmdImage } from "./commands/image.js";
 import { cmdAttach } from "./commands/attach.js";
+import { cmdTranscribe, cmdTts } from "./commands/voice.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -245,6 +246,46 @@ program.command("image <prompt>")
     provider: opts.provider,
     model: opts.model,
     size: opts.size,
+    attach: !!opts.attach,
+    caption: opts.caption,
+    quiet: !!opts.quiet,
+  }));
+
+// Transcribe - speech-to-text via OpenAI Whisper.
+program.command("transcribe <path>")
+  .description("Transcribe an audio file (requires OPENAI_API_KEY)")
+  .option("--profile <name>")
+  .option("--provider <name>", "openai (default)")
+  .option("--model <id>", "override model (default: whisper-1)")
+  .option("--language <code>", "BCP-47 language hint, e.g. en, es, ja")
+  .option("--quiet", "print only the transcript")
+  .action(async (path, opts) => cmdTranscribe({
+    profile: opts.profile,
+    path,
+    provider: opts.provider,
+    model: opts.model,
+    language: opts.language,
+    quiet: !!opts.quiet,
+  }));
+
+// TTS - text-to-speech. Picks OpenAI > ElevenLabs > macOS `say` fallback.
+program.command("tts <text>")
+  .description("Generate speech from text (OpenAI / ElevenLabs / macOS `say`)")
+  .option("--profile <name>", "profile for default output dir")
+  .option("--out <path>", "output path (default: <profileDir>/audio/<ts>.mp3)")
+  .option("--provider <name>", "openai | elevenlabs | system (default: auto)")
+  .option("--voice <name>", "voice id (openai: alloy/echo/fable/onyx/nova/shimmer; elevenlabs: voice id)")
+  .option("--model <id>", "override provider default model")
+  .option("--attach", "push the generated audio to the originating channel")
+  .option("--caption <text>", "caption used on --attach")
+  .option("--quiet", "print only the output path")
+  .action(async (text, opts) => cmdTts({
+    profile: opts.profile,
+    text,
+    out: opts.out,
+    provider: opts.provider,
+    voice: opts.voice,
+    model: opts.model,
     attach: !!opts.attach,
     caption: opts.caption,
     quiet: !!opts.quiet,

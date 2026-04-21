@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.19.8
+
+**Voice in and out: Whisper transcription + TTS reply.**
+
+Two new commands and one inbound transcription path. Voice messages
+on Telegram now auto-transcribe (when `OPENAI_API_KEY` is set) so
+the agent reads what the user actually said, not "[voice]". The
+agent can answer back as audio with one shell call.
+
+- `bajaclaw transcribe <path> [--quiet] [--language en]` - speech to
+  text via OpenAI Whisper. Returns the transcript on stdout, plus
+  language and duration.
+- `bajaclaw tts "<text>" [--out path] [--provider openai|elevenlabs|system]
+  [--voice alloy] [--attach] [--caption ...]` - text to speech.
+  Auto-selects: OpenAI tts-1 (`OPENAI_API_KEY`), then ElevenLabs
+  (`ELEVENLABS_API_KEY`), then macOS `say` + `afconvert` to m4a as a
+  zero-key local fallback (linux/windows error if no key set).
+  `--attach` reuses F6's outbound file path so the audio lands in the
+  originating channel.
+- Telegram inbound: `msg.voice` (OGG/opus voice notes) and
+  `msg.audio` (mp3/m4a uploads) now download to a tmp path and -
+  with `OPENAI_API_KEY` - transcribe inline. The transcript is
+  prepended to the task body as `[voice transcript] ...` /
+  `[audio transcript] ...` so the agent's reply is grounded in the
+  spoken content. Transcription failures log warn and degrade to
+  attaching just the audio file.
+- New bundled skill `voice` with NEVER-ASK triggers ("voice reply",
+  "speak your reply", "transcribe this") and the one-liner usage.
+- 4 new tests. 119/119 pass.
+
 ## 0.19.7
 
 **Streaming responses in `bajaclaw chat`.**
