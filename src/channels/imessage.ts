@@ -397,39 +397,17 @@ export async function startIMessage(
       // chatId here is the normalized handle string for the adapter.
       await sendViaAppleScript(String(chatId), text, log);
     },
-    startTyping: (chatId) => {
-      // Native typing helper (helpers/bajaclaw-imessage-helper) speaks
-      // to IMCore directly to set the "..." indicator. AppleScript
-      // can't do this; our Obj-C helper calls setLocalUserIsTyping:
-      // on IMChat via the private framework.
-      //
-      // IMCore's typing flag auto-expires after ~60s on the receiver
-      // side (matches Messages.app's own heartbeat). We refresh every
-      // 30s to keep it lit until the cycle finishes. Each refresh is
-      // a sub-100ms spawn; cost is negligible.
-      //
-      // Graceful degradation: if the helper isn't installed or fails
-      // (missing TCC permission, no existing chat, Apple changed the
-      // private API), we log once and proceed silently - the adapter
-      // never blocks a reply because of a typing failure.
-      const handle = String(chatId);
-      const first = sendTypingIndicator(handle, true, log);
-      if (!first.ok) {
-        // Return a no-op stop fn; caller side doesn't care about the
-        // distinction as long as the method shape is preserved.
-        return () => { /* no-op */ };
-      }
-      const timer = setInterval(() => {
-        const r = sendTypingIndicator(handle, true, log);
-        // If a refresh fails, stop trying - something changed
-        // (chat deleted, permission revoked). Next cycle will retry.
-        if (!r.ok) clearInterval(timer);
-      }, 30_000);
-      return () => {
-        clearInterval(timer);
-        // Fire-and-forget stop; don't block reply routing on it.
-        sendTypingIndicator(handle, false, log);
-      };
+    startTyping: (_chatId) => {
+      // iMessage typing indicators are not wired as of v0.17.1. v0.17.0
+      // shipped a native helper that talks to IMCore, but the registry
+      // stays empty in a standalone process because we don't register
+      // as a proper IMDaemonListener - imagent only pushes chat state
+      // to subscribed listeners (that's how BlueBubbles works, with a
+      // full Obj-C delegate). The helper binary is retained for a
+      // future pass that implements the listener properly; for now we
+      // keep the shape (startTyping returns a stop fn) so the gateway
+      // plumbing stays consistent.
+      return () => { /* no-op */ };
     },
     stop: async () => {
       stopped = true;

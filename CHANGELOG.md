@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.17.1
+
+**Disable iMessage typing indicator (turned out not to work end-to-end).**
+
+v0.17.0 shipped a native Obj-C helper that dlopens IMCore and calls
+`setLocalUserIsTyping:` on `IMChat`. The helper DOES reach IMCore, DOES
+get a live IMChatRegistry, and DOES call the typing selector without
+errors - but `IMChatRegistry.allExistingChats` is empty in a standalone
+process because we never register as an `IMDaemonListener` with the
+right capability flags. imagent only pushes chat state to subscribed
+listeners; without that, `setLocalUserIsTyping:` has no chat to apply
+to and the lookup fails with exit 4.
+
+Proper fix requires implementing IMDaemonListenerProtocol with the
+appropriate capability flags - roughly the BlueBubbles approach. That's
+a meaningfully larger chunk of reverse-engineered Obj-C than was
+scoped, so `startTyping` reverts to a no-op for now. The helper binary
+and source stay in the tree as the foundation for a future listener
+implementation, or for anyone who wants to experiment.
+
+What still works: iMessage send + receive + routing, cross-restart
+state, allowlist filtering, graceful fallback. Feature parity with
+v0.16 minus the typing pass. Tests: 70/70.
+
 ## 0.17.0
 
 **iMessage typing indicators via a native Obj-C helper.**
