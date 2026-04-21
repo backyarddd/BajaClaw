@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.15.2
+          autonomous agents on your terms  ·  MIT  ·  v0.16.0
 ```
 
 ## What BajaClaw is
@@ -278,18 +278,19 @@ Exit codes are structured so skills can branch: 0 ready, 10 install failed, 20 a
 
 ---
 
-## Channels (Telegram and Discord)
+## Channels (Telegram, Discord, iMessage)
 
 Connect the agent to a chat platform so it can be reached from a phone.
 
 ```
 bajaclaw channel add default telegram --token <BOT_TOKEN>
 bajaclaw channel add default discord --token <BOT_TOKEN> --channel-id <ID> --user-id <YOUR_ID>
+bajaclaw channel add default imessage --contact +15551234567 --contact friend@icloud.com
 bajaclaw channel list default
 bajaclaw channel remove default telegram
 ```
 
-For Telegram, `--user-id` is the numeric ID from `@userinfobot`; it's stored as the allowlist. For Discord, `--channel-id` is the server channel; `--user-id` is optional and restricts who the bot responds to.
+For Telegram, `--user-id` is the numeric ID from `@userinfobot`; it's stored as the allowlist. For Discord, `--channel-id` is the server channel; `--user-id` is optional and restricts who the bot responds to. For iMessage (macOS only), `--contact` is a phone number (any format) or an Apple ID email, repeatable; only messages from allowlisted handles route through.
 
 Inbound messages (from allowlisted senders) are normalized into the tasks queue. The daemon picks them up on the next poll. Outbound replies route back through the same channel. Typing indicators appear while cycles run.
 

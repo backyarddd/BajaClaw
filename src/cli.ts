@@ -187,9 +187,19 @@ daemonCmd.command("run [profile]").action(async (p) => daemon.cmdRun(defaultProf
 
 // Channel group
 const chanCmd = program.command("channel").description("Messaging channels");
-chanCmd.command("add [profile]").argument("<kind>").requiredOption("--token <t>").option("--channel-id <id>").option("--user-id <id>")
-  .action(async (p, kind, o) => channel.cmdAdd(defaultProfile(p), kind as "telegram" | "discord", o.token, o.channelId, o.userId));
-chanCmd.command("remove [profile]").argument("<kind>").action(async (p, kind) => channel.cmdRemove(defaultProfile(p), kind as "telegram" | "discord"));
+chanCmd.command("add [profile]")
+  .argument("<kind>", "telegram | discord | imessage")
+  .option("--token <t>", "bot token (telegram/discord)")
+  .option("--channel-id <id>", "discord channel id, or telegram user id")
+  .option("--user-id <id>", "allowlist user id (discord)")
+  .option("--contact <handle...>", "iMessage contact to allow (phone or email); repeatable")
+  .action(async (p, kind, o) => channel.cmdAdd(defaultProfile(p), kind as "telegram" | "discord" | "imessage", {
+    token: o.token,
+    channelId: o.channelId,
+    userId: o.userId,
+    contact: o.contact,
+  }));
+chanCmd.command("remove [profile]").argument("<kind>").action(async (p, kind) => channel.cmdRemove(defaultProfile(p), kind as "telegram" | "discord" | "imessage"));
 chanCmd.command("list [profile]").action(async (p) => channel.cmdList(defaultProfile(p)));
 
 // Ensure - fluid tool bootstrap. Skills and internal paths call this

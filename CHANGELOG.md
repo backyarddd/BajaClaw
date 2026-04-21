@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.16.0
+
+**iMessage channel adapter (macOS-only). Send and receive iMessages
+through Messages.app, same two-way bridge shape as Telegram and
+Discord. Per-profile: each agent owns its own contact allowlist.**
+
+### Features
+
+1. **`src/channels/imessage.ts`** - new adapter. Outbound via
+   `osascript` + Messages.app's `participants` API. Inbound by polling
+   `~/Library/Messages/chat.db` (SQLite, read-only) every 2s, tracking
+   the last-seen `message.ROWID` in a per-profile state file.
+   First-run seeds the state to the current max ROWID so historical
+   messages don't get replayed as tasks.
+2. **Email or phone handles.** `bajaclaw channel add <profile>
+   imessage --contact <handle>` accepts either a phone number (any
+   format - we normalize to E.164) or an Apple ID email. `--contact`
+   is repeatable for multi-handle allowlists.
+3. **Per-agent channels.** iMessage routes by handle, so different
+   profiles can own different contacts. A "gf" profile can hold her
+   handle while "default" handles your own, with no crossover.
+4. **Permission-aware setup.** The CLI auto-probes Full Disk Access
+   on `channel add` and opens the exact System Settings pane if
+   missing (`x-apple.systempreferences:...?Privacy_AllFiles`).
+   Automation permission prompts on first send; the adapter detects
+   AppleScript error -1743 and surfaces a clear message with the
+   correct next-step URL.
+5. **`setup-imessage` skill.** Platform-gated `[macos, darwin]`
+   fluid wizard: collects contacts, handles the FDA wait loop,
+   restarts the daemon, verifies an inbound/outbound round-trip.
+
+### Engineering notes
+
+- `ChannelConfig.token` is now optional (iMessage doesn't use one);
+  telegram/discord adapters log a clear error on missing token.
+- `ChannelKind = "telegram" | "discord" | "imessage"` is exported
+  from `src/channels/gateway.ts`.
+- Source prefix is `imessage:<normalized-handle>`, so history lookup
+  via `loadSourceHistory` works identically to telegram/discord.
+- Scope (v1): 1:1 chats only, text messages only. Group chats are
+  filtered out via `chat.room_name IS NOT NULL`. Inbound attachments
+  are flagged as `[attachment]` in the task body but not downloaded.
+- 14 new unit tests in `tests/imessage.test.js`: Apple date format
+  (ns + legacy sec), handle normalization (phone/email variants),
+  AppleScript escaping, `chat.db` path resolution, state round-trip,
+  and a full `fetchNewMessages` SQLite query against a fake
+  chat.db-shaped schema.
+
 ## 0.15.2
 
 **Hygiene: zero em dashes in repo (CHANGELOG + chat-ui.tsx + dashboard.ts).**

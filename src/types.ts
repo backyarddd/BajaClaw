@@ -133,9 +133,15 @@ export interface CompactionConfig {
 }
 
 export interface ChannelConfig {
-  kind: "telegram" | "discord";
-  token: string;
+  kind: "telegram" | "discord" | "imessage";
+  // iMessage has no token (Messages.app owns auth via the Mac's Apple ID),
+  // so this is optional on the type and validated per-kind in the adapter.
+  token?: string;
   channelId?: string;
+  // For telegram/discord: user/channel ids. For iMessage: the set of
+  // handles (phone numbers or email addresses) whose inbound messages
+  // should route to this profile. Empty allowlist on iMessage means
+  // "any handle" - dangerous; the CLI warns.
   allowlist?: (string | number)[];
 }
 
