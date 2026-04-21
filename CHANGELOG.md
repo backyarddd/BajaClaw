@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.15.0
+
+**Fluid tool bootstrap + seven new bundled skills. Skills install their
+CLIs automatically, launch auth flows when needed, and work the same
+on macOS, Linux, and Windows.**
+
+### Features
+
+1. **`bajaclaw ensure <tool>` subcommand.** One entry point that every
+   skill and internal path calls before depending on a system tool.
+   Detects OS (darwin/linux/win32) plus available package managers
+   (brew/apt/dnf/pacman/winget/scoop/choco/npm/pipx). Idempotent. Each
+   recipe declares ordered install steps per OS; the runner picks the
+   first manager present. If the tool has an auth flow, `--auth` kicks
+   it off inline. Exit codes are structured (0 ready, 10 install
+   failed, 20 auth pending, 30 unsupported platform, 40 no manager)
+   so shell callers can branch cleanly.
+2. **Built-in recipes for seven tools.** `gh`, `vercel`, `supabase`,
+   `ffmpeg`, `yt-dlp`, `tesseract`, `poppler`. Each recipe covers
+   darwin + linux + win32 with the right manager preference order
+   (e.g. brew first on mac, npm first for node-native tools across
+   all platforms).
+3. **`bajaclaw ensure-list`** enumerates every available recipe and
+   shows which are supported on the current box.
+4. **Seven new bundled skills:**
+   - **github** - full `gh` CLI coverage: PRs, issues, Actions,
+     releases, the `gh api` escape hatch. Uses `bajaclaw ensure gh
+     --auth` as its first step.
+   - **vercel** - deploys, env vars, promote/rollback, logs,
+     aliases. CLI for writes, optional MCP for read-heavy ops.
+   - **supabase** - port of the official `supabase/agent-skills`
+     skill with the bajaclaw ensure wrapper. Schema iteration via
+     `execute_sql`, commit via migrations, `db advisors` security
+     check, type gen, edge function deploy.
+   - **pr-review** - four-pass systematic PR review
+     (understand / correctness / security / tests).
+   - **debug-methodology** - reproduce / bisect / hypothesize /
+     test / fix / verify. Kills patch-chaining.
+   - **conventional-commits** - commit format with the user's rules
+     baked in (no em dashes, no Co-Authored-By trailer).
+   - **ocr-pdf** - text-layer first via pdftotext, OCR fallback via
+     tesseract. Uses `bajaclaw ensure poppler` + `bajaclaw ensure
+     tesseract`.
+
+### Engineering notes
+
+- New files: `src/ensure.ts` (core), `src/ensure-recipes.ts` (tool
+  table), `src/commands/ensure.ts` (CLI wrapper).
+- No breaking changes to existing skills or commands.
+- Tests in `tests/ensure.test.js`: platform detect, recipe integrity,
+  exit code distinctness, skill parse + trigger presence.
+- Cross-platform: recipes specify per-OS steps explicitly; no
+  implicit POSIX assumptions in the new code. (The daemon's orphan
+  sweep in `src/commands/daemon.ts` remains unix-only; planned for
+  v0.15.1.)
+
 ## 0.14.27
 
 **Chat: turn separators, persistent composer with live message queue,

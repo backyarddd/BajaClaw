@@ -31,6 +31,7 @@ import * as skill from "./commands/skill.js";
 import * as profile from "./commands/profile.js";
 import * as daemon from "./commands/daemon.js";
 import * as channel from "./commands/channel.js";
+import { cmdEnsure, cmdEnsureList } from "./commands/ensure.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -190,6 +191,28 @@ chanCmd.command("add [profile]").argument("<kind>").requiredOption("--token <t>"
   .action(async (p, kind, o) => channel.cmdAdd(defaultProfile(p), kind as "telegram" | "discord", o.token, o.channelId, o.userId));
 chanCmd.command("remove [profile]").argument("<kind>").action(async (p, kind) => channel.cmdRemove(defaultProfile(p), kind as "telegram" | "discord"));
 chanCmd.command("list [profile]").action(async (p) => channel.cmdList(defaultProfile(p)));
+
+// Ensure - fluid tool bootstrap. Skills and internal paths call this
+// to make sure a CLI tool is installed and (optionally) authenticated
+// before they depend on it. Cross-platform; detects package managers
+// automatically; idempotent.
+program.command("ensure <tool>")
+  .description("Install and optionally authenticate a system tool (gh, vercel, supabase, ffmpeg, yt-dlp, tesseract, poppler)")
+  .option("--auth", "also kick off the tool's login flow if needed")
+  .option("--quiet", "suppress progress output; exit code still meaningful")
+  .option("--json", "emit a structured JSON outcome on stdout")
+  .option("--check-only", "check install state without modifying the system")
+  .action(async (tool: string, opts) => cmdEnsure(tool, {
+    auth: !!opts.auth,
+    quiet: !!opts.quiet,
+    json: !!opts.json,
+    checkOnly: !!opts.checkOnly,
+  }));
+
+program.command("ensure-list")
+  .description("List every tool bajaclaw knows how to install on this platform")
+  .option("--json", "emit a JSON array")
+  .action(async (opts) => cmdEnsureList({ json: !!opts.json }));
 
 // Update
 program.command("update").description("Check for and install a newer version")
