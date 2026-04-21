@@ -41,6 +41,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runCycle, type CycleOutput } from "../agent.js";
 import { expandAtRefs } from "../at-refs.js";
+import { takeScreenshot } from "./screenshot.js";
 import { saveConfig } from "../config.js";
 import { openDb, type DB } from "../db.js";
 import { tierFor, budgetFor, AUTO, HAIKU, SONNET, OPUS } from "../model-picker.js";
@@ -272,7 +273,13 @@ export function ChatApp({
     let taskText = trimmed;
     let mergedAttachments = attachmentsForTurn;
     try {
-      const expanded = await expandAtRefs(trimmed, { profile });
+      const expanded = await expandAtRefs(trimmed, {
+        profile,
+        onScreen: async () => {
+          try { return await takeScreenshot({ profile, quiet: true }); }
+          catch { return null; }
+        },
+      });
       if (expanded.warnings.length > 0) {
         appendSystemLines(expanded.warnings.map((w) => ({ text: w, dim: true })));
       }

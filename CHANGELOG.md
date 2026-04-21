@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.19.2
+
+**`bajaclaw screenshot`: cross-platform capture, plus `@screen` in chat.**
+
+New command that grabs the primary display to a PNG. macOS uses the
+built-in `screencapture`, linux tries `grim` (wayland), `scrot`,
+`maim`, and `import` (imagemagick) in order, windows uses an inline
+PowerShell snippet that needs no external binary.
+
+- `bajaclaw screenshot` - saves to `<profileDir>/screenshots/<ts>.png`.
+- `bajaclaw screenshot /path/to/out.png` - explicit output.
+- `-i` / `--interactive` (macOS) for click-a-window or drag-a-region.
+- `--region x,y,w,h` and `--display <n>` for macOS targeting.
+- `@screen` in a chat message takes a capture and attaches it to the
+  turn so the agent can see it directly. F2's `@`-ref expansion
+  already exposed the hook; F3 wires it to the real command.
+- Permission failures on macOS surface a clean error pointing at
+  System Settings > Privacy & Security > Screen Recording rather than
+  the raw `exit 1`. Same ergonomics as the iMessage adapter's
+  Automation / FDA messaging.
+- 4 new tests. Live capture (`BAJACLAW_SMOKE_SCREENSHOT=1`) gated so
+  CI runs without Screen Recording permission still pass.
+
 ## 0.19.1
 
 **`@` context references in `bajaclaw chat`.**
