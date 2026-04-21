@@ -140,6 +140,55 @@ async function dispatchApi(
     return;
   }
 
+  // GET /api/plans?status=pending|all - list plans.
+  if (url.startsWith("/api/plans") && method === "GET" && !/\/api\/plans\/\d+/.test(url)) {
+    const status = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`).searchParams.get("status") ?? "pending";
+    const db = openDb(profile);
+    try {
+      const rows = status === "all"
+        ? db.prepare("SELECT id, status, task, plan_text, created_at, approved_at FROM plans ORDER BY id DESC LIMIT 100").all()
+        : db.prepare("SELECT id, status, task, plan_text, created_at, approved_at FROM plans WHERE status='pending' ORDER BY id DESC LIMIT 100").all();
+      json(res, rows);
+    } finally { db.close(); }
+    return;
+  }
+
+  // POST /api/plans/:id/approve - approve and enqueue. Body: {edited?}
+  const planApproveMatch = url.match(/^\/api\/plans\/(\d+)\/approve$/);
+  if (planApproveMatch && method === "POST") {
+    const id = Number(planApproveMatch[1]);
+    const body = await readJson(req).catch(() => ({})) as { edited?: string };
+    const { cmdPlanApprove } = await import("./plan.js");
+    try {
+      // cmdPlanApprove writes to stdout; for the API route we just want
+      // to exec the side effects and report ok. We open the db ourselves
+      // to know what happened.
+      const db = openDb(profile);
+      try {
+        const row = db.prepare("SELECT * FROM plans WHERE id = ?").get(id) as { status: string } | undefined;
+        if (!row) { json(res, { ok: false, error: "not found" }, 404); return; }
+        if (row.status !== "pending") { json(res, { ok: false, error: `already ${row.status}` }, 409); return; }
+      } finally { db.close(); }
+      await cmdPlanApprove(profile, id, { edited: body.edited });
+      json(res, { ok: true });
+    } catch (e) {
+      json(res, { ok: false, error: (e as Error).message }, 500);
+    }
+    return;
+  }
+
+  // POST /api/plans/:id/cancel - cancel.
+  const planCancelMatch = url.match(/^\/api\/plans\/(\d+)\/cancel$/);
+  if (planCancelMatch && method === "POST") {
+    const id = Number(planCancelMatch[1]);
+    const db = openDb(profile);
+    try {
+      const r = db.prepare("UPDATE plans SET status='cancelled' WHERE id = ? AND status='pending'").run(id);
+      json(res, { ok: r.changes > 0 });
+    } finally { db.close(); }
+    return;
+  }
+
   // POST /api/attach - push an attachment to the originating channel
   // of a running cycle. Body: {path, source?, caption?}. When source
   // is set, attachments go to that channel; otherwise the last
