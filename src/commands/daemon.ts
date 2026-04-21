@@ -225,13 +225,37 @@ function isRunning(pid: number): boolean {
 // Find running processes whose command line contains `daemon run <profile>`.
 // Skip our own pid and any pid stored in the pidfile (stop before
 // calling this if you want to sweep the referenced daemon too).
+//
+// Cross-platform: unix uses `ps -axo`; Windows uses PowerShell's
+// Get-CimInstance Win32_Process (wmic is deprecated in Win11).
 function findStaleDaemons(profile: string): number[] {
-  if (process.platform === "win32") return []; // `ps` unavailable
-  const needle = `daemon run ${profile}`;
-  const r = spawnSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
-  if (r.status !== 0 || !r.stdout) return [];
   const ownPid = process.pid;
   const referenced = readReferencedPid(profile);
+  // Defensive: profile names are validated upstream but sanitize the
+  // PowerShell -like pattern too so a literal `*` or `'` in a profile
+  // name can't escape the wildcard match.
+  const safeProfile = profile.replace(/[^a-zA-Z0-9 _-]/g, "");
+  const needle = `daemon run ${safeProfile}`;
+
+  if (process.platform === "win32") {
+    // Single-quoted strings in PowerShell don't interpolate, but the
+    // pattern still needs balanced quotes. `-like '*...*'` with sanitized
+    // input is safe.
+    const script = `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${needle}*' -and $_.CommandLine -like '*bajaclaw*' } | Select-Object -ExpandProperty ProcessId`;
+    const r = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
+    if (r.status !== 0 || !r.stdout) return [];
+    const out: number[] = [];
+    for (const line of r.stdout.split(/\r?\n/)) {
+      const pid = Number(line.trim());
+      if (!Number.isFinite(pid) || pid <= 0) continue;
+      if (pid === ownPid || pid === referenced) continue;
+      out.push(pid);
+    }
+    return out;
+  }
+
+  const r = spawnSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
+  if (r.status !== 0 || !r.stdout) return [];
   const out: number[] = [];
   for (const line of r.stdout.split("\n")) {
     if (!line.includes(needle)) continue;
