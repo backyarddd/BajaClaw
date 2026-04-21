@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.19.10
+
+**Per-cycle shadow-git checkpoints + `bajaclaw rewind`.**
+
+Opt-in safety net for cycles that touch files. When
+`config.snapshots.enabled = true`, every cycle commits the snapshot
+root to a separate shadow git repo (`<profileDir>/snapshots/.shadow-git`)
+before running and again after. The dashboard cycle drawer gets a
+"rewind" button; the CLI gets `bajaclaw rewind <cycleId>`. Rewinding
+is destructive but bounded: only the snapshot root, only that cycle's
+pre-state.
+
+- New `src/snapshots.ts`: `snapshot(profile, root, label)` and
+  `rewindToSha(profile, root, sha)` wrap a bare shadow git so we
+  never touch the user's own `.git`. Failures (no git on PATH, root
+  missing, init blocked) degrade to no-op with a warn log.
+- Cycles get three new columns (migration v4): `pre_sha`, `post_sha`,
+  `snapshot_root`. The agent.ts cycle records all three when
+  snapshots are enabled.
+- `config.snapshots.root` overrides the default (defaults to the
+  profile workdir). Set this to the user's project repo to protect
+  application code rather than profile state.
+- `bajaclaw rewind <cycleId>` requires `--yes` to actually modify
+  files. `--dry-run` shows what would happen.
+- `bajaclaw snapshot-list [--root <path>]` shows the shadow-git
+  history for inspection.
+- Dashboard cycle drawer: rewind button only appears when the cycle
+  has `pre_sha` set. Browser confirm() gate before calling
+  `POST /api/cycles/:id/rewind`.
+- Default is OFF. Most users have their own git workflow; checkpoint
+  is for unattended automation where rollback needs to be one click.
+- 3 new tests including the live snapshot+rewind round-trip via real
+  git. 124/124 pass.
+
 ## 0.19.9
 
 **Plan mode: agent writes a plan, user approves before any execution.**

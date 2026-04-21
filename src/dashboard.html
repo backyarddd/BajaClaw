@@ -1120,7 +1120,10 @@
             el("span", { class: "badge " + (c.status === "ok" ? "badge-success" : c.status === "running" ? "badge-info" : "badge-danger") }, c.status ?? "?"),
             el("span", { style: "margin-left:10px" }, "Cycle #" + c.id),
           ]),
-          el("button", { class: "btn btn-ghost", onclick: () => drawer.remove() }, "close"),
+          el("div", { style: "display:flex; gap:6px; align-items:center" }, [
+            (c.pre_sha ? rewindButton(c) : null),
+            el("button", { class: "btn btn-ghost", onclick: () => drawer.remove() }, "close"),
+          ]),
         ]),
         kvBlock([
           ["started", c.started_at ?? ""],
@@ -1129,7 +1132,9 @@
           ["cost", c.cost_usd != null ? usd(c.cost_usd) : "-"],
           ["tokens", ((c.input_tokens ?? 0) + " in / " + (c.output_tokens ?? 0) + " out")],
           ["turns", String(c.turns ?? "-")],
-        ]),
+          c.pre_sha ? ["pre-snapshot", String(c.pre_sha).slice(0, 12)] : null,
+          c.snapshot_root ? ["snapshot root", c.snapshot_root] : null,
+        ].filter(Boolean)),
         el("div", { style: "margin-top:16px" }, [
           el("div", { class: "label" }, "Task"),
           el("pre", { class: "mono", style: preStyle() }, c.task ?? ""),
@@ -1153,6 +1158,39 @@
       ]),
     ]);
     document.body.append(drawer);
+  }
+
+  function rewindButton(cycle) {
+    const btn = el("button", { class: "btn btn-secondary", type: "button" }, "rewind");
+    btn.addEventListener("click", async () => {
+      const ok = window.confirm(
+        "Rewind cycle #" + cycle.id + "?\n\n" +
+        "This restores '" + (cycle.snapshot_root || "?") + "' to the pre-cycle state. " +
+        "Uncommitted changes there will be overwritten."
+      );
+      if (!ok) return;
+      btn.disabled = true; btn.textContent = "rewinding...";
+      try {
+        const r = await fetch("/api/cycles/" + cycle.id + "/rewind", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ confirm: true }),
+        }).then((x) => x.json());
+        if (r.ok) {
+          btn.textContent = "rewound ✓";
+          btn.style.color = "var(--success)";
+        } else {
+          btn.textContent = "failed";
+          btn.disabled = false;
+          alert("rewind failed: " + (r.error || "unknown"));
+        }
+      } catch (e) {
+        btn.textContent = "failed";
+        btn.disabled = false;
+        alert("rewind error: " + e.message);
+      }
+    });
+    return btn;
   }
 
   function kvBlock(rows) {
