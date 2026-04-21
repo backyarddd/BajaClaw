@@ -99,6 +99,25 @@ const MIGRATIONS: { version: number; sql: string }[] = [
     version: 2,
     sql: `ALTER TABLE tasks ADD COLUMN attachments TEXT DEFAULT NULL;`,
   },
+  {
+    version: 3,
+    sql: `
+      CREATE TABLE IF NOT EXISTS plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL,
+        approved_at TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        task TEXT NOT NULL,
+        plan_text TEXT NOT NULL,
+        plan_json TEXT,
+        cycle_id INTEGER,
+        approved_task_id INTEGER,
+        FOREIGN KEY (cycle_id) REFERENCES cycles(id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
+      CREATE INDEX IF NOT EXISTS idx_plans_created ON plans(created_at);
+    `,
+  },
 ];
 
 export function openDb(profile: string): DB {

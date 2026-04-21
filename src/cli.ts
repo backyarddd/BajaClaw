@@ -38,6 +38,7 @@ import { cmdBrowserEnable, cmdBrowserDisable, cmdBrowserStatus } from "./command
 import { cmdImage } from "./commands/image.js";
 import { cmdAttach } from "./commands/attach.js";
 import { cmdTranscribe, cmdTts } from "./commands/voice.js";
+import { cmdPlan, cmdPlanList, cmdPlanShow, cmdPlanApprove, cmdPlanCancel } from "./commands/plan.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -250,6 +251,37 @@ program.command("image <prompt>")
     caption: opts.caption,
     quiet: !!opts.quiet,
   }));
+
+// Plan mode - the agent writes a structured plan instead of executing.
+// Persists to the plans table with status=pending. User reviews then
+// approves (enqueues a real task with the plan attached) or cancels.
+const planCmd = program.command("plan").description("Plan mode: review the agent's plan before executing");
+planCmd.command("create [profile]")
+  .description("Generate a plan for a task and store it for review")
+  .requiredOption("--task <text>", "task description")
+  .option("--model <id>", "override model for the planning cycle")
+  .action(async (p, opts) => cmdPlan({
+    profile: defaultProfile(p),
+    task: opts.task,
+    modelOverride: opts.model,
+  }));
+planCmd.command("list [profile]")
+  .description("List pending plans (--all for all statuses)")
+  .option("--all", "include approved + cancelled")
+  .action(async (p, opts) => cmdPlanList(defaultProfile(p), { all: !!opts.all }));
+planCmd.command("show [profile]")
+  .description("Show a stored plan in full")
+  .requiredOption("--id <n>", "plan id")
+  .action(async (p, opts) => cmdPlanShow(defaultProfile(p), Number(opts.id)));
+planCmd.command("approve [profile]")
+  .description("Approve a plan; enqueues a high-priority task with the plan attached")
+  .requiredOption("--id <n>", "plan id")
+  .option("--edited <text>", "use this text as the final plan instead of the stored one")
+  .action(async (p, opts) => cmdPlanApprove(defaultProfile(p), Number(opts.id), { edited: opts.edited }));
+planCmd.command("cancel [profile]")
+  .description("Cancel a pending plan")
+  .requiredOption("--id <n>", "plan id")
+  .action(async (p, opts) => cmdPlanCancel(defaultProfile(p), Number(opts.id)));
 
 // Transcribe - speech-to-text via OpenAI Whisper.
 program.command("transcribe <path>")

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.19.9
+
+**Plan mode: agent writes a plan, user approves before any execution.**
+
+New `plans` table (migration v3), CLI command group, and dashboard
+view. The flow: ask for a plan, the agent emits a structured
+markdown spec (Goal / Steps / Risks / Success criteria) but does NOT
+execute. Plans land on the queue for review. Approve from the CLI or
+the dashboard; the original task is then enqueued with the plan
+attached as the execution contract.
+
+- `bajaclaw plan create --task "..."` runs a plan-only cycle and
+  stores the result.
+- `bajaclaw plan list [--all]` shows pending (or all) plans.
+- `bajaclaw plan show --id <n>` prints a plan in full.
+- `bajaclaw plan approve --id <n> [--edited <text>]` approves and
+  enqueues. `--edited` overrides the stored plan.
+- `bajaclaw plan cancel --id <n>` cancels a pending plan.
+- Dashboard "Plans" view: list with inline-editable plan body,
+  Approve + Cancel buttons. Shows status badges (pending / approved
+  / cancelled). New routes `GET /api/plans?status=pending|all`,
+  `POST /api/plans/:id/approve`, `POST /api/plans/:id/cancel`.
+- Approved tasks land at priority `high` so they jump the queue
+  ahead of routine work.
+- Plan-only cycle uses an injected system prompt that mandates
+  markdown shape and bans tool calls. Prose plan, not JSON; the
+  user reviews English.
+- 2 new tests. 121/121 pass.
+
 ## 0.19.8
 
 **Voice in and out: Whisper transcription + TTS reply.**
