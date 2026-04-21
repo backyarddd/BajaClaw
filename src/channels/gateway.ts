@@ -61,6 +61,7 @@ interface Adapter {
   kind: ChannelKind;
   send: Sender;
   sendFile?: FileSender;
+  sendTapback?: (chatId: string | number, messageGuid: string, type: number) => Promise<void>;
   startTyping: TypingStarter;
   stop: () => Promise<void>;
 }
@@ -170,6 +171,27 @@ export async function sendAttachmentToSource(
   if (!a || !a.sendFile) return false;
   await a.sendFile(id, path, caption);
   return true;
+}
+
+/** Send a tapback (reaction) to a specific message. iMessage only
+ *  for now. Returns false if the channel does not support it OR the
+ *  AppleScript path failed (e.g. private-entitlement gate on macOS
+ *  14+). Callers should treat this as best-effort. */
+export async function sendTapbackToSource(
+  profile: string,
+  source: string,
+  messageGuid: string,
+  type: number,
+): Promise<boolean> {
+  const colon = source.indexOf(":");
+  if (colon < 0) return false;
+  const kind = source.slice(0, colon);
+  const id = source.slice(colon + 1);
+  if (kind !== "imessage") return false;
+  const a = adapters.get(key(profile, kind));
+  if (!a || !a.sendTapback) return false;
+  try { await a.sendTapback(id, messageGuid, type); return true; }
+  catch { return false; }
 }
 
 /** Like sendAttachmentToSource but pings the last-active chat on the

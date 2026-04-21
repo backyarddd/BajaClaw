@@ -10,7 +10,7 @@ import { bajaclawHome, profileLogDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
 import { runCycle } from "../agent.js";
-import { sendProgressToSource, broadcastToProfile, sendAttachmentToSource, broadcastAttachmentToProfile } from "../channels/gateway.js";
+import { sendProgressToSource, broadcastToProfile, sendAttachmentToSource, broadcastAttachmentToProfile, sendTapbackToSource } from "../channels/gateway.js";
 import { loadAllSkillsRaw, runtimeSkipReason } from "../skills/loader.js";
 import { currentVersion } from "../updater.js";
 import type { AgentConfig, ChannelConfig } from "../types.js";
@@ -137,6 +137,24 @@ async function dispatchApi(
       broadcastToProfile(profile, text);
     }
     json(res, { ok: true });
+    return;
+  }
+
+  // POST /api/tapback - send an iMessage tapback (reaction). Body:
+  // {source, messageGuid, type}. iMessage only; gracefully no-ops for
+  // other channels and surfaces best-effort outcome.
+  if (url === "/api/tapback" && method === "POST") {
+    const body = await readJson(req).catch(() => ({})) as { source?: string; messageGuid?: string; type?: number };
+    if (!body.source || !body.messageGuid || typeof body.type !== "number") {
+      json(res, { ok: false, error: "source, messageGuid, type required" }, 400);
+      return;
+    }
+    try {
+      const ok = await sendTapbackToSource(profile, body.source, body.messageGuid, body.type);
+      json(res, { ok });
+    } catch (e) {
+      json(res, { ok: false, error: (e as Error).message }, 500);
+    }
     return;
   }
 
