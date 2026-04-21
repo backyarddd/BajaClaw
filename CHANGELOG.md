@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.16.2
+
+**Docs: full iMessage coverage, ensure subsystem, per-agent channels.**
+
+Rewrote `docs/channels.md` with the three-adapter picture (Telegram,
+Discord, iMessage), permission model for macOS, per-agent channel
+dedication pattern, source-routing shape, and troubleshooting. Added
+`imessage` to the guide topic list in `docs/commands.md`. Updated
+`docs/commands.md` command table with `bajaclaw ensure` and the
+`--contact` flag. Updated `docs/architecture.md` to reference the
+new `src/ensure*.ts` and iMessage adapter. Added a dedicated
+security note for iMessage being entirely local. Added the seven
+tool-facing skills (github/vercel/supabase/pr-review/debug-methodology/
+conventional-commits/ocr-pdf) plus `setup-imessage` to the skill
+inventory in `docs/skills.md`.
+
+No code changes.
+
 ## 0.16.1
 
 **Stop re-opening System Settings on every daemon restart when iMessage
