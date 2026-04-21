@@ -258,10 +258,12 @@ export async function startIMessage(
 
   const probe = probeFullDiskAccess();
   if (!probe.granted) {
+    // Log-only here: the CLI already opens the System Settings pane
+    // when the user runs `channel add imessage`. Re-opening it on
+    // every daemon restart is noise - trust that they'll grant it
+    // when they see the CLI nudge, and that subsequent daemon
+    // restarts will pick it up automatically.
     log.error("gateway.imessage.fda-missing", { error: probe.error });
-    // Open the pane once to nudge the user - idempotent; they can
-    // just close it if they've already granted.
-    openFullDiskAccessPane();
     return undefined;
   }
 
