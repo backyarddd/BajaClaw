@@ -157,3 +157,70 @@ test("setup-imessage skill is platform-gated to darwin/macos", () => {
   assert.match(md, /bajaclaw channel add/);
   assert.match(md, /Full Disk Access/);
 });
+
+test("typing helper binary is present and executable on macOS", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only");
+  const bin = join(__dirname, "..", "helpers", "bajaclaw-imessage-helper");
+  assert.ok(existsSync(bin), `missing helper: ${bin}`);
+  const { statSync } = await import("node:fs");
+  const st = statSync(bin);
+  assert.ok(st.isFile());
+  // Executable bit on owner at minimum
+  assert.ok((st.mode & 0o100) !== 0, "helper not executable");
+});
+
+test("typing helper exits with usage on missing args", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only");
+  const { spawnSync } = await import("node:child_process");
+  const bin = join(__dirname, "..", "helpers", "bajaclaw-imessage-helper");
+  const r = spawnSync(bin, [], { encoding: "utf8" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /usage/);
+});
+
+test("typing helper returns clean error for nonexistent chat (IMCore loads)", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only");
+  const { spawnSync } = await import("node:child_process");
+  const bin = join(__dirname, "..", "helpers", "bajaclaw-imessage-helper");
+  // A handle that cannot exist as a chat - exit 4 proves IMCore loaded,
+  // IMChatRegistry resolved, and the code path reached the "no chat"
+  // branch without crashing.
+  const r = spawnSync(bin, ["start", "+19999999999"], { encoding: "utf8" });
+  assert.equal(r.status, 4);
+  assert.match(r.stderr, /no existing chat/);
+});
+
+test("resolveTypingHelperPath finds the shipped binary", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only");
+  const { resolveTypingHelperPath } = await import("../dist/channels/imessage.js");
+  const p = resolveTypingHelperPath();
+  assert.ok(p, "helper path should resolve");
+  assert.match(p, /bajaclaw-imessage-helper$/);
+});
+
+test("sendTypingIndicator returns ok:false for nonexistent chat with graceful exit code", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only");
+  const { sendTypingIndicator } = await import("../dist/channels/imessage.js");
+  const r = sendTypingIndicator("+19999999999", true);
+  assert.equal(r.ok, false);
+  assert.equal(r.exitCode, 4);
+  assert.match(r.error || "", /no existing chat/);
+});
+
+test("sendTypingIndicator returns unsupported-platform on non-darwin", async (t) => {
+  // We can't change process.platform at runtime, but we can assert the
+  // code path exists by reading the compiled dist.
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(join(__dirname, "..", "dist", "channels", "imessage.js"), "utf8");
+  assert.match(src, /unsupported-platform/);
+});
+
+test("universal Mach-O: helper contains both arm64 and x86_64 slices", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only");
+  const { spawnSync } = await import("node:child_process");
+  const bin = join(__dirname, "..", "helpers", "bajaclaw-imessage-helper");
+  const r = spawnSync("lipo", ["-info", bin], { encoding: "utf8" });
+  if (r.status !== 0) return t.skip("lipo unavailable");
+  assert.match(r.stdout, /arm64/);
+  assert.match(r.stdout, /x86_64/);
+});

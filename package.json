@@ -1,6 +1,6 @@
 {
   "name": "bajaclaw",
-  "version": "0.16.2",
+  "version": "0.17.0",
   "description": "BajaClaw - autonomous agents on your terms",
   "type": "module",
   "bajaclaw": {
@@ -12,7 +12,8 @@
     "bajaclaw": "bin/bajaclaw.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-static.js",
+    "build": "tsc -p tsconfig.json && node scripts/copy-static.js && node scripts/build-imessage-helper.mjs",
+    "build:helper": "node scripts/build-imessage-helper.mjs",
     "dev": "tsx src/cli.ts",
     "dashboard:dev": "tsx watch src/cli.ts dashboard",
     "test": "node scripts/run-tests.js",
@@ -23,6 +24,7 @@
   "files": [
     "bin/",
     "dist/",
+    "helpers/",
     "scripts/",
     "skills/",
     "templates/"
