@@ -32,6 +32,7 @@ import * as profile from "./commands/profile.js";
 import * as daemon from "./commands/daemon.js";
 import * as channel from "./commands/channel.js";
 import { cmdEnsure, cmdEnsureList } from "./commands/ensure.js";
+import { runWatch } from "./commands/watch.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -217,6 +218,24 @@ program.command("ensure <tool>")
     quiet: !!opts.quiet,
     json: !!opts.json,
     checkOnly: !!opts.checkOnly,
+  }));
+
+// Watch - file watcher that turns `// AI:` / `# AI:` / `<!-- AI: -->`
+// markers in source files into tasks on the profile's queue. On first
+// run per profile it seeds the dedup state without enqueuing, so the
+// existing tree doesn't flood the queue.
+program.command("watch [paths...]")
+  .description("Watch files for `AI:` comments and enqueue them as tasks")
+  .option("--profile <name>", "profile (default: $BAJACLAW_PROFILE or 'default')")
+  .option("--purge", "clear dedup state before starting (forces re-seed)")
+  .option("--once", "scan once and exit (no live watch)")
+  .option("--dry-run", "print matches, do not enqueue")
+  .action(async (paths: string[], opts) => runWatch({
+    profile: defaultProfile(opts.profile),
+    paths,
+    purge: !!opts.purge,
+    once: !!opts.once,
+    dryRun: !!opts.dryRun,
   }));
 
 program.command("ensure-list")

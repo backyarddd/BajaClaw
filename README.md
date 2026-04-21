@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.18.1
+          autonomous agents on your terms  ·  MIT  ·  v0.19.0
 ```
 
 ## What BajaClaw is
@@ -598,6 +598,7 @@ Full detail in [docs/commands.md](docs/commands.md). Summary:
 | `banner` | print the ASCII banner |
 | `welcome` | print the welcome + next steps |
 | `say <text>` | send a progress update (used from inside cycles) |
+| `watch [paths...]` | watch files for `// AI:` / `# AI:` / `<!-- AI: -->` comments and enqueue them as tasks |
 
 ### Environment variables
 
