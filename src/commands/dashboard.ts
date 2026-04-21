@@ -187,6 +187,66 @@ async function dispatchApi(
     return;
   }
 
+  // GET /api/clawhub/search?q=... - proxy to ClawHub registry search.
+  // Never exposes a token or local state; just forwards the query and
+  // returns a small subset of fields the UI renders.
+  if (url.startsWith("/api/clawhub/search") && method === "GET") {
+    const q = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`).searchParams.get("q") ?? "";
+    if (!q.trim()) { json(res, { results: [] }); return; }
+    try {
+      const registry = (process.env.CLAWHUB_REGISTRY ?? "https://clawhub.ai").replace(/\/+$/, "");
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 10_000);
+      const r = await fetch(`${registry}/api/v1/search?q=${encodeURIComponent(q)}`, { signal: ac.signal });
+      clearTimeout(timer);
+      if (!r.ok) { json(res, { results: [], error: `HTTP ${r.status}` }, r.status); return; }
+      const body = await r.json() as { results?: Array<{ slug: string; displayName?: string; summary?: string; score?: number }> };
+      const results = (body.results ?? []).slice(0, 25).map((it) => ({
+        slug: it.slug,
+        displayName: it.displayName ?? it.slug,
+        summary: it.summary ?? "",
+        score: it.score,
+      }));
+      json(res, { results });
+    } catch (e) {
+      json(res, { results: [], error: (e as Error).message }, 502);
+    }
+    return;
+  }
+
+  // POST /api/clawhub/install - install a ClawHub skill into the user scope.
+  // Body: {"slug": "<slug>", "version": "<ver>"}. Shells out to
+  // `bajaclaw skill install clawhub:<slug>[@ver]` with the confirm env
+  // already set - the dashboard request itself counts as the confirm.
+  if (url === "/api/clawhub/install" && method === "POST") {
+    let body = "";
+    req.on("data", (chunk) => body += chunk.toString());
+    req.on("end", async () => {
+      try {
+        const parsed = JSON.parse(body || "{}") as { slug?: string; version?: string };
+        const slug = String(parsed.slug ?? "").trim();
+        if (!slug) { json(res, { ok: false, error: "slug required" }, 400); return; }
+        const spec = parsed.version ? `clawhub:${slug}@${parsed.version}` : `clawhub:${slug}`;
+        const { spawn } = await import("node:child_process");
+        const binJs = join(__dirname, "..", "..", "bin", "bajaclaw.js");
+        const proc = spawn(process.execPath, [binJs, "skill", "install", spec, "--yes"], {
+          env: { ...process.env, BAJACLAW_CONFIRM: "yes" },
+        });
+        let stdout = "";
+        let stderr = "";
+        proc.stdout.on("data", (d) => stdout += d.toString());
+        proc.stderr.on("data", (d) => stderr += d.toString());
+        proc.on("close", (code) => {
+          if (code === 0) json(res, { ok: true, stdout });
+          else json(res, { ok: false, stderr: stderr || stdout, code }, 500);
+        });
+      } catch (e) {
+        json(res, { ok: false, error: (e as Error).message }, 500);
+      }
+    });
+    return;
+  }
+
   // GET /api/skills - active + inactive skills with origin.
   if (url === "/api/skills" && method === "GET") {
     const skills = loadAllSkillsRaw(profile);

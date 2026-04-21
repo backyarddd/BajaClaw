@@ -524,7 +524,27 @@
 
       <section class="view" id="view-skills">
         <div class="card">
-          <div class="card-title">Skills <span class="card-sub" id="skills-count"></span></div>
+          <div class="card-title">
+            ClawHub marketplace
+            <span class="card-sub">search and install skills from the registry</span>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px">
+            <input
+              id="clawhub-q"
+              type="search"
+              placeholder="search clawhub (e.g. pr review, migrate db, gmail)"
+              class="input"
+              style="flex:1"
+              autocomplete="off"
+            />
+            <button class="btn" id="clawhub-search" type="button">search</button>
+          </div>
+          <div id="clawhub-status" class="help" style="min-height:18px"></div>
+          <div class="list" id="clawhub-results"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Installed skills <span class="card-sub" id="skills-count"></span></div>
           <div class="list" id="skills-list"></div>
         </div>
       </section>
@@ -1227,6 +1247,75 @@
       ]));
     }
   }
+
+  // ClawHub marketplace. Search hits /api/clawhub/search (a proxy), install
+  // hits /api/clawhub/install which shells out to `skill install clawhub:<slug>`.
+  async function clawhubSearch() {
+    const q = $("#clawhub-q").value.trim();
+    const status = $("#clawhub-status");
+    const list = $("#clawhub-results");
+    list.innerHTML = "";
+    if (!q) { status.textContent = ""; return; }
+    status.textContent = "searching...";
+    try {
+      const data = await api("/api/clawhub/search?q=" + encodeURIComponent(q));
+      const results = data.results || [];
+      if (data.error) {
+        status.textContent = "search error: " + data.error;
+        return;
+      }
+      status.textContent = results.length === 0
+        ? "no matches"
+        : results.length + " match" + (results.length === 1 ? "" : "es");
+      for (const r of results) {
+        const btn = el("button", { class: "btn btn-secondary", type: "button" }, "install");
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          btn.textContent = "installing...";
+          try {
+            const out = await fetch("/api/clawhub/install", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ slug: r.slug }),
+            }).then((x) => x.json());
+            if (out.ok) {
+              btn.textContent = "installed ✓";
+              btn.style.color = "var(--success)";
+              btn.style.borderColor = "rgba(34,197,94,0.3)";
+              // Refresh the installed list so the new skill appears.
+              renderSkills().catch(() => {});
+            } else {
+              btn.textContent = "install failed";
+              btn.disabled = false;
+              status.textContent = "install error: " + (out.stderr || out.error || "code " + out.code);
+            }
+          } catch (e) {
+            btn.textContent = "install failed";
+            btn.disabled = false;
+            status.textContent = "install error: " + e.message;
+          }
+        });
+        list.append(el("div", { class: "list-item" }, [
+          el("div", { class: "list-item-main" }, [
+            el("div", { class: "list-item-title" }, [
+              el("span", { class: "mono" }, r.slug),
+              r.displayName && r.displayName !== r.slug
+                ? el("span", { class: "muted", style: "margin-left:8px" }, "· " + r.displayName)
+                : null,
+            ]),
+            el("div", { class: "list-item-sub" }, r.summary || ""),
+          ]),
+          btn,
+        ]));
+      }
+    } catch (e) {
+      status.textContent = "search failed: " + e.message;
+    }
+  }
+  $("#clawhub-search").addEventListener("click", clawhubSearch);
+  $("#clawhub-q").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); clawhubSearch(); }
+  });
 
   async function renderChannels() {
     const rows = await api("/api/channels");

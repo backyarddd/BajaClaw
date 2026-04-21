@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.19.4
+
+**Em-dash hygiene regression in 0.19.3.**
+
+0.19.3 shipped with one em dash (U+2014) in `src/dashboard.html` in
+the new ClawHub result row - the separator between slug and display
+name. Repo em-dash count has been 0 for releases since v0.15.2; 0.19.4
+restores that. Swapped to middle dot. 0.19.3 deprecated on npm
+pointing users here. No other runtime delta.
+
+## 0.19.3
+
+**ClawHub skill marketplace in the dashboard.**
+
+The Skills view now has a search box that hits the ClawHub registry
+live and renders matching skills with a one-click install button.
+Search returns slug + display name + summary; install shells out to
+`bajaclaw skill install clawhub:<slug> --yes` on the server side and
+refreshes the installed list on success.
+
+- `GET /api/clawhub/search?q=<query>`: proxy to
+  `https://clawhub.ai/api/v1/search`. 10 s timeout, trims results to
+  25, returns `{results, error?}`. Never exposes local state.
+- `POST /api/clawhub/install`: body `{slug, version?}`. Shells out
+  with `BAJACLAW_CONFIRM=yes` so the skill writes without the
+  interactive prompt. Install output and exit code round-trip back
+  to the caller.
+- UI wires both routes and degrades gracefully: disabled button
+  during install, green checkmark on success, inline error on
+  failure. No new CSS classes; reuses existing `.input`, `.btn`,
+  `.list-item`, and `--success` tokens.
+- Registry URL is overridable via the existing `CLAWHUB_REGISTRY`
+  env var, matching `skill install` / `skill search`.
+
 ## 0.19.2
 
 **`bajaclaw screenshot`: cross-platform capture, plus `@screen` in chat.**
