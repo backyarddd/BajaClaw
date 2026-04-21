@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.17.3
+
+**iMessage typing indicator: revert to no-op. Approach doesn't work on macOS 26.**
+
+v0.17.2's listener-registration fix was theoretically sound (Barcelona
+/ BlueBubbles use the same idea) but empirically fails on macOS 26:
+
+- `[[daemon listener] addHandler:]` succeeds.
+- `connectToDaemonWithLaunch:capabilities:blockUntilConnected:` succeeds
+  with Barcelona's bitmask (17179869241).
+- Adding `IMAccountController.sharedInstance()` as a daemon handler
+  succeeds.
+- But `IMAccountController.accounts` stays empty, `activeIMessageAccount`
+  is nil, and `IMServiceImpl.iMessageService` returns nil.
+- Without an account there's no `IMHandle`, without a handle there's no
+  `IMChat`, and `setLocalUserIsTyping:` has nothing to call.
+
+Ad-hoc code signing doesn't help. The gate appears to be that macOS 26
+withholds iMessage account state from processes that aren't signed with
+private entitlements (`com.apple.private.imcore.*`) or running inside
+a trusted bundle (Messages.app, imagent.app).
+
+So `startTyping` reverts to a no-op. The helper binary and `.m` source
+stay in the tree for future work if Apple relaxes this or we adopt a
+signing path. No user-facing regression vs v0.17.1; v0.17.2 was never
+installed widely.
+
+**Also**: if iMessage replies feel slow, check `effort` and `model` in
+`~/.bajaclaw/profiles/<p>/config.json`. `model: claude-opus-4-7` with
+`effort: max` has noticeably higher latency than `sonnet` or `haiku`
+for short messages. Switch to `sonnet` (or `auto` for per-task routing)
+if latency matters more than reasoning depth.
+
 ## 0.17.2
 
 **iMessage typing indicator: fix IMDaemonListener registration so imagent pushes chat state.**
