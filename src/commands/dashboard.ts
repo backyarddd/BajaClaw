@@ -140,6 +140,34 @@ async function dispatchApi(
     return;
   }
 
+  // POST /api/cycles/:id/rewind - destructive: restore the work tree
+  // to the cycle's pre-snapshot state. Body: {confirm:true}. No-op
+  // when the cycle wasn't snapshotted.
+  const rewindMatch = url.match(/^\/api\/cycles\/(\d+)\/rewind$/);
+  if (rewindMatch && method === "POST") {
+    const id = Number(rewindMatch[1]);
+    const body = await readJson(req).catch(() => ({})) as { confirm?: boolean };
+    if (!body.confirm) { json(res, { ok: false, error: "confirm flag required" }, 400); return; }
+    try {
+      const db = openDb(profile);
+      let pre: string | null = null;
+      let root: string | null = null;
+      try {
+        const row = db.prepare("SELECT pre_sha, snapshot_root FROM cycles WHERE id = ?").get(id) as { pre_sha: string | null; snapshot_root: string | null } | undefined;
+        if (!row) { json(res, { ok: false, error: "not found" }, 404); return; }
+        pre = row.pre_sha; root = row.snapshot_root;
+      } finally { db.close(); }
+      if (!pre || !root) { json(res, { ok: false, error: "no snapshot for this cycle" }, 409); return; }
+      const { rewindToSha } = await import("../snapshots.js");
+      const r = await rewindToSha(profile, root, pre);
+      if (r.ok) json(res, { ok: true, sha: r.sha });
+      else json(res, { ok: false, error: r.error }, 500);
+    } catch (e) {
+      json(res, { ok: false, error: (e as Error).message }, 500);
+    }
+    return;
+  }
+
   // GET /api/plans?status=pending|all - list plans.
   if (url.startsWith("/api/plans") && method === "GET" && !/\/api\/plans\/\d+/.test(url)) {
     const status = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`).searchParams.get("status") ?? "pending";

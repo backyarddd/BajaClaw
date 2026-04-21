@@ -39,6 +39,7 @@ import { cmdImage } from "./commands/image.js";
 import { cmdAttach } from "./commands/attach.js";
 import { cmdTranscribe, cmdTts } from "./commands/voice.js";
 import { cmdPlan, cmdPlanList, cmdPlanShow, cmdPlanApprove, cmdPlanCancel } from "./commands/plan.js";
+import { cmdRewind, cmdSnapshotList } from "./commands/rewind.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -251,6 +252,25 @@ program.command("image <prompt>")
     caption: opts.caption,
     quiet: !!opts.quiet,
   }));
+
+// Rewind - restore a snapshotted work tree to a cycle's pre-state.
+// Requires `cfg.snapshots.enabled = true` at the time the cycle ran.
+program.command("rewind <cycleId>")
+  .description("Restore the snapshotted work tree to its pre-cycle state (destructive)")
+  .option("--profile <name>")
+  .option("--yes", "skip the confirmation gate (required to actually rewind)")
+  .option("--dry-run", "show what would happen, do not modify files")
+  .action(async (cycleId, opts) => cmdRewind({
+    profile: defaultProfile(opts.profile),
+    cycleId: Number(cycleId),
+    yes: !!opts.yes,
+    dryRun: !!opts.dryRun,
+  }));
+
+program.command("snapshot-list [profile]")
+  .description("List shadow-git snapshots for a profile")
+  .option("--root <path>", "snapshot root (default: cwd)")
+  .action(async (p, opts) => cmdSnapshotList(defaultProfile(p), opts.root));
 
 // Plan mode - the agent writes a structured plan instead of executing.
 // Persists to the plans table with status=pending. User reviews then

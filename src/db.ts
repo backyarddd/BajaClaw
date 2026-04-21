@@ -118,6 +118,14 @@ const MIGRATIONS: { version: number; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS idx_plans_created ON plans(created_at);
     `,
   },
+  {
+    version: 4,
+    sql: `
+      ALTER TABLE cycles ADD COLUMN pre_sha TEXT DEFAULT NULL;
+      ALTER TABLE cycles ADD COLUMN post_sha TEXT DEFAULT NULL;
+      ALTER TABLE cycles ADD COLUMN snapshot_root TEXT DEFAULT NULL;
+    `,
+  },
 ];
 
 export function openDb(profile: string): DB {

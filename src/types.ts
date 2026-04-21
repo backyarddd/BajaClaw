@@ -111,6 +111,15 @@ export interface AgentConfig {
   // Memory-compaction policy. Keeps the memory pool lean so recall stays
   // sharp and DB size stays bounded as the agent learns over time.
   compaction?: CompactionConfig;
+  // Per-cycle shadow-git snapshots. When enabled, every cycle commits
+  // the snapshot root before and after running so the user can rewind
+  // a cycle from the dashboard or `bajaclaw rewind`. Off by default.
+  // `root` defaults to the profile's workdir; set explicitly to
+  // protect a different folder (e.g. the user's project repo).
+  snapshots?: {
+    enabled?: boolean;
+    root?: string;
+  };
 }
 
 export interface CompactionConfig {

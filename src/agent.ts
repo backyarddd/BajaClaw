@@ -239,6 +239,19 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       env: spawnEnv,
     };
 
+    // Optional shadow-git pre-snapshot. Off by default (cfg.snapshots.enabled).
+    // Failures are non-fatal - the cycle still runs even if snapshot capture
+    // can't init the shadow repo (e.g. git not on PATH).
+    let preSha: string | null = null;
+    let snapshotRoot: string | null = null;
+    if (cfg.snapshots?.enabled) {
+      const { snapshot } = await import("./snapshots.js");
+      snapshotRoot = cfg.snapshots.root ?? opts.workdir ?? process.cwd();
+      const r = await snapshot(input.profile, snapshotRoot, `pre-cycle-${cycleId}`);
+      if (r.ok && r.sha) preSha = r.sha;
+      else log.warn("snapshot.pre.fail", { cycleId, error: r.error });
+    }
+
     // Stream when the caller asked for partial-text callbacks;
     // otherwise fall through to the blocking JSON path so the rest
     // of the codebase (channels, dashboard, HTTP API) stays unchanged.
@@ -246,6 +259,20 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       ? await runStream(prompt, opts, { onPartialText: input.onPartialText })
       : await runOnce(prompt, opts);
     const finished = new Date().toISOString();
+
+    // Optional post-snapshot. Captures the diff for later inspection
+    // even when the user never rewinds.
+    let postSha: string | null = null;
+    if (cfg.snapshots?.enabled && snapshotRoot) {
+      const { snapshot } = await import("./snapshots.js");
+      const r = await snapshot(input.profile, snapshotRoot, `post-cycle-${cycleId}`);
+      if (r.ok && r.sha) postSha = r.sha;
+      else log.warn("snapshot.post.fail", { cycleId, error: r.error });
+    }
+    if (preSha || postSha) {
+      db.prepare("UPDATE cycles SET pre_sha=?, post_sha=?, snapshot_root=? WHERE id=?")
+        .run(preSha, postSha, snapshotRoot, cycleId);
+    }
 
     if (!result.ok) {
       recordFailure(db);
