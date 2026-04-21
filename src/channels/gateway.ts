@@ -52,6 +52,7 @@ async function downloadToTmp(url: string, ext: string): Promise<string | null> {
 }
 
 type Sender = (chatId: string | number, text: string) => Promise<void>;
+type FileSender = (chatId: string | number, path: string, caption?: string) => Promise<void>;
 type TypingStarter = (chatId: string | number) => () => void;
 
 export type ChannelKind = "telegram" | "discord" | "imessage";
@@ -59,6 +60,7 @@ export type ChannelKind = "telegram" | "discord" | "imessage";
 interface Adapter {
   kind: ChannelKind;
   send: Sender;
+  sendFile?: FileSender;
   startTyping: TypingStarter;
   stop: () => Promise<void>;
 }
@@ -146,6 +148,48 @@ export async function replyToSource(profile: string, source: string, text: strin
   const a = adapters.get(key(profile, kind));
   if (!a) return;
   await a.send(id, text);
+}
+
+/** Send a file attachment to the channel that originated a task.
+ *  Images on Telegram and Discord arrive inline; iMessage attaches as
+ *  a normal file. No-ops (returns false) when the adapter does not
+ *  support file send. Does NOT end typing; follow with a normal reply
+ *  to close the turn. */
+export async function sendAttachmentToSource(
+  profile: string,
+  source: string,
+  path: string,
+  caption?: string,
+): Promise<boolean> {
+  const colon = source.indexOf(":");
+  if (colon < 0) return false;
+  const kind = source.slice(0, colon);
+  const id = source.slice(colon + 1);
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return false;
+  const a = adapters.get(key(profile, kind));
+  if (!a || !a.sendFile) return false;
+  await a.sendFile(id, path, caption);
+  return true;
+}
+
+/** Like sendAttachmentToSource but pings the last-active chat on the
+ *  profile for a given kind. Used when BAJACLAW_SOURCE is not set and
+ *  the user still wants the attachment to land somewhere. Returns
+ *  false if no last-active chat is known on that channel. */
+export async function broadcastAttachmentToProfile(
+  profile: string,
+  path: string,
+  caption?: string,
+): Promise<boolean> {
+  for (const kind of ["telegram", "discord", "imessage"] as ChannelKind[]) {
+    const target = notifyTargets.get(key(profile, kind));
+    if (!target) continue;
+    const a = adapters.get(key(profile, kind));
+    if (!a || !a.sendFile) continue;
+    try { await a.sendFile(target, path, caption); return true; }
+    catch { /* try next kind */ }
+  }
+  return false;
 }
 
 /** Show the platform's "typing…" indicator for the given source. The
@@ -287,6 +331,17 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
     send: async (chatId, text) => {
       await bot.sendMessage(Number(chatId), text);
     },
+    sendFile: async (chatId, path, caption) => {
+      // Images go through sendPhoto so they render inline in the
+      // chat. Everything else is a document attachment.
+      const ext = path.toLowerCase().split(".").pop() ?? "";
+      const isImage = ["png", "jpg", "jpeg", "gif", "webp"].includes(ext);
+      if (isImage) {
+        await bot.sendPhoto(Number(chatId), path, caption ? { caption } : {});
+      } else {
+        await bot.sendDocument(Number(chatId), path, caption ? { caption } : {});
+      }
+    },
     startTyping: (chatId) => {
       // Telegram's typing indicator auto-clears after 5s, so re-send
       // every 4s until stopped. `sendChatAction` errors are swallowed
@@ -367,6 +422,15 @@ async function startDiscord(profile: string, c: ChannelConfig, log: Logger): Pro
       const ch = await client.channels.fetch(String(channelId));
       if (ch && "send" in ch && typeof (ch as { send?: unknown }).send === "function") {
         await (ch as { send: (t: string) => Promise<unknown> }).send(text);
+      }
+    },
+    sendFile: async (channelId, path, caption) => {
+      const ch = await client.channels.fetch(String(channelId));
+      if (ch && "send" in ch && typeof (ch as { send?: unknown }).send === "function") {
+        await (ch as { send: (o: { files: string[]; content?: string }) => Promise<unknown> }).send({
+          files: [path],
+          content: caption,
+        });
       }
     },
     startTyping: (channelId) => {

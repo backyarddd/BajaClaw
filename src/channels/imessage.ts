@@ -556,7 +556,7 @@ type TypingStarter = (chatId: string | number) => () => void;
 export interface IMessageAdapter {
   kind: "imessage";
   send: Sender;
-  sendFile?: (chatId: string | number, filePath: string) => Promise<void>;
+  sendFile?: (chatId: string | number, filePath: string, caption?: string) => Promise<void>;
   startTyping: TypingStarter;
   stop: () => Promise<void>;
 }
@@ -704,12 +704,18 @@ export async function startIMessage(
         verifyRecentSend(db, log, id);
       }
     },
-    sendFile: async (chatId, filePath) => {
+    sendFile: async (chatId, filePath, caption) => {
       const id = String(chatId);
       if (id.startsWith("group:")) {
         throw new Error("sendFile to iMessage groups not yet supported");
       }
       await sendFileViaAppleScript(id, filePath, log);
+      // AppleScript's file send does not take a caption. Send it as a
+      // follow-up text message so the user sees "here's the image" /
+      // "source: ..." in the thread.
+      if (caption && caption.trim().length > 0) {
+        await sendViaAppleScript(id, caption, log);
+      }
     },
     startTyping: (_chatId) => {
       // Typing indicator is not reachable without Apple-private

@@ -35,6 +35,8 @@ import { cmdEnsure, cmdEnsureList } from "./commands/ensure.js";
 import { runWatch } from "./commands/watch.js";
 import { runScreenshotCommand } from "./commands/screenshot.js";
 import { cmdBrowserEnable, cmdBrowserDisable, cmdBrowserStatus } from "./commands/browser.js";
+import { cmdImage } from "./commands/image.js";
+import { cmdAttach } from "./commands/attach.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -221,6 +223,40 @@ program.command("ensure <tool>")
     json: !!opts.json,
     checkOnly: !!opts.checkOnly,
   }));
+
+// Image - generate an image and save it to disk. Provider auto-selects
+// from OPENAI_API_KEY (default gpt-image-1) or FAL_KEY (default
+// fal-ai/flux/schnell). With --attach the image is also pushed to the
+// originating channel via the same path as `bajaclaw attach`.
+program.command("image <prompt>")
+  .description("Generate an image from a text prompt (OpenAI or FAL)")
+  .option("--profile <name>", "profile for default output dir")
+  .option("--out <path>", "output path")
+  .option("--provider <name>", "openai | fal (default: auto based on env keys)")
+  .option("--model <id>", "override provider default model")
+  .option("--size <dims>", "e.g. 1024x1024 (openai), landscape_4_3 (fal)")
+  .option("--attach", "push the generated image to the originating channel (requires BAJACLAW_SOURCE or a recent chat)")
+  .option("--caption <text>", "caption used on --attach; defaults to the prompt")
+  .option("--quiet", "print only the output path")
+  .action(async (prompt, opts) => cmdImage({
+    profile: opts.profile,
+    prompt,
+    out: opts.out,
+    provider: opts.provider,
+    model: opts.model,
+    size: opts.size,
+    attach: !!opts.attach,
+    caption: opts.caption,
+    quiet: !!opts.quiet,
+  }));
+
+// Attach - push a file attachment (image, document, etc.) to the
+// originating channel of a running cycle. Analogue to `bajaclaw say`
+// but for files. Reads BAJACLAW_SOURCE + BAJACLAW_DASHBOARD_PORT.
+program.command("attach <path>")
+  .description("Attach a file to the originating channel (used from inside a cycle)")
+  .option("--caption <text>", "optional caption; shown inline on Telegram/Discord, as a follow-up on iMessage")
+  .action(async (path, opts) => cmdAttach(path, { caption: opts.caption }));
 
 // Browser - enable browser automation via @playwright/mcp. Adds an
 // MCP server entry to the profile's mcp-config.json and runs
