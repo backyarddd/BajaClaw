@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.1
+
+**Stop re-opening System Settings on every daemon restart when iMessage
+FDA isn't granted.**
+
+`startIMessage` used to call `openFullDiskAccessPane()` each time the
+daemon booted without Full Disk Access. That pane already opens from
+the CLI on `channel add imessage`; re-opening it on every subsequent
+daemon restart was noisy and would pop System Settings over the user's
+foreground work. The daemon now just logs `gateway.imessage.fda-missing`
+and waits for the grant to appear on its next boot.
+
 ## 0.16.0
 
 **iMessage channel adapter (macOS-only). Send and receive iMessages
