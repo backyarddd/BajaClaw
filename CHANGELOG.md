@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.19.0
+
+**`bajaclaw watch`: turn `// AI:` / `# AI:` / `<!-- AI: -->` comments into tasks.**
+
+Write `// AI: rename foo to bar` in any source file. Save. The comment
+becomes a task on the profile's queue; the daemon picks it up on the
+next poll, edits the file, and removes the marker. Works in any editor
+(no IDE plugin) and alongside the existing channels (Telegram, Discord,
+iMessage).
+
+- Five comment styles detected: C-family `//`, C block `/* ... */`,
+  HTML `<!-- ... -->`, shell/python `#`, SQL/lua `--`. Inline forms
+  work too (`const x = 1 // AI: rename`).
+- First-run seed: on first invocation the watcher records hashes of
+  every existing marker in the tree *without* enqueuing. Prevents the
+  queue from flooding on trees that already contain AI markers. After
+  the seed, any new or changed marker fires.
+- Dedup by `sha1(path + line + instruction)`. Saving the same file
+  repeatedly does not re-enqueue the same comment. The agent is
+  expected to remove (or replace) the marker as part of executing the
+  task; if it doesn't, the marker will re-enqueue on the next change
+  only if its line or text shifts.
+- State lives at `<profileDir>/watch.state.json`. `--purge` clears
+  dedup state and re-seeds.
+- `--once` scans a tree one time and exits (no live watch). `--dry-run`
+  prints what would be enqueued without touching the DB or state.
+- Horizontal-whitespace-only regex internals: `\s*` between `AI:` and
+  the instruction would otherwise swallow the newline and pull text
+  from the following line as the "instruction". Fixed by using `[ \t]*`.
+- Ignore filters: `node_modules`, `.git`, `dist`, `build`, `.next`,
+  `.venv`, `target`, `__pycache__`, common binary/media/lock
+  extensions, files over 5 MB, files with NUL bytes in the first 4 KB.
+- 14 new tests. 90/90 pass.
+
 ## 0.18.1
 
 **CI fix: skip `chatDbPath` test on non-darwin.**
