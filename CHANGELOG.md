@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.17.0
+
+**iMessage typing indicators via a native Obj-C helper.**
+
+AppleScript's `Messages` vocabulary doesn't expose the "typing..."
+indicator - it lives in Apple's private `IMCore.framework`. To match
+Telegram/Discord's shape, we now ship a small Obj-C helper binary that
+dlopens IMCore and calls `setLocalUserIsTyping:` on `IMChat` through
+`NSInvocation`.
+
+### Features
+
+1. **`helpers/imessage-typing.m`** - reverse-engineered Obj-C source,
+   ~100 LOC. Declares the two private-framework interfaces we touch
+   (`IMChatRegistry`, `IMChat`) and invokes the typing selector via
+   `NSInvocation`. Structured exit codes for graceful caller fallback
+   (0 ok, 1 bad args, 2 IMCore failed to load, 3 class missing,
+   4 no chat, 5 selector missing, 6 invocation threw).
+2. **`scripts/build-imessage-helper.mjs`** - compiles to a universal
+   arm64 + x86_64 Mach-O via `xcrun --find clang` + `lipo`. Requires
+   Xcode Command Line Tools. Skips cleanly on non-Darwin. Hooked into
+   `npm run build` and exposed as `npm run build:helper`.
+3. **Pre-built binary shipped.** `helpers/bajaclaw-imessage-helper`
+   lives in the tarball (via `package.json` `files`). No Xcode
+   requirement at `npm install` time.
+4. **Adapter integration** (`src/channels/imessage.ts`). New
+   `resolveTypingHelperPath`, `sendTypingIndicator`, and a keep-alive
+   refresh loop (30s) in `startTyping`. Mirrors Telegram's 4s /
+   Discord's 8s refresh pattern but matches IMCore's ~60s auto-expiry.
+5. **Quarantine auto-stripped.** `resolveTypingHelperPath` runs
+   `xattr -dr com.apple.quarantine` on the binary the first time it's
+   resolved. npm tarballs apply the quarantine attribute which
+   Gatekeeper would otherwise block. Idempotent; no-op if absent.
+6. **Graceful degradation everywhere.** If the helper is missing,
+   not executable, fails to dlopen IMCore, TCC-denied, or throws
+   during invocation - the adapter logs `gateway.imessage.typing-fail`
+   once and the send path continues normally. Replies never fail
+   because typing fails.
+
+### Engineering notes
+
+- 7 new tests in `tests/imessage.test.js` covering: helper binary
+  presence + exec bit, usage-error exit, IMCore load path (exit 4 for
+  nonexistent chat), path resolver, `sendTypingIndicator` happy/sad
+  returns, universal Mach-O verification via `lipo -info`.
+- Total iMessage test count: 21. Total project: 70.
+- Universal binary size: ~85 KB.
+- `spawnSync` timeout on typing calls is 5s - if IMCore hangs (has
+  happened once on beta macOS), we move on instead of wedging the
+  typing refresh loop.
+- Known limit: private-framework access is subject to Apple's whim.
+  If macOS 16 renames any symbol, typing goes dark; send path still
+  works. Landmine 44 in HANDOFF.md.
+
 ## 0.16.2
 
 **Docs: full iMessage coverage, ensure subsystem, per-agent channels.**

@@ -36,7 +36,7 @@ bajaclaw channel add <profile> imessage --contact <handle> [--contact <handle> .
 - First use requires granting Full Disk Access to whichever app launches bajaclaw (Terminal, iTerm, VS Code, etc.). The CLI auto-opens the right System Settings pane.
 - First outbound reply triggers a one-time macOS Automation prompt for Messages.app. Click Allow.
 
-Scope in v1: 1:1 iMessage threads only. Group chats are filtered out, and inbound attachments are flagged in the task body as `[attachment]` but not downloaded. Typing indicators and read receipts do not round-trip.
+Scope in v1: 1:1 iMessage threads only. Group chats are filtered out, and inbound attachments are flagged in the task body as `[attachment]` but not downloaded. Read receipts do not round-trip (we see receipts in chat.db but can't send them). Typing indicators **do** round-trip as of v0.17.0 via a bundled native helper that calls IMCore's `setLocalUserIsTyping:` - the "..." bubble shows on the recipient's device while the agent is composing.
 
 Sending SMS (green bubbles) from the Mac requires Text Message Forwarding with a paired iPhone. BajaClaw routes through iMessage only by default - if Messages.app falls back to SMS on your Mac, that's Apple's routing, not ours.
 
@@ -58,7 +58,8 @@ The `gf` profile has its own daemon, memory, skills, dashboard port (configurabl
 Two macOS permissions are required. Both are one-time; they survive daemon restarts but can be re-prompted on macOS major-version upgrades.
 
 1. **Full Disk Access** - reads `~/Library/Messages/chat.db`. Granted in `System Settings → Privacy & Security → Full Disk Access`. The CLI probes on `channel add` and opens the pane if missing.
-2. **Automation → Messages** - drives Messages.app via AppleScript. macOS prompts on the first send; accept the dialog once.
+2. **Automation → Messages** - drives Messages.app via AppleScript for sends. macOS prompts on the first send; accept the dialog once.
+3. **Accessibility (optional, for typing)** - the native typing helper calls Apple's private `IMCore` framework. On most macOS versions, no extra permission is required. If the typing indicator never appears on the recipient's side despite the helper exiting cleanly, grant Accessibility to the terminal app running bajaclaw.
 
 Probing programmatically: bajaclaw tries to read the file and catches `EACCES`/`EPERM` to infer the FDA state. AppleScript error `-1743` indicates Automation was denied; the adapter surfaces it with a clear message pointing at the correct pane.
 
@@ -96,3 +97,5 @@ All adapters live in the daemon process. Stopping the daemon cleanly ends pollin
 - Group iMessage chats
 - iMessage attachment download (inbound image/video)
 - Outbound iMessage attachments (AppleScript doesn't expose a clean path)
+- iMessage read receipts (receivable; sending requires deeper IMCore hooks)
+- iMessage tapbacks/reactions (sending; chat.db shows received ones)

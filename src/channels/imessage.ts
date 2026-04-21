@@ -18,14 +18,17 @@
 // `[attachment]` markers; agents still see them and can ask the user
 // to forward through another channel.
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, renameSync, openSync, closeSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
 import { profileDir, ensureDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { Logger } from "../logger.js";
 import type { ChannelConfig } from "../types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Apple's CFAbsoluteTime epoch: 2001-01-01 00:00:00 UTC, in seconds
 // since Unix epoch. chat.db stores message.date as nanoseconds since
@@ -137,6 +140,67 @@ export interface InboundIMessage {
 // file surfaces as a clear error instead of creating an empty db.
 export function openChatDb(): Database.Database {
   return new Database(chatDbPath(), { readonly: true, fileMustExist: true });
+}
+
+// Native typing helper. Compiled from helpers/imessage-typing.m into a
+// universal Mach-O binary shipped alongside bajaclaw. Calls IMCore's
+// private setLocalUserIsTyping: to produce the "..." indicator on the
+// recipient's device - something AppleScript can't do.
+//
+// Resolves to one of:
+//   - <repo>/helpers/bajaclaw-imessage-helper  (dev checkout; src/channels -> up two)
+//   - <pkg>/helpers/bajaclaw-imessage-helper   (installed; dist/channels -> up two)
+// Both paths end up the same shape because `files` in package.json
+// ships helpers/ verbatim next to dist/.
+let cachedHelperPath: string | null | undefined;
+
+export function resolveTypingHelperPath(): string | null {
+  if (cachedHelperPath !== undefined) return cachedHelperPath;
+  // __dirname is <root>/dist/channels when installed, or <root>/src/channels
+  // via tsx. Either way, up two levels is the package root.
+  const root = join(__dirname, "..", "..");
+  const candidate = join(root, "helpers", "bajaclaw-imessage-helper");
+  try {
+    const st = statSync(candidate);
+    if (st.isFile()) {
+      // Strip the quarantine attribute npm applies to files downloaded
+      // in tarballs. Idempotent; no-op if absent. Ignored on failure.
+      spawnSync("xattr", ["-dr", "com.apple.quarantine", candidate], { stdio: "ignore" });
+      cachedHelperPath = candidate;
+      return candidate;
+    }
+  } catch { /* not present */ }
+  cachedHelperPath = null;
+  return null;
+}
+
+export interface TypingResult {
+  ok: boolean;
+  exitCode: number;
+  error?: string;
+}
+
+export function sendTypingIndicator(
+  handle: string,
+  typing: boolean,
+  log?: Logger,
+): TypingResult {
+  if (process.platform !== "darwin") {
+    return { ok: false, exitCode: -1, error: "unsupported-platform" };
+  }
+  const helper = resolveTypingHelperPath();
+  if (!helper) {
+    return { ok: false, exitCode: -1, error: "helper-not-found" };
+  }
+  const norm = normalizeHandle(handle);
+  const verb = typing ? "start" : "stop";
+  const r = spawnSync(helper, [verb, norm], { encoding: "utf8", timeout: 5000 });
+  if (r.status === 0) {
+    return { ok: true, exitCode: 0 };
+  }
+  const err = (r.stderr || "").trim();
+  log?.warn("gateway.imessage.typing-fail", { verb, handle: norm, status: r.status, err: err.slice(0, 200) });
+  return { ok: false, exitCode: r.status ?? -1, error: err };
 }
 
 // The inbound query. ROWID is monotonic and indexed, so "everything
@@ -333,12 +397,39 @@ export async function startIMessage(
       // chatId here is the normalized handle string for the adapter.
       await sendViaAppleScript(String(chatId), text, log);
     },
-    startTyping: (_chatId) => {
-      // iMessage has no scripted typing indicator. No-op returning a
-      // no-op stop function keeps the shape consistent with the other
-      // adapters (gateway.beginTyping/endTyping stay useful as flow
-      // markers even when they don't render anything).
-      return () => { /* no-op */ };
+    startTyping: (chatId) => {
+      // Native typing helper (helpers/bajaclaw-imessage-helper) speaks
+      // to IMCore directly to set the "..." indicator. AppleScript
+      // can't do this; our Obj-C helper calls setLocalUserIsTyping:
+      // on IMChat via the private framework.
+      //
+      // IMCore's typing flag auto-expires after ~60s on the receiver
+      // side (matches Messages.app's own heartbeat). We refresh every
+      // 30s to keep it lit until the cycle finishes. Each refresh is
+      // a sub-100ms spawn; cost is negligible.
+      //
+      // Graceful degradation: if the helper isn't installed or fails
+      // (missing TCC permission, no existing chat, Apple changed the
+      // private API), we log once and proceed silently - the adapter
+      // never blocks a reply because of a typing failure.
+      const handle = String(chatId);
+      const first = sendTypingIndicator(handle, true, log);
+      if (!first.ok) {
+        // Return a no-op stop fn; caller side doesn't care about the
+        // distinction as long as the method shape is preserved.
+        return () => { /* no-op */ };
+      }
+      const timer = setInterval(() => {
+        const r = sendTypingIndicator(handle, true, log);
+        // If a refresh fails, stop trying - something changed
+        // (chat deleted, permission revoked). Next cycle will retry.
+        if (!r.ok) clearInterval(timer);
+      }, 30_000);
+      return () => {
+        clearInterval(timer);
+        // Fire-and-forget stop; don't block reply routing on it.
+        sendTypingIndicator(handle, false, log);
+      };
     },
     stop: async () => {
       stopped = true;
