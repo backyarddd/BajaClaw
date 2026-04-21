@@ -3,7 +3,7 @@
 // Replaces the old readline-based REPL (v0.14.23 and earlier). Prior
 // versions fought readline's `_refreshLine` cursor model to draw a
 // bordered "sandwich" around the input; see HANDOFF.md landmine 17.
-// Ink sidesteps all of that — it owns the render loop, diffs each
+// Ink sidesteps all of that - it owns the render loop, diffs each
 // frame, and lets us describe the UI declaratively.
 //
 // Layout, top to bottom:
@@ -120,7 +120,7 @@ interface UsageWindow {
 }
 
 // Each completed item in the scrollback. Rendered via <Static> so it
-// only ever writes once per append — no re-render when the composer
+// only ever writes once per append - no re-render when the composer
 // state changes, keeps scrollback clean.
 //
 // Ink 7 renders only the LAST <Static> component in the tree, so the
@@ -155,7 +155,7 @@ export function ChatApp({
   // Seed the Static list with the intro entry on first render so the
   // banner + identity block land in scrollback. Ink 7 renders only
   // the LAST <Static> in the tree, so we use ONE Static for everything
-  // — intro goes in the same list as the turns.
+  // - intro goes in the same list as the turns.
   const [turns, setTurns] = useState<TurnEntry[]>(() => {
     const db = openDb(profile);
     let usage: { fiveH: UsageWindow; week: UsageWindow };
@@ -185,7 +185,7 @@ export function ChatApp({
   const [commandHistory, setCommandHistory] = useState<string[]>([]);
   // Local message queue. If the user hits Enter while a cycle is in
   // flight, the message lands here instead of forcing them to wait.
-  // Drained FIFO as soon as `thinking` flips false — see the useEffect
+  // Drained FIFO as soon as `thinking` flips false - see the useEffect
   // below.
   const [messageQueue, setMessageQueue] = useState<string[]>([]);
 
@@ -215,7 +215,7 @@ export function ChatApp({
   }, [thinking, thinkingStart]);
 
   // Ctrl-C / Ctrl-D exit. Registered as a top-level input handler so
-  // it fires even while the composer's own useInput is active — Ink
+  // it fires even while the composer's own useInput is active - Ink
   // delivers each key event to every registered handler.
   useInput((char, key) => {
     if (key.ctrl && (char === "c" || char === "d")) {
@@ -379,7 +379,7 @@ export function ChatApp({
       {/* Intro + turn history. <Static> appends each new entry once
           and never re-renders prior entries. The intro entry was
           seeded into state on mount. The second arg to the render
-          function is the item's index — we use it to skip the
+          function is the item's index - we use it to skip the
           separator on the very first turn after the intro. */}
       <Static items={turns}>
         {(t, i) => <TurnView key={t.id} turn={t} showSeparator={i > 0} />}
@@ -1112,7 +1112,7 @@ async function handleSlash(input: string, ctx: SlashCtx): Promise<void> {
       return;
     }
     case "history":
-      ctx.appendSystem([{ text: "(use the dashboard for full history — /stats for session totals)", dim: true }]);
+      ctx.appendSystem([{ text: "(use the dashboard for full history - /stats for session totals)", dim: true }]);
       return;
     default:
       ctx.appendSystem([

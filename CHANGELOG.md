@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.15.2
+
+**Hygiene: zero em dashes in repo (CHANGELOG + chat-ui.tsx + dashboard.ts).**
+
+Handoff landmine 15 states "Em dashes: 0 in the repo and 0 in agent
+output" but three shipped files held stale U+2014 characters from
+earlier versions (4 in CHANGELOG historical entries, 1 in
+dashboard.ts comment, 7 in chat-ui.tsx comments). All converted to
+regular hyphens. No behavior change, no API change.
+
 ## 0.15.1
 
 **Retrofit pass on the v0.15.0 fluid contract: Windows daemon orphan
@@ -114,7 +124,7 @@ and a `dashboard:dev` script with hot-reloaded HTML.**
    during `npm run build` so the npm-installed version renders the
    real dashboard instead of the fallback page.
 5. **`npm run dashboard:dev`.** New script that runs `tsx watch
-   src/cli.ts dashboard` — the dashboard restarts on any backend
+   src/cli.ts dashboard` - the dashboard restarts on any backend
    TypeScript change, HTML hot-reloads on refresh, runs standalone
    (no daemon required).
 
@@ -179,7 +189,7 @@ history, context-aware hints.**
    only session-level totals (turns, tokens, cost) and a 📎 badge
    when attachments are queued. Model or effort only re-appear in the
    status bar if they've changed mid-session via `/model` or
-   `/effort` — otherwise they're redundant.
+   `/effort` - otherwise they're redundant.
 4. **Context-aware hint footer.** Dim line under the status bar that
    changes its shortcut cheatsheet based on state: `↑↓ recall · /
    commands · Ctrl-D quit` when idle, `Enter send · ←→ edit · Ctrl-D
@@ -225,7 +235,7 @@ Ctrl-C / Ctrl-D to quit with session summary.
 Ink 7 renders only the LAST `<Static>` component in the tree, so the
 intro (banner + header) is seeded into the same Static list as the
 turns rather than kept in its own component. The composer uses a
-custom `useInput` handler instead of `ink-text-input` — we need to
+custom `useInput` handler instead of `ink-text-input` - we need to
 treat both `\r` (`key.return`) and embedded `\n` (which Ink 7 routes
 as `keypress.name="enter"` but doesn't surface on the `key` object)
 as submit, to work reliably across terminals, ptys, and paste
@@ -613,7 +623,7 @@ scrolls cleanly with bullet prefixes: `> user` and `● agent`.
 ### What changed
 
 1. **Welcome**: big "BAJACLAW" block-letter banner followed by a
-   two-column info block — left column has agent name, model,
+   two-column info block - left column has agent name, model,
    profile, effort, context, version, cwd; right column is the live
    **Available Skills** inventory with counts per origin (bajaclaw /
    openclaw / hermes). Usage line (5h + week) rendered muted below.
