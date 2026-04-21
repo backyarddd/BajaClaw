@@ -11,6 +11,7 @@ import { loadConfig } from "../config.js";
 import { openDb } from "../db.js";
 import { Logger } from "../logger.js";
 import type { ChannelConfig } from "../types.js";
+import { startIMessage, insertIMessageTask, normalizeHandle } from "./imessage.js";
 
 function extractFrames(videoPath: string, frameCount = 8): string[] {
   let interval = 2;
@@ -53,8 +54,10 @@ async function downloadToTmp(url: string, ext: string): Promise<string | null> {
 type Sender = (chatId: string | number, text: string) => Promise<void>;
 type TypingStarter = (chatId: string | number) => () => void;
 
+export type ChannelKind = "telegram" | "discord" | "imessage";
+
 interface Adapter {
-  kind: "telegram" | "discord";
+  kind: ChannelKind;
   send: Sender;
   startTyping: TypingStarter;
   stop: () => Promise<void>;
@@ -68,7 +71,7 @@ const activeTyping = new Map<string, () => void>();
 // Updated whenever a message arrives. Used by broadcastToProfile.
 const notifyTargets = new Map<string, string>();
 
-function key(profile: string, kind: "telegram" | "discord"): string {
+function key(profile: string, kind: ChannelKind): string {
   return `${profile}:${kind}`;
 }
 
@@ -94,6 +97,17 @@ export async function startAllGateways(profile: string): Promise<void> {
       } else if (c.kind === "discord") {
         const a = await startDiscord(profile, c, log);
         if (a) adapters.set(k, a);
+      } else if (c.kind === "imessage") {
+        const a = await startIMessage(profile, c, log, {
+          onInbound: (msg) => {
+            insertIMessageTask(profile, msg);
+            const nh = normalizeHandle(msg.handle);
+            notifyTargets.set(key(profile, "imessage"), nh);
+            log.info("gateway.imessage.msg", { from: nh, len: msg.text.length, attachment: msg.hasAttachment });
+            beginTyping(profile, `imessage:${nh}`);
+          },
+        });
+        if (a) adapters.set(k, a);
       }
     } catch (e) {
       log.error(`gateway.${c.kind}.err`, { error: (e as Error).message });
@@ -117,7 +131,7 @@ export async function replyToSource(profile: string, source: string, text: strin
   if (colon < 0) return;
   const kind = source.slice(0, colon);
   const id = source.slice(colon + 1);
-  if (kind !== "telegram" && kind !== "discord") return;
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return;
   const a = adapters.get(key(profile, kind));
   if (!a) return;
   await a.send(id, text);
@@ -131,9 +145,9 @@ export async function replyToSource(profile: string, source: string, text: strin
 export function beginTyping(profile: string, source: string): void {
   const colon = source.indexOf(":");
   if (colon < 0) return;
-  const kind = source.slice(0, colon) as "telegram" | "discord";
+  const kind = source.slice(0, colon) as ChannelKind;
   const id = source.slice(colon + 1);
-  if (kind !== "telegram" && kind !== "discord") return;
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return;
   const a = adapters.get(key(profile, kind));
   if (!a) return;
   const existing = activeTyping.get(source);
@@ -162,7 +176,7 @@ export async function sendProgressToSource(profile: string, source: string, text
   if (colon < 0) return;
   const kind = source.slice(0, colon);
   const id = source.slice(colon + 1);
-  if (kind !== "telegram" && kind !== "discord") return;
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return;
   const a = adapters.get(key(profile, kind));
   if (!a) return;
   await a.send(id, text);
@@ -172,7 +186,7 @@ export async function sendProgressToSource(profile: string, source: string, text
  *  Uses the last seen chat/channel ID per adapter. No-ops if no messages
  *  have arrived yet (no chatId to target). Fire-and-forget. */
 export function broadcastToProfile(profile: string, text: string): void {
-  for (const kind of ["telegram", "discord"] as const) {
+  for (const kind of ["telegram", "discord", "imessage"] as const) {
     const k = key(profile, kind);
     const a = adapters.get(k);
     if (!a) continue;
@@ -183,6 +197,7 @@ export function broadcastToProfile(profile: string, text: string): void {
 }
 
 async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Promise<Adapter | undefined> {
+  if (!c.token) { log.error("gateway.telegram.missing-token"); return undefined; }
   let TelegramBot: typeof import("node-telegram-bot-api") | undefined;
   try { TelegramBot = (await import("node-telegram-bot-api")).default; }
   catch { log.warn("gateway.telegram.missing-dep"); return undefined; }
@@ -278,6 +293,7 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
 }
 
 async function startDiscord(profile: string, c: ChannelConfig, log: Logger): Promise<Adapter | undefined> {
+  if (!c.token) { log.error("gateway.discord.missing-token"); return undefined; }
   let discord: typeof import("discord.js") | undefined;
   try { discord = await import("discord.js"); }
   catch { log.warn("gateway.discord.missing-dep"); return undefined; }
