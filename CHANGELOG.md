@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.17.2
+
+**iMessage typing indicator: fix IMDaemonListener registration so imagent pushes chat state.**
+
+Root cause of v0.17.1 regression: the helper binary was calling
+`connectToDaemon` + `blockUntilConnected` but never registering as an
+`IMDaemonListener`. imagent only pushes chat state to subscribed
+listeners, so `IMChatRegistry.allExistingChats` stayed empty and every
+`setLocalUserIsTyping:` call failed with "no existing chat".
+
+Fix - two parts:
+
+1. **`helpers/imessage-typing.m`**: Added `BajaCrawListener` class that
+   conforms to the listener protocol via `methodSignatureForSelector:` +
+   `forwardInvocation:` (safe catch-all for any undeclared imagent
+   callbacks). Implements `- (unsigned long long)capabilities` returning
+   all bits so imagent pushes chat list events. Registered via
+   `[[daemon listener] addHandler:]` with a fallback to
+   `[daemon addListener:]` for older macOS. `waitForChats()` now exits
+   early when the listener sets `gReady = YES` instead of only polling
+   `allExistingChats` on a fixed timer. `runDaemonLoop()` moved stdin
+   reading to a GCD background thread so the main `NSRunLoop` keeps
+   spinning, which is required for imagent callbacks to fire.
+
+2. **`src/channels/imessage.ts`**: `startTyping` is no longer a no-op.
+   Added `startTypingHelperProcess()` which spawns the helper in `serve`
+   mode as a long-lived `ChildProcess`. Writes `start <handle>` on typing
+   start with a 10s initial retry (in case the first call races the
+   registry load) and a 30s refresh interval. `endTyping` writes
+   `stop <handle>`. Helper is stopped cleanly on adapter teardown.
+
+70/70 tests pass. One-shot mode (argv form) preserved for existing test paths.
+
 ## 0.17.1
 
 **Disable iMessage typing indicator (turned out not to work end-to-end).**

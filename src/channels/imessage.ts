@@ -17,7 +17,8 @@
 // attachments. Inbound attachments are noted in the body as
 // `[attachment]` markers; agents still see them and can ask the user
 // to forward through another channel.
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -203,6 +204,71 @@ export function sendTypingIndicator(
   return { ok: false, exitCode: r.status ?? -1, error: err };
 }
 
+// Long-lived subprocess wrapper for the typing helper in `serve` mode.
+// The helper reads commands from stdin and writes ok/err lines to stdout.
+// Keeping it alive means the IMDaemonListener stays registered and
+// imagent keeps the chat registry populated.
+interface TypingHelper {
+  send: (cmd: string) => void;
+  stop: () => void;
+}
+
+function startTypingHelperProcess(log: Logger): TypingHelper | null {
+  if (process.platform !== "darwin") return null;
+  const helperPath = resolveTypingHelperPath();
+  if (!helperPath) return null;
+
+  let proc: ChildProcess | null = null;
+  let helperStopped = false;
+  let retried = false;
+
+  function launchHelper(): void {
+    // helperPath is checked non-null at the top of startTypingHelperProcess.
+    const child = spawn(helperPath as string, ["serve"], { stdio: ["pipe", "pipe", "pipe"] });
+    proc = child;
+
+    child.stderr?.on("data", (d: Buffer) => {
+      const msg = d.toString().trim();
+      if (msg) log.warn("gateway.imessage.helper-stderr", { msg: msg.slice(0, 200) });
+    });
+
+    child.stdout?.on("data", (d: Buffer) => {
+      const lines = d.toString().trim().split(/\r?\n/);
+      for (const line of lines) {
+        if (line.startsWith("err ")) {
+          log.warn("gateway.imessage.helper-err", { msg: line.slice(4, 200) });
+        }
+      }
+    });
+
+    child.on("error", (e: Error) => {
+      log.warn("gateway.imessage.helper-spawn-error", { error: e.message });
+    });
+
+    child.on("exit", (code) => {
+      if (!helperStopped && !retried) {
+        retried = true;
+        log.info("gateway.imessage.helper-respawn", { code });
+        launchHelper();
+      }
+    });
+  }
+
+  launchHelper();
+
+  return {
+    send: (cmd: string) => {
+      try { proc?.stdin?.write(cmd + "\n"); } catch { /* typing is best-effort */ }
+    },
+    stop: () => {
+      helperStopped = true;
+      try { proc?.stdin?.write("quit\n"); } catch { /* ignore */ }
+      // Give it 1s to exit cleanly, then SIGTERM.
+      setTimeout(() => { try { proc?.kill("SIGTERM"); } catch { /* ignore */ } }, 1000);
+    },
+  };
+}
+
 // The inbound query. ROWID is monotonic and indexed, so "everything
 // after the last one we saw" is an O(log n) lookup plus a sequential
 // scan over only the new rows. Joins to handle.id for the sender
@@ -354,6 +420,8 @@ export async function startIMessage(
   const allowlist = (config.allowlist ?? []).map((h) => normalizeHandle(String(h)));
   const useAllowlist = allowlist.length > 0;
 
+  const typingHelper = startTypingHelperProcess(log);
+
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
 
@@ -397,21 +465,33 @@ export async function startIMessage(
       // chatId here is the normalized handle string for the adapter.
       await sendViaAppleScript(String(chatId), text, log);
     },
-    startTyping: (_chatId) => {
-      // iMessage typing indicators are not wired as of v0.17.1. v0.17.0
-      // shipped a native helper that talks to IMCore, but the registry
-      // stays empty in a standalone process because we don't register
-      // as a proper IMDaemonListener - imagent only pushes chat state
-      // to subscribed listeners (that's how BlueBubbles works, with a
-      // full Obj-C delegate). The helper binary is retained for a
-      // future pass that implements the listener properly; for now we
-      // keep the shape (startTyping returns a stop fn) so the gateway
-      // plumbing stays consistent.
-      return () => { /* no-op */ };
+    startTyping: (chatId) => {
+      if (!typingHelper) return () => {};
+      const handle = normalizeHandle(String(chatId));
+      let indicatorStopped = false;
+
+      const sendStart = () => typingHelper.send(`start ${handle}`);
+      sendStart();
+
+      // iMessage "..." indicator stays on until the sender replies or
+      // ~60s elapse. Refresh every 30s to keep it alive across long
+      // cycles. Also retry at 10s in case the first call raced against
+      // the helper's registry population (imagent may take a few seconds
+      // to push chat state after the listener is registered).
+      const initialRetry = setTimeout(() => { if (!indicatorStopped) sendStart(); }, 10_000);
+      const refreshTimer = setInterval(() => { if (!indicatorStopped) sendStart(); }, 30_000);
+
+      return () => {
+        indicatorStopped = true;
+        clearTimeout(initialRetry);
+        clearInterval(refreshTimer);
+        typingHelper.send(`stop ${handle}`);
+      };
     },
     stop: async () => {
       stopped = true;
       if (timer) clearTimeout(timer);
+      typingHelper?.stop();
       try { db.close(); } catch { /* ignore */ }
     },
   };

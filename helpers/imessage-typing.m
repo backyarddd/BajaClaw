@@ -54,8 +54,23 @@
 - (NSString *)chatIdentifier;
 @end
 
+// Listener class. Registered with imagent so it pushes chat state
+// to this process. Without this registration, IMChatRegistry stays
+// empty even after a successful connectToDaemon + blockUntilConnected.
+//
+// Key insight from BlueBubbles: imagent only delivers chat state to
+// processes registered via [[daemon listener] addHandler:] with an
+// appropriate capabilities bitmask.
+@interface BajaCrawListener : NSObject
+@end
+
 static NSString * const IMCORE_PATH = @"/System/Library/PrivateFrameworks/IMCore.framework/IMCore";
 static BOOL gVerbose = NO;
+// Set to YES by listener callbacks once imagent has pushed at least
+// the initial chat state. Used as an early-exit signal in waitForChats.
+static BOOL gReady = NO;
+// Kept alive for process lifetime; ARC retains through this global.
+static id gListenerInstance = nil;
 
 static void logDebug(NSString *fmt, ...) {
     if (!gVerbose) return;
@@ -65,6 +80,77 @@ static void logDebug(NSString *fmt, ...) {
     va_end(args);
     fprintf(stderr, "DEBUG: %s\n", [s UTF8String]);
 }
+
+@implementation BajaCrawListener
+
+// imagent calls setupComplete: / setupCompleted: when the connection
+// handshake finishes. Either name can appear depending on macOS version.
+- (void)setupComplete:(id)arg {
+    logDebug(@"setupComplete:");
+    gReady = YES;
+}
+- (void)setupCompleted:(id)arg {
+    logDebug(@"setupCompleted:");
+    gReady = YES;
+}
+- (void)didConnectToIMAgent:(id)arg {
+    logDebug(@"didConnectToIMAgent:");
+    gReady = YES;
+}
+
+// imagent calls these when chat state becomes available.
+- (void)chatLoaded:(id)arg1 chatProperties:(id)arg2 {
+    logDebug(@"chatLoaded:chatProperties:");
+    gReady = YES;
+}
+- (void)chatsDidChange:(id)arg1 {
+    logDebug(@"chatsDidChange:");
+    gReady = YES;
+}
+- (void)chatsLoaded:(id)arg1 {
+    logDebug(@"chatsLoaded:");
+    gReady = YES;
+}
+
+// No-op stubs for other common imagent callbacks.
+- (void)messageReceived:(id)arg1 { }
+- (void)account:(id)arg1 updatedSettings:(id)arg2 { }
+- (void)account:(id)arg1 status:(id)arg2 { }
+- (void)account:(id)arg1 loginStatusChanged:(id)arg2 { }
+- (void)didDisconnectFromIMAgent:(id)arg1 { }
+
+// imagent queries capabilities to decide which events to push.
+// Return all bits so we receive chat list and setup events.
+- (unsigned long long)capabilities {
+    return 0xFFFFFFFFFFFFFFFFULL;
+}
+
+// Safe fallback: imagent sends many selectors we haven't declared.
+// Without methodSignatureForSelector: + forwardInvocation:, any
+// unknown selector would crash with "unrecognized selector".
+- (NSMethodSignature *)methodSignatureForSelector:(SEL)sel {
+    NSMethodSignature *sig = [super methodSignatureForSelector:sel];
+    if (!sig) {
+        // Generic void(id) signature covers the vast majority of
+        // imagent callbacks that deliver a single object argument.
+        sig = [NSMethodSignature signatureWithObjCTypes:"v@:@"];
+    }
+    return sig;
+}
+- (void)forwardInvocation:(NSInvocation *)inv {
+    NSString *selName = NSStringFromSelector([inv selector]);
+    logDebug(@"unhandled imagent callback: %@", selName);
+    // Treat any "chat"/"setup"/"chats" prefixed callback as a ready
+    // signal - imagent may rename these methods across macOS versions.
+    if ([selName hasPrefix:@"chat"]
+     || [selName hasPrefix:@"setup"]
+     || [selName hasPrefix:@"chats"]
+     || [selName hasPrefix:@"didConnect"]) {
+        gReady = YES;
+    }
+}
+
+@end
 
 static BOOL loadIMCore(void) {
     void *h = dlopen([IMCORE_PATH UTF8String], RTLD_NOW);
@@ -80,18 +166,53 @@ static BOOL connectDaemon(void) {
     if (!daemonClass) return NO;
     id daemon = [daemonClass performSelector:@selector(sharedInstance)];
     if (!daemon) return NO;
+
+    // Create the listener before connecting so it is ready when imagent
+    // delivers the initial connection callbacks.
+    gListenerInstance = [[BajaCrawListener alloc] init];
+
     if ([daemon respondsToSelector:@selector(connectToDaemon)]) {
         [daemon performSelector:@selector(connectToDaemon)];
     }
     if ([daemon respondsToSelector:@selector(blockUntilConnected)]) {
         [daemon performSelector:@selector(blockUntilConnected)];
     }
+
+    // Register as a listener. imagent will begin pushing chat state
+    // once the handler is added with appropriate capabilities.
+    // Primary path: [[daemon listener] addHandler:]
+    id daemonListener = [daemon respondsToSelector:@selector(listener)]
+        ? [daemon performSelector:@selector(listener)] : nil;
+
+    SEL addHandlerSel = NSSelectorFromString(@"addHandler:");
+    if (daemonListener && [daemonListener respondsToSelector:addHandlerSel]) {
+        // Dynamic selector: ARC warns about potential leak but gListenerInstance
+        // is a strong global so there is no actual leak.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        [daemonListener performSelector:addHandlerSel withObject:gListenerInstance];
+#pragma clang diagnostic pop
+        logDebug(@"listener registered via [daemonListener addHandler:]");
+    } else {
+        // Fallback: some macOS versions expose addListener: on the daemon itself.
+        SEL addListenerSel = NSSelectorFromString(@"addListener:");
+        if ([daemon respondsToSelector:addListenerSel]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+            [daemon performSelector:addListenerSel withObject:gListenerInstance];
+#pragma clang diagnostic pop
+            logDebug(@"listener registered via [daemon addListener:]");
+        } else {
+            logDebug(@"WARNING: no listener registration API found - chat list may not load");
+        }
+    }
+
     return YES;
 }
 
 // Wait up to `seconds` for the registry to report at least one chat.
-// Returns the number of chats when it gave up (may be 0 if the wait
-// expired).
+// Now also watches gReady (set by listener callbacks) as an early exit.
+// Returns the chat count when it gives up (may be 0 on timeout).
 static NSUInteger waitForChats(NSTimeInterval seconds) {
     NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
     NSUInteger last = 0;
@@ -104,6 +225,18 @@ static NSUInteger waitForChats(NSTimeInterval seconds) {
             if ([chats isKindOfClass:[NSArray class]]) {
                 last = [(NSArray *)chats count];
                 if (last > 0) return last;
+            }
+            // gReady means the listener received a chat-state callback.
+            // Give the registry one extra tick to settle, then return
+            // whatever we have (even if count is still 0 - some macOS
+            // versions populate via chatIdentifier lookup only).
+            if (gReady) {
+                [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.3]];
+                id chats2 = [reg performSelector:@selector(allExistingChats)];
+                if ([chats2 isKindOfClass:[NSArray class]]) {
+                    last = [(NSArray *)chats2 count];
+                }
+                return last;
             }
         }
     }
@@ -173,48 +306,72 @@ static NSString *toggleTyping(NSString *target, BOOL typing) {
     return nil;
 }
 
-// Long-running stdin loop. Reads line-delimited commands; writes
-// "ok"/"err ..." lines to stdout. Returns when stdin is closed or a
-// "quit" command arrives.
+// Long-running stdin loop. Reads commands on a GCD background thread
+// so the main thread can keep spinning NSRunLoop, which is required
+// for imagent to deliver callbacks to gListenerInstance.
+//
+// Commands are dispatched back to the main thread for toggleTyping
+// because IMCore is not thread-safe.
 static int runDaemonLoop(void) {
     logDebug(@"entering daemon loop");
-    // Warm up the registry once. A few seconds of waiting at start is
-    // fine because we only pay it once per helper lifetime.
-    waitForChats(5.0);
+    setvbuf(stdout, NULL, _IOLBF, 0);
 
-    char *buf = NULL;
-    size_t bufSize = 0;
-    ssize_t len;
-    setvbuf(stdout, NULL, _IOLBF, 0); // line-buffered
-    while ((len = getline(&buf, &bufSize, stdin)) != -1) {
-        @autoreleasepool {
-            // Trim trailing newline.
-            while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) { buf[--len] = '\0'; }
-            if (len == 0) continue;
-            NSString *line = [NSString stringWithUTF8String:buf];
-            NSArray<NSString *> *parts = [line componentsSeparatedByString:@" "];
-            NSString *cmd = parts.count > 0 ? parts[0] : @"";
-            NSString *arg = parts.count > 1 ? [[parts subarrayWithRange:NSMakeRange(1, parts.count - 1)] componentsJoinedByString:@" "] : @"";
+    __block volatile BOOL done = NO;
 
-            if ([cmd isEqualToString:@"ping"]) {
-                printf("ok\n");
-            } else if ([cmd isEqualToString:@"quit"]) {
-                printf("ok\n");
-                break;
-            } else if ([cmd isEqualToString:@"start"] || [cmd isEqualToString:@"stop"]) {
-                BOOL typing = [cmd isEqualToString:@"start"];
-                NSString *err = toggleTyping(arg, typing);
-                if (err) {
-                    printf("err %s\n", [err UTF8String]);
-                } else {
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        char *buf = NULL;
+        size_t bufSize = 0;
+        ssize_t len;
+        while (!done && (len = getline(&buf, &bufSize, stdin)) != -1) {
+            @autoreleasepool {
+                while (len > 0 && (buf[len-1] == '\n' || buf[len-1] == '\r')) { buf[--len] = '\0'; }
+                if (len == 0) continue;
+                NSString *line = [NSString stringWithUTF8String:buf];
+                NSArray<NSString *> *parts = [line componentsSeparatedByString:@" "];
+                NSString *cmd = parts.count > 0 ? parts[0] : @"";
+                NSString *arg = parts.count > 1
+                    ? [[parts subarrayWithRange:NSMakeRange(1, parts.count - 1)] componentsJoinedByString:@" "]
+                    : @"";
+
+                if ([cmd isEqualToString:@"ping"]) {
                     printf("ok\n");
+                } else if ([cmd isEqualToString:@"quit"]) {
+                    printf("ok\n");
+                    done = YES;
+                    break;
+                } else if ([cmd isEqualToString:@"start"] || [cmd isEqualToString:@"stop"]) {
+                    BOOL typing = [cmd isEqualToString:@"start"];
+                    __block NSString *err = nil;
+                    // Dispatch to main thread: IMCore callbacks and toggleTyping
+                    // must run on the same thread as the runloop.
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        err = toggleTyping(arg, typing);
+                    });
+                    if (err) {
+                        printf("err %s\n", [err UTF8String]);
+                    } else {
+                        printf("ok\n");
+                    }
+                } else {
+                    printf("err unknown command\n");
                 }
-            } else {
-                printf("err unknown command\n");
             }
         }
+        free(buf);
+        done = YES;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            CFRunLoopStop(CFRunLoopGetMain());
+        });
+    });
+
+    // Spin the main runloop indefinitely. This is what keeps imagent
+    // able to fire callbacks on gListenerInstance. Without this, the
+    // listener is registered but never invoked.
+    while (!done) {
+        @autoreleasepool {
+            [[NSRunLoop mainRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:1.0]];
+        }
     }
-    free(buf);
     return 0;
 }
 
@@ -251,9 +408,9 @@ int main(int argc, char *argv[]) {
 
         NSString *target = [NSString stringWithUTF8String:argv[2]];
 
-        // One-shot mode: wait up to 5s for registry. If still empty,
-        // we won't find the chat. Callers in long-running setups
-        // should use `serve` instead.
+        // One-shot mode: wait up to 5s for registry. The listener registered
+        // in connectDaemon() will receive callbacks while the runloop spins
+        // inside waitForChats(), which now exits early when gReady is set.
         waitForChats(5.0);
 
         NSString *err = toggleTyping(target, typing);
