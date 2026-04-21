@@ -40,6 +40,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { runCycle, type CycleOutput } from "../agent.js";
+import { expandAtRefs } from "../at-refs.js";
 import { saveConfig } from "../config.js";
 import { openDb, type DB } from "../db.js";
 import { tierFor, budgetFor, AUTO, HAIKU, SONNET, OPUS } from "../model-picker.js";
@@ -264,6 +265,29 @@ export function ChatApp({
       pendingAttachments.length > 0 ? [...pendingAttachments] : undefined;
     if (attachmentsForTurn) setPendingAttachments([]);
 
+    // Expand @file:/ @folder:/ @cycle:/ @memory:/ @url:/ @screen refs.
+    // Adds a "Referenced context" block at the end of the task text and
+    // pushes image paths onto attachments. Warnings surface as a dim
+    // system line so the user knows what didn't resolve.
+    let taskText = trimmed;
+    let mergedAttachments = attachmentsForTurn;
+    try {
+      const expanded = await expandAtRefs(trimmed, { profile });
+      if (expanded.warnings.length > 0) {
+        appendSystemLines(expanded.warnings.map((w) => ({ text: w, dim: true })));
+      }
+      if (expanded.resolvedRefs.length > 0) {
+        const kinds = expanded.resolvedRefs.map((r) => `@${r.raw}`).join(", ");
+        appendSystemLines([{ text: `resolved: ${kinds}`, dim: true }]);
+      }
+      taskText = expanded.task;
+      if (expanded.attachments.length > 0) {
+        mergedAttachments = [...(attachmentsForTurn ?? []), ...expanded.attachments];
+      }
+    } catch (e) {
+      appendSystemLines([{ text: `@-ref expansion failed: ${(e as Error).message}`, dim: true }]);
+    }
+
     const effectiveModel = modelOverride ?? cfg.model;
     thinkingModelRef.current = effectiveModel;
     thinkingRef.current = true;
@@ -277,10 +301,10 @@ export function ChatApp({
       const recent = historyRef.current.slice(-HISTORY_LIMIT - 1, -1);
       r = await runCycle({
         profile,
-        task: trimmed,
+        task: taskText,
         modelOverride,
         sessionHistory: recent,
-        attachments: attachmentsForTurn,
+        attachments: mergedAttachments,
       });
     } catch (e) {
       caughtError = e as Error;
@@ -923,7 +947,7 @@ function HintFooter({ hasInput, isSlash, thinking }: { hasInput: boolean; isSlas
   } else if (hasInput) {
     hint = "Enter send · ←→ edit · Ctrl-D quit";
   } else {
-    hint = "↑↓ recall · / commands · Ctrl-D quit";
+    hint = "↑↓ recall · / commands · @ context · Ctrl-D quit";
   }
   return (
     <Box>
