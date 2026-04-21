@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.15.1
+
+**Retrofit pass on the v0.15.0 fluid contract: Windows daemon orphan
+sweep, and setup-telegram/discord now auto-fix missing optional
+dependencies instead of telling the user to run npm.**
+
+### Fixes
+
+1. **Windows daemon orphan sweep.** `findStaleDaemons` in
+   `src/commands/daemon.ts` previously returned `[]` on win32
+   because `ps` is unavailable. Now uses PowerShell's
+   `Get-CimInstance Win32_Process` on win32 so the sweep works
+   everywhere. Profile names are sanitized before being interpolated
+   into the PowerShell `-like` pattern.
+2. **`setup-telegram` (v0.3.0) and `setup-discord` (v0.3.0) skills
+   auto-heal missing optional deps.** Previously instructed the user
+   to run `npm install -g node-telegram-bot-api` or `npm install -g
+   discord.js`, which installed those packages as siblings (not into
+   bajaclaw's `node_modules`) and didn't actually fix the adapter.
+   The skills now try `bajaclaw channel add`, detect "Cannot find
+   module" on failure, run `npm install -g bajaclaw --force` to
+   rebuild the tree (which picks up `optionalDependencies`), and
+   retry. Zero user instructions to install anything manually.
+
 ## 0.15.0
 
 **Fluid tool bootstrap + seven new bundled skills. Skills install their

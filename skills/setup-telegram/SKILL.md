@@ -1,117 +1,116 @@
 ---
 name: setup-telegram
 description: Wire up a bidirectional Telegram chat bridge between the user and the agent
-version: 0.2.0
+version: 0.3.0
 tools: [Bash, Read, Write, Edit]
 triggers: ["setup telegram", "help me with telegram", "connect telegram", "telegram bot", "add telegram", "telegram setup", "telegram chat", "message you on phone", "phone chat", "mobile chat"]
 effort: medium
 ---
 
-## ⚠️ NON-NEGOTIABLE RULE: NEVER ASK "WHAT DO YOU WANT TO USE IT FOR?"
+## Non-negotiable rule: never ask "what do you want to use it for"
 
-When the user says **anything** that triggers this skill - "set up
-telegram", "connect telegram", "telegram bot", "talk to you on my
-phone", "message you from my phone", etc. - the intent is **always
-the same**: a **two-way chat bridge** so the user can message you from
-Telegram and you reply in the same thread.
+When the user triggers this skill - "set up telegram", "connect
+telegram", "telegram bot", "talk to you on my phone" - the intent
+is **always the same**: a two-way chat bridge. Do not ask:
 
-You **must not** ask any of these:
 - "What do you want to use Telegram for?"
 - "Notifications, commands, or something else?"
 - "What should this bot do?"
-- Any other meta-question about intent.
 
-The user already told you - they want to chat. Just wire it up.
+Wire it up. If they want something specific (e.g. "only alerts"),
+they will say so. Otherwise: silence, collect credentials, run
+the commands.
 
-If they specifically say they want something different (e.g.
-"I want it for error alerts only"), ADJUST then. Otherwise: silence,
-collect credentials, run the commands.
+## Step 1 - Collect credentials
 
-## Execution plan
-
-You have `Bash`, `Read`, `Write`, `Edit` tools. Permission prompts are
-auto-approved by BajaClaw's backend invocation. Just do the work.
-
-### Step 1 - Collect credentials from the user
-
-Tell the user exactly two things to get:
+Telegram requires two things. Tell the user exactly this:
 
 ```
-To wire up a Telegram chat with me, I need:
+I need two things from Telegram:
 
   1) A bot token from @BotFather
-     In Telegram, message @BotFather → /newbot → follow the prompts
-     → copy the token (looks like 123456789:ABCdef...).
+     In Telegram: message @BotFather -> /newbot -> follow the prompts
+     -> copy the token (looks like 123456789:ABCdef...).
 
   2) Your numeric Telegram user ID from @userinfobot
-     Message @userinfobot → copy the number it replies with.
+     In Telegram: message @userinfobot -> copy the number it replies
+     with.
 
-Paste both here and I'll wire it up.
+Paste both and I'll handle the rest.
 ```
 
-Wait for the user to reply with the token + user id. Don't proceed
-without both - without the user id the allowlist is empty and no
-messages will route through.
+Don't proceed without both. Without the user id, the allowlist is
+empty and no messages route through.
 
-### Step 2 - Wire the channel
+## Step 2 - Wire the channel (auto-fixes missing deps)
 
-Once you have both values, run:
+Run this first, inside a try/catch shell pattern. If it succeeds,
+skip to step 3. If it fails because a module is missing, run the
+fix and retry:
 
 ```bash
-bajaclaw channel add <profile> telegram --token <TOKEN> --user-id <USER_ID>
+profile="${BAJACLAW_PROFILE:-default}"
+
+# First attempt
+if ! bajaclaw channel add "$profile" telegram --token "$TOKEN" --user-id "$USER_ID" 2>/tmp/bc-tg-err; then
+  if grep -q "Cannot find module" /tmp/bc-tg-err || grep -q "node-telegram-bot-api" /tmp/bc-tg-err; then
+    echo "Missing optional dep; rebuilding bajaclaw..."
+    npm install -g bajaclaw --force
+    # Retry after the rebuild
+    bajaclaw channel add "$profile" telegram --token "$TOKEN" --user-id "$USER_ID"
+  else
+    cat /tmp/bc-tg-err >&2
+    exit 1
+  fi
+fi
 ```
 
-Where `<profile>` is the currently active profile (default: `default`
-unless BAJACLAW_PROFILE is set to something else in the environment).
-The `--user-id` gets added to the telegram allowlist so only messages
-from that sender are routed to the agent.
+The `--force` flag refreshes bajaclaw's whole install, including
+`optionalDependencies` (`node-telegram-bot-api`, `discord.js`). Only
+runs when the adapter actually failed to load - no-op otherwise.
 
-Then verify:
+## Step 3 - Start the daemon
 
 ```bash
-bajaclaw channel list <profile>
+bajaclaw daemon start "$profile"
 ```
 
-### Step 3 - Ensure the dep is present
+The daemon hosts the Telegram adapter that polls for messages. It
+also boots the dashboard in-process.
 
-The adapter uses `node-telegram-bot-api` (optional dependency). Check
-if it's installed; if not, install it globally:
+## Step 4 - Verify and invite the user to test
 
 ```bash
-npm install -g node-telegram-bot-api
+bajaclaw channel list "$profile"       # expect one telegram row
+bajaclaw daemon status "$profile"      # expect "running"
 ```
 
-### Step 4 - Start the gateway
+Then tell the user:
 
-```bash
-bajaclaw daemon start <profile>
-```
+> Done. Open Telegram, send any message to the bot (the name you
+> picked in @BotFather), and I'll reply. The first reply may take
+> a few seconds while the first cycle boots.
 
-The daemon hosts the telegram adapter that polls for messages.
+## Verification
 
-### Step 5 - Confirm and invite the user to test
+- `bajaclaw channel list "$profile"` shows the telegram row with
+  token shown as `***…<last 4>` and the allowlist containing the
+  user's numeric id.
+- `bajaclaw daemon status "$profile"` shows `running (pid N)`.
+- Sending a message from Telegram lands in
+  `bajaclaw daemon logs "$profile" --lines 30` as a
+  `gateway.telegram.msg` entry.
+- The user sees a reply in the Telegram thread.
 
-Say something like: "Done. Open Telegram, send any message to the bot
-(it'll be named whatever you picked in @BotFather), and I'll reply."
+## Pitfalls
 
-## Verification checklist
-
-- `bajaclaw channel list <profile>` shows a `telegram` entry with the
-  token set (printed as `***…<last 4 chars>`) and the allowlist
-  containing the user's numeric id.
-- `bajaclaw daemon status <profile>` shows `running`.
-- Sending a message from Telegram lands in `bajaclaw daemon logs
-  <profile> --lines 30` as a `gateway.telegram.msg` entry.
-- The user sees a reply in the Telegram thread (may take a few seconds
-  for the cycle to run on first message).
-
-## Pitfalls (to anticipate, not pre-ask)
-
-- Bot cannot DM the user first - the user must message the bot first
-  OR add the bot to a group. Tell the user this only if they report
-  "I don't see anything happen."
-- If the token is wrong: `gateway.telegram.error` will appear in the
-  daemon log within ~10 seconds. Ask them to re-check the token.
-- Never echo the token back in the chat once it's in config.json.
-- `bajaclaw uninstall --keep-data` preserves the channel config;
-  full uninstall removes it.
+- **Bot cannot DM the user first.** The user must message the bot
+  first (or add it to a group). Tell the user only if they report
+  "nothing happens" after step 4.
+- **Wrong token:** a `gateway.telegram.error` entry appears in the
+  daemon log within ~10 seconds. Ask the user to re-check the token.
+- **Never echo the token** back in chat once it's in config.json.
+  Refer to it as "the token you gave me".
+- **BotFather is manual.** There's no API to create bots for the
+  user - they must do it themselves. The skill makes the surrounding
+  setup fluid, but this step remains human.
