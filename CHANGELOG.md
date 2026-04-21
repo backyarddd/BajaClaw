@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.19.11
+
+**iMessage tapbacks (best-effort) + read-receipts documented as out of reach.**
+
+Closes the v0.19 sprint. Two pieces, one of which we know upfront may
+not work on macOS 14+ for the same reason typing died in v0.17.x.
+
+- `bajaclaw tapback send <messageGuid> <type>` - send a reaction
+  (love/like/dislike/laugh/emphasize/question, or numeric 2000-2005).
+  `--remove` to undo. `--source <imessage:handle>` or
+  `BAJACLAW_SOURCE` from the env. Wraps Apple's undocumented
+  `associated message type` / `associated message guid` AppleScript
+  parameters - works on macOS 12-13 in many setups, may silently
+  fail or hit `-1700` on macOS 14-26 unless the calling process
+  holds private IMCore entitlements (it does not).
+- `bajaclaw tapback list` shows the reaction-name to numeric map.
+- `bajaclaw read-receipt` is an intentional no-op stub. Marking a
+  message as read from userspace requires SIP-protected chat.db
+  writes or `IMCore.markChatAsRead:` (private entitlement, Apple
+  gates non-Apple processes). Stub points at landmine 48 so callers
+  understand the gap.
+- New adapter surface: `Adapter.sendTapback?(chatId, guid, type)` on
+  iMessage; gateway `sendTapbackToSource` returns false on any
+  failure rather than throwing, matching the "best-effort"
+  contract. Telegram and Discord do not implement it.
+- New dashboard route `POST /api/tapback`. Body: source, messageGuid,
+  type. Returns `{ok}` so callers can surface "delivered" vs
+  "rejected" cleanly.
+- Builder uses `with timeout of 30 seconds` and the same Tahoe
+  `1st service whose service type = iMessage` form as the existing
+  send path (landmine 50).
+- 3 new tests cover the type map and AppleScript builder. 127/127
+  pass.
+
 ## 0.19.10
 
 **Per-cycle shadow-git checkpoints + `bajaclaw rewind`.**

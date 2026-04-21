@@ -40,6 +40,7 @@ import { cmdAttach } from "./commands/attach.js";
 import { cmdTranscribe, cmdTts } from "./commands/voice.js";
 import { cmdPlan, cmdPlanList, cmdPlanShow, cmdPlanApprove, cmdPlanCancel } from "./commands/plan.js";
 import { cmdRewind, cmdSnapshotList } from "./commands/rewind.js";
+import { cmdTapback, cmdTapbackList, cmdReadReceipt } from "./commands/tapback.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -252,6 +253,25 @@ program.command("image <prompt>")
     caption: opts.caption,
     quiet: !!opts.quiet,
   }));
+
+// Tapback - send an iMessage reaction to a specific message. Best-effort
+// on macOS 14+ (private IMCore entitlements; see HANDOFF landmine 48).
+const tapbackCmd = program.command("tapback").description("Send an iMessage tapback (reaction) to a specific message");
+tapbackCmd.command("send")
+  .argument("<messageGuid>", "iMessage message GUID to react to")
+  .argument("<type>", "type name (love/like/dislike/laugh/emphasize/question) or numeric (2000-2005)")
+  .option("--source <s>", "imessage:<handle> (default: $BAJACLAW_SOURCE)")
+  .option("--remove", "remove the tapback instead of adding it")
+  .action(async (messageGuid, type, opts) => cmdTapback({
+    messageGuid, type, source: opts.source, remove: !!opts.remove,
+  }));
+tapbackCmd.command("list").description("Show known tapback types").action(cmdTapbackList);
+
+// Read-receipt - intentional no-op stub. Documents why this is not
+// implementable from userspace on macOS 14+.
+program.command("read-receipt")
+  .description("Mark an iMessage thread as read (NOT implementable on macOS 14+; see HANDOFF.md landmine 48)")
+  .action(() => cmdReadReceipt());
 
 // Rewind - restore a snapshotted work tree to a cycle's pre-state.
 // Requires `cfg.snapshots.enabled = true` at the time the cycle ran.

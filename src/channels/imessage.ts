@@ -462,6 +462,50 @@ export async function sendGroupViaAppleScript(chatGuid: string, text: string, lo
   await runOsaWithRetry(buildGroupSendAppleScript(chatGuid, text), log);
 }
 
+// Tapback ("reaction") types per Apple's IMCore. Add: 2000-2005;
+// Remove: 3000-3005 (subtract 1000 from add to get the corresponding
+// remove). Apple's docs are sparse; values are observed from
+// reverse-engineered third-party clients (BlueBubbles et al).
+export const TAPBACK_TYPES: Record<string, number> = {
+  love: 2000, heart: 2000,
+  like: 2001, thumbsup: 2001,
+  dislike: 2002, thumbsdown: 2002,
+  laugh: 2003, haha: 2003,
+  emphasize: 2004, exclaim: 2004,
+  question: 2005, questionmark: 2005,
+};
+
+// Reverse map for `bajaclaw tapback list`.
+export const TAPBACK_NAMES: Record<number, string> = {
+  2000: "love", 2001: "like", 2002: "dislike",
+  2003: "laugh", 2004: "emphasize", 2005: "question",
+};
+
+export function buildTapbackAppleScript(handle: string, messageGuid: string, type: number): string {
+  const esc = (s: string): string => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const norm = normalizeHandle(handle);
+  // Apple's AppleScript dictionary for Messages.app does NOT publicly
+  // document `associatedMessageType` / `associatedMessageGuid` as
+  // parameters to `send`. The form below is what BlueBubbles, Beeper,
+  // and similar clients use; it works on macOS 12-13 in many setups
+  // and is broken (silently or with -1700) on macOS 14-26 unless the
+  // calling process holds private IMCore entitlements. We try anyway,
+  // and the caller surfaces the failure cleanly.
+  return `
+with timeout of 30 seconds
+  tell application "Messages"
+    set targetService to 1st service whose service type = iMessage
+    set targetBuddy to participant "${esc(norm)}" of targetService
+    send "" to targetBuddy with properties {associated message type:${type}, associated message guid:"${esc(messageGuid)}"}
+  end tell
+end timeout
+`.trim();
+}
+
+export async function sendTapbackViaAppleScript(handle: string, messageGuid: string, type: number, log?: Logger): Promise<void> {
+  await runOsaWithRetry(buildTapbackAppleScript(handle, messageGuid, type), log);
+}
+
 // Outbound attachments: Messages.app's AppleScript `send` rejects files
 // outside a small set of standard user directories on Sequoia/Tahoe
 // (sandbox regression). Stage a copy into ~/Pictures/bajaclaw-staging
@@ -557,6 +601,10 @@ export interface IMessageAdapter {
   kind: "imessage";
   send: Sender;
   sendFile?: (chatId: string | number, filePath: string, caption?: string) => Promise<void>;
+  // Optional reaction sender. May fail on macOS 14+ due to private
+  // entitlement requirements on IMCore (see HANDOFF landmine 48 for
+  // the typing-indicator analogue). Caller must catch and degrade.
+  sendTapback?: (chatId: string | number, messageGuid: string, type: number) => Promise<void>;
   startTyping: TypingStarter;
   stop: () => Promise<void>;
 }
@@ -716,6 +764,13 @@ export async function startIMessage(
       if (caption && caption.trim().length > 0) {
         await sendViaAppleScript(id, caption, log);
       }
+    },
+    sendTapback: async (chatId, messageGuid, type) => {
+      const id = String(chatId);
+      if (id.startsWith("group:")) {
+        throw new Error("sendTapback to iMessage groups not yet supported");
+      }
+      await sendTapbackViaAppleScript(id, messageGuid, type, log);
     },
     startTyping: (_chatId) => {
       // Typing indicator is not reachable without Apple-private
