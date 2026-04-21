@@ -17,8 +17,7 @@
 // attachments. Inbound attachments are noted in the body as
 // `[attachment]` markers; agents still see them and can ask the user
 // to forward through another channel.
-import { spawnSync, spawn } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -143,29 +142,26 @@ export function openChatDb(): Database.Database {
   return new Database(chatDbPath(), { readonly: true, fileMustExist: true });
 }
 
-// Native typing helper. Compiled from helpers/imessage-typing.m into a
-// universal Mach-O binary shipped alongside bajaclaw. Calls IMCore's
-// private setLocalUserIsTyping: to produce the "..." indicator on the
-// recipient's device - something AppleScript can't do.
+// Native typing helper: retained as source + pre-built binary in
+// helpers/ but not currently invoked. Prior attempts (v0.17.0 one-shot,
+// v0.17.2 long-lived listener) both fail on macOS 26+: unsigned
+// helpers never receive account/chat state from imagent, so
+// `IMChatRegistry.allExistingChats` stays empty and there's no
+// `IMChat` object to call `setLocalUserIsTyping:` on. Making it work
+// would require either code signing with private entitlements or
+// running from an Apple-trusted context - neither is in scope.
 //
-// Resolves to one of:
-//   - <repo>/helpers/bajaclaw-imessage-helper  (dev checkout; src/channels -> up two)
-//   - <pkg>/helpers/bajaclaw-imessage-helper   (installed; dist/channels -> up two)
-// Both paths end up the same shape because `files` in package.json
-// ships helpers/ verbatim next to dist/.
+// Resolver kept for future experiments and so existing unit tests
+// that import it keep compiling.
 let cachedHelperPath: string | null | undefined;
 
 export function resolveTypingHelperPath(): string | null {
   if (cachedHelperPath !== undefined) return cachedHelperPath;
-  // __dirname is <root>/dist/channels when installed, or <root>/src/channels
-  // via tsx. Either way, up two levels is the package root.
   const root = join(__dirname, "..", "..");
   const candidate = join(root, "helpers", "bajaclaw-imessage-helper");
   try {
     const st = statSync(candidate);
     if (st.isFile()) {
-      // Strip the quarantine attribute npm applies to files downloaded
-      // in tarballs. Idempotent; no-op if absent. Ignored on failure.
       spawnSync("xattr", ["-dr", "com.apple.quarantine", candidate], { stdio: "ignore" });
       cachedHelperPath = candidate;
       return candidate;
@@ -181,6 +177,8 @@ export interface TypingResult {
   error?: string;
 }
 
+// One-shot helper invocation retained for tests and future use.
+// Currently unused by the adapter because it can't succeed on macOS 26+.
 export function sendTypingIndicator(
   handle: string,
   typing: boolean,
@@ -202,71 +200,6 @@ export function sendTypingIndicator(
   const err = (r.stderr || "").trim();
   log?.warn("gateway.imessage.typing-fail", { verb, handle: norm, status: r.status, err: err.slice(0, 200) });
   return { ok: false, exitCode: r.status ?? -1, error: err };
-}
-
-// Long-lived subprocess wrapper for the typing helper in `serve` mode.
-// The helper reads commands from stdin and writes ok/err lines to stdout.
-// Keeping it alive means the IMDaemonListener stays registered and
-// imagent keeps the chat registry populated.
-interface TypingHelper {
-  send: (cmd: string) => void;
-  stop: () => void;
-}
-
-function startTypingHelperProcess(log: Logger): TypingHelper | null {
-  if (process.platform !== "darwin") return null;
-  const helperPath = resolveTypingHelperPath();
-  if (!helperPath) return null;
-
-  let proc: ChildProcess | null = null;
-  let helperStopped = false;
-  let retried = false;
-
-  function launchHelper(): void {
-    // helperPath is checked non-null at the top of startTypingHelperProcess.
-    const child = spawn(helperPath as string, ["serve"], { stdio: ["pipe", "pipe", "pipe"] });
-    proc = child;
-
-    child.stderr?.on("data", (d: Buffer) => {
-      const msg = d.toString().trim();
-      if (msg) log.warn("gateway.imessage.helper-stderr", { msg: msg.slice(0, 200) });
-    });
-
-    child.stdout?.on("data", (d: Buffer) => {
-      const lines = d.toString().trim().split(/\r?\n/);
-      for (const line of lines) {
-        if (line.startsWith("err ")) {
-          log.warn("gateway.imessage.helper-err", { msg: line.slice(4, 200) });
-        }
-      }
-    });
-
-    child.on("error", (e: Error) => {
-      log.warn("gateway.imessage.helper-spawn-error", { error: e.message });
-    });
-
-    child.on("exit", (code) => {
-      if (!helperStopped && !retried) {
-        retried = true;
-        log.info("gateway.imessage.helper-respawn", { code });
-        launchHelper();
-      }
-    });
-  }
-
-  launchHelper();
-
-  return {
-    send: (cmd: string) => {
-      try { proc?.stdin?.write(cmd + "\n"); } catch { /* typing is best-effort */ }
-    },
-    stop: () => {
-      helperStopped = true;
-      try { proc?.stdin?.write("quit\n"); } catch { /* ignore */ }
-      // Give it 1s to exit cleanly, then SIGTERM.
-      setTimeout(() => { try { proc?.kill("SIGTERM"); } catch { /* ignore */ } }, 1000);
-    },
-  };
 }
 
 // The inbound query. ROWID is monotonic and indexed, so "everything
@@ -420,8 +353,6 @@ export async function startIMessage(
   const allowlist = (config.allowlist ?? []).map((h) => normalizeHandle(String(h)));
   const useAllowlist = allowlist.length > 0;
 
-  const typingHelper = startTypingHelperProcess(log);
-
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
 
@@ -465,33 +396,17 @@ export async function startIMessage(
       // chatId here is the normalized handle string for the adapter.
       await sendViaAppleScript(String(chatId), text, log);
     },
-    startTyping: (chatId) => {
-      if (!typingHelper) return () => {};
-      const handle = normalizeHandle(String(chatId));
-      let indicatorStopped = false;
-
-      const sendStart = () => typingHelper.send(`start ${handle}`);
-      sendStart();
-
-      // iMessage "..." indicator stays on until the sender replies or
-      // ~60s elapse. Refresh every 30s to keep it alive across long
-      // cycles. Also retry at 10s in case the first call raced against
-      // the helper's registry population (imagent may take a few seconds
-      // to push chat state after the listener is registered).
-      const initialRetry = setTimeout(() => { if (!indicatorStopped) sendStart(); }, 10_000);
-      const refreshTimer = setInterval(() => { if (!indicatorStopped) sendStart(); }, 30_000);
-
-      return () => {
-        indicatorStopped = true;
-        clearTimeout(initialRetry);
-        clearInterval(refreshTimer);
-        typingHelper.send(`stop ${handle}`);
-      };
+    startTyping: (_chatId) => {
+      // Typing indicator is not functional on macOS 26+ for unsigned
+      // helpers. Attempts in v0.17.0/v0.17.2 both failed because
+      // imagent doesn't push account/chat state to our process, so
+      // IMChatRegistry stays empty. Returning a no-op stop keeps the
+      // gateway plumbing consistent.
+      return () => {};
     },
     stop: async () => {
       stopped = true;
       if (timer) clearTimeout(timer);
-      typingHelper?.stop();
       try { db.close(); } catch { /* ignore */ }
     },
   };
