@@ -36,7 +36,7 @@ bajaclaw channel add <profile> imessage --contact <handle> [--contact <handle> .
 - First use requires granting Full Disk Access to whichever app launches bajaclaw (Terminal, iTerm, VS Code, etc.). The CLI auto-opens the right System Settings pane.
 - First outbound reply triggers a one-time macOS Automation prompt for Messages.app. Click Allow.
 
-Scope in v1: 1:1 iMessage threads only. Group chats are filtered out, and inbound attachments are flagged in the task body as `[attachment]` but not downloaded. Read receipts do not round-trip (we see receipts in chat.db but can't send them). Typing indicators **do** round-trip as of v0.17.0 via a bundled native helper that calls IMCore's `setLocalUserIsTyping:` - the "..." bubble shows on the recipient's device while the agent is composing.
+Scope in v1: 1:1 iMessage threads only. Group chats are filtered out, and inbound attachments are flagged in the task body as `[attachment]` but not downloaded. Typing indicators and read receipts do not round-trip. (v0.17.0 tried to add typing via a private-framework helper; the helper reaches IMCore cleanly, but imagent only pushes chat state to processes subscribed as a full `IMDaemonListener` - so lookups stay empty. v0.17.1 reverts startTyping to a no-op. The helper binary stays in the tree for a future pass that implements listener subscription properly.)
 
 Sending SMS (green bubbles) from the Mac requires Text Message Forwarding with a paired iPhone. BajaClaw routes through iMessage only by default - if Messages.app falls back to SMS on your Mac, that's Apple's routing, not ours.
 
