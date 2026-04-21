@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.19.7
+
+**Streaming responses in `bajaclaw chat`.**
+
+The chat REPL now renders assistant text as it is generated, not after
+the cycle fully completes. The spinner stays up and the partial text
+fills in below it, replacing the "is it still thinking?" silence on
+long turns.
+
+- New `runStream(prompt, opts, {onPartialText})` in `src/claude.ts`
+  spawns `claude -p ... --output-format stream-json
+  --include-partial-messages --verbose` and parses each NDJSON line
+  into partial-text deltas + the final result block. Shape-compatible
+  with `runOnce` so callers swap one for the other by passing the
+  callback.
+- `runCycle` accepts `onPartialText?`. When set, the stream path is
+  used; memory, skills, MCP merge, and post-cycle extraction all run
+  as before.
+- Chat UI: new `streamingText` state, rendered under the thinking
+  indicator. Cleared on cycle end (the Static scrollback picks up the
+  finalized turn).
+- Channels (Telegram / Discord / iMessage), dashboard chat, HTTP API,
+  daemon heartbeats continue to use the blocking `runOnce` path.
+  Editing outbound messages mid-cycle is landmine territory per
+  adapter; not in v0.19 scope.
+- 2 new tests. 115/115 pass.
+
 ## 0.19.6
 
 **Image generation + outbound file attachments across every channel.**

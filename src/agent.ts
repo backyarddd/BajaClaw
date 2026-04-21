@@ -19,7 +19,7 @@ import { join } from "node:path";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db.js";
 import { Logger } from "./logger.js";
-import { runOnce } from "./claude.js";
+import { runOnce, runStream } from "./claude.js";
 import { profileDir } from "./paths.js";
 import { shouldAllow, rateLimit, recordFailure, recordSuccess } from "./safety.js";
 import { recall } from "./memory/recall.js";
@@ -52,6 +52,11 @@ export interface CycleInput {
   // Discord, or the CLI). Paths are appended to the prompt so the
   // agent can view them with the Read tool.
   attachments?: string[];
+  // Optional streaming callbacks. When provided, runCycle uses the
+  // stream-json output format and fires onPartialText as the
+  // assistant emits incremental text. The final CycleOutput is
+  // otherwise identical in shape to the non-streaming path.
+  onPartialText?: (delta: string, accumulated: string) => void;
 }
 
 export interface CycleOutput {
@@ -234,7 +239,12 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       env: spawnEnv,
     };
 
-    const result = await runOnce(prompt, opts);
+    // Stream when the caller asked for partial-text callbacks;
+    // otherwise fall through to the blocking JSON path so the rest
+    // of the codebase (channels, dashboard, HTTP API) stays unchanged.
+    const result = input.onPartialText
+      ? await runStream(prompt, opts, { onPartialText: input.onPartialText })
+      : await runOnce(prompt, opts);
     const finished = new Date().toISOString();
 
     if (!result.ok) {

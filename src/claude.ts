@@ -173,15 +173,173 @@ export async function runOnce(prompt: string, opts: ClaudeOptions = {}): Promise
   }
 }
 
-export function runStream(prompt: string, opts: ClaudeOptions = {}): ResultPromise | null {
-  const cmd = buildCommand(prompt, opts);
-  const bin = cachedBinary;
-  if (!bin) return null;
-  return execa(bin, [...cmd, "--output-format", "stream-json"], {
-    cwd: opts.workdir,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...cleanSpawnEnv(), ...(opts.env ?? {}) },
-  });
+export interface StreamCallbacks {
+  // Partial text delta from the assistant. `accumulated` is the full
+  // text so far; `delta` is what was added in this chunk. Fires as
+  // often as claude emits partial_assistant_message events.
+  onPartialText?: (delta: string, accumulated: string) => void;
+  // Raw event passthrough for callers that want more than just text
+  // (e.g. tool-use announcements).
+  onEvent?: (event: unknown) => void;
+}
+
+// Streaming variant of runOnce. Spawns `claude -p ... --output-format
+// stream-json --include-partial-messages`, parses each NDJSON line,
+// fires callbacks as partials arrive, and returns a final ClaudeResult
+// identical in shape to runOnce (so callers can swap one for the
+// other without changing their reply path). Falls back to runOnce
+// when the CLI does not support streaming.
+export async function runStream(
+  prompt: string,
+  opts: ClaudeOptions,
+  cb: StreamCallbacks = {},
+): Promise<ClaudeResult> {
+  const start = Date.now();
+  const dryRun = process.env.BAJACLAW_DRY_RUN === "1" || (opts as { dryRun?: boolean }).dryRun === true;
+  if (dryRun) return runOnce(prompt, opts);
+
+  const bin = await findClaudeBinary();
+  if (!bin) {
+    return {
+      ok: false,
+      text: "",
+      events: [],
+      error: "claude CLI not found. See docs/claude-integration.md.",
+      durationMs: Date.now() - start,
+    };
+  }
+
+  const cmd = [...buildCommand(prompt, opts), "--output-format", "stream-json", "--include-partial-messages", "--verbose"];
+  const effectiveTimeout = opts.timeout ?? DEFAULT_TIMEOUT;
+
+  let accumulatedText = "";
+  const events: ClaudeEvent[] = [];
+  let costUsd: number | undefined;
+  let inputTokens: number | undefined;
+  let outputTokens: number | undefined;
+  let turns: number | undefined;
+  let resultText: string | undefined;
+  let streamError: string | undefined;
+
+  try {
+    const subp = execa(bin, cmd, {
+      cwd: opts.workdir,
+      timeout: effectiveTimeout,
+      reject: false,
+      stdin: "ignore",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...cleanSpawnEnv(), ...(opts.env ?? {}) },
+    });
+
+    const stdout = subp.stdout;
+    if (!stdout) {
+      return { ok: false, text: "", events: [], error: "no stdout stream", durationMs: Date.now() - start };
+    }
+
+    let buf = "";
+    stdout.setEncoding("utf8");
+    stdout.on("data", (chunk: string) => {
+      buf += chunk;
+      let nl: number;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        let ev: Record<string, unknown>;
+        try { ev = JSON.parse(line) as Record<string, unknown>; } catch { continue; }
+        events.push(ev as ClaudeEvent);
+        try { cb.onEvent?.(ev); } catch { /* callback errors must not kill the stream */ }
+
+        const type = ev.type;
+        // Partial assistant text: delta events arrive incrementally.
+        // Field names vary by claude CLI version; handle the common
+        // shapes: {type:"stream_event", event:{type:"content_block_delta", delta:{text:"..."}}}
+        // and {type:"assistant", delta:"..."}.
+        if (type === "stream_event" || type === "assistant") {
+          const delta = extractDelta(ev);
+          if (delta) {
+            accumulatedText += delta;
+            try { cb.onPartialText?.(delta, accumulatedText); } catch { /* swallow */ }
+          }
+        }
+        // Final result block.
+        if (type === "result") {
+          const obj = ev as Record<string, unknown>;
+          if (typeof obj.result === "string") resultText = obj.result;
+          if (typeof obj.total_cost_usd === "number") costUsd = obj.total_cost_usd;
+          if (typeof obj.num_turns === "number") turns = obj.num_turns;
+          const usage = obj.usage as Record<string, number> | undefined;
+          if (usage) {
+            if (typeof usage.input_tokens === "number") inputTokens = usage.input_tokens;
+            if (typeof usage.output_tokens === "number") outputTokens = usage.output_tokens;
+          }
+          if (obj.is_error === true && typeof obj.subtype === "string" && obj.subtype !== "success") {
+            streamError = String(obj.subtype);
+          }
+        }
+      }
+    });
+
+    const r = await subp;
+    // Flush any final partial line that did not end in newline.
+    const tail = buf.trim();
+    if (tail) {
+      try {
+        const ev = JSON.parse(tail) as Record<string, unknown>;
+        events.push(ev as ClaudeEvent);
+      } catch { /* ignore */ }
+    }
+
+    const ok = (r.exitCode ?? 0) === 0 || (resultText !== undefined && !streamError);
+    const finalText = resultText ?? accumulatedText;
+    return {
+      ok,
+      text: ok ? finalText : "",
+      events,
+      error: streamError ?? (ok ? undefined : (r.stderr?.toString().trim().slice(0, 500))),
+      durationMs: Date.now() - start,
+      command: ["claude", ...cmd],
+      costUsd, inputTokens, outputTokens, turns,
+    };
+  } catch (e) {
+    const err = e as Error & { timedOut?: boolean; exitCode?: number; stderr?: string };
+    let msg = err.message;
+    if (err.timedOut) {
+      msg = `backend timed out after ${Math.round(effectiveTimeout / 1000)}s (cycleTimeoutMs=${effectiveTimeout}).`;
+    }
+    return {
+      ok: false,
+      text: "",
+      events,
+      error: msg,
+      durationMs: Date.now() - start,
+      command: ["claude", ...cmd],
+    };
+  }
+}
+
+function extractDelta(ev: Record<string, unknown>): string | null {
+  // stream_event wrapping an anthropic content_block_delta
+  const inner = (ev.event ?? ev) as Record<string, unknown>;
+  const innerType = inner.type;
+  if (innerType === "content_block_delta") {
+    const delta = inner.delta as Record<string, unknown> | undefined;
+    if (delta && typeof delta.text === "string") return delta.text;
+  }
+  // Some CLIs emit {type:"assistant", text:"..."} for incremental text.
+  if (innerType === "text_delta" && typeof inner.text === "string") return inner.text;
+  // {type:"partial_assistant_message", message:{content:[{type:"text",text:"..."}]}}
+  if (innerType === "partial_assistant_message" || ev.type === "partial_assistant_message") {
+    const msg = (inner.message ?? ev.message) as Record<string, unknown> | undefined;
+    const content = msg?.content as unknown[] | undefined;
+    if (Array.isArray(content)) {
+      for (const c of content) {
+        const cc = c as Record<string, unknown>;
+        if (cc?.type === "text" && typeof cc.text === "string") return cc.text;
+      }
+    }
+  }
+  return null;
 }
 
 function parseResult(

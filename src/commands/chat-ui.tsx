@@ -180,6 +180,10 @@ export function ChatApp({
   });
   const [thinking, setThinking] = useState(false);
   const [thinkingStart, setThinkingStart] = useState(0);
+  // Live streaming text rendered under the thinking indicator while
+  // a cycle is in flight. Cleared on thinking=false; the final reply
+  // is appended to the Static scrollback, not this live buffer.
+  const [streamingText, setStreamingText] = useState<string>("");
   const [elapsed, setElapsed] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([]);
   // Ring of submitted inputs for ↑/↓ recall. Newest-last, slash
@@ -301,6 +305,7 @@ export function ChatApp({
     setThinking(true);
     setThinkingStart(Date.now());
     setElapsed(0);
+    setStreamingText("");
 
     let r: CycleOutput | null = null;
     let caughtError: Error | null = null;
@@ -312,6 +317,7 @@ export function ChatApp({
         modelOverride,
         sessionHistory: recent,
         attachments: mergedAttachments,
+        onPartialText: (_delta, accumulated) => setStreamingText(accumulated),
       });
     } catch (e) {
       caughtError = e as Error;
@@ -319,6 +325,7 @@ export function ChatApp({
 
     thinkingRef.current = false;
     setThinking(false);
+    setStreamingText("");
 
     if (caughtError) {
       appendTurn({
@@ -420,15 +427,22 @@ export function ChatApp({
           stays visible for the whole cycle. Typing while thinking
           enqueues the message (see `handleSubmit`). */}
       {thinking && (
-        <Box>
-          <Text color="magenta">
-            <Spinner type="dots" />
-          </Text>
-          <Text dimColor> thinking · </Text>
-          <Text dimColor>{shortModel(thinkingModelRef.current === AUTO ? SONNET : thinkingModelRef.current)}</Text>
-          <Text dimColor> · {(elapsed / 1000).toFixed(1)}s</Text>
-          {messageQueue.length > 0 && (
-            <Text color="cyan"> · {messageQueue.length} queued</Text>
+        <Box flexDirection="column">
+          <Box>
+            <Text color="magenta">
+              <Spinner type="dots" />
+            </Text>
+            <Text dimColor> thinking · </Text>
+            <Text dimColor>{shortModel(thinkingModelRef.current === AUTO ? SONNET : thinkingModelRef.current)}</Text>
+            <Text dimColor> · {(elapsed / 1000).toFixed(1)}s</Text>
+            {messageQueue.length > 0 && (
+              <Text color="cyan"> · {messageQueue.length} queued</Text>
+            )}
+          </Box>
+          {streamingText && (
+            <Box marginTop={1}>
+              <Text>{streamingText}</Text>
+            </Box>
           )}
         </Box>
       )}
