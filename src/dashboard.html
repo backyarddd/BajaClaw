@@ -1087,10 +1087,10 @@
         kvBlock([
           ["started", c.started_at ?? ""],
           ["finished", c.finished_at ?? "(unfinished)"],
-          ["model", c.model ?? "—"],
-          ["cost", c.cost_usd != null ? usd(c.cost_usd) : "—"],
+          ["model", c.model ?? "-"],
+          ["cost", c.cost_usd != null ? usd(c.cost_usd) : "-"],
           ["tokens", ((c.input_tokens ?? 0) + " in / " + (c.output_tokens ?? 0) + " out")],
-          ["turns", String(c.turns ?? "—")],
+          ["turns", String(c.turns ?? "-")],
         ]),
         el("div", { style: "margin-top:16px" }, [
           el("div", { class: "label" }, "Task"),
