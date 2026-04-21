@@ -1,5 +1,45 @@
 # Changelog
 
+## 0.19.1
+
+**`@` context references in `bajaclaw chat`.**
+
+Drop file paths, folder listings, URLs, cycle history, or memory
+search results straight into any chat message. The expansion runs
+before `runCycle` and appends a "Referenced context" block so the
+agent sees the actual bytes, not just the path.
+
+Supported forms:
+
+- `@file:<path>` / `@<path>` - inlines the file. Image files (png,
+  jpg, gif, webp, heic) become attachments (Claude sees them as
+  images); text files get fenced with a guessed language tag. Files
+  over 50 KB get head+tail with a byte-count marker.
+- `@folder:<path>` / `@dir:<path>` - lists the directory (up to 100
+  entries, `d`/`f` prefix per entry).
+- `@url:<url>` / `@https://...` - fetches the body, 10 s timeout,
+  first 50 KB appended. HTTP 4xx/5xx surfaces as a warning.
+- `@cycle:<id>` - loads the task and response preview from the
+  cycles table for that id.
+- `@memory:<query>` / `@mem:<query>` - runs an FTS5 recall and
+  appends the top 5 matches.
+- `@screen` / `@screenshot` - hook-only for now; F3 wires in the
+  actual screenshot command.
+
+Safety:
+
+- URL-before-colon parse: without this, `@https://example.com` was
+  parsed as `kind=https` / `arg=//example.com` and silently failed.
+  The parser now detects `http(s)://` before splitting on `:`.
+- Negative-lookbehind on `@` means `foo@bar.com` in prose is not a
+  ref.
+- All resolver errors surface as dim warnings in the chat
+  scrollback so the user can see what didn't resolve (missing file,
+  HTTP 404, cycle not found, etc.). The original message still
+  sends.
+
+15 new tests. 106/106 pass.
+
 ## 0.19.0
 
 **`bajaclaw watch`: turn `// AI:` / `# AI:` / `<!-- AI: -->` comments into tasks.**
