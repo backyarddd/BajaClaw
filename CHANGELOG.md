@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.18.1
+
+**CI fix: skip `chatDbPath` test on non-darwin.**
+
+The `chatDbPath points at user Library/Messages` test asserted a
+forward-slash path that doesn't exist on Windows runners (`C:\Users\
+<user>\Library\Messages\chat.db` has backslashes and no
+Messages.app anyway). The iMessage adapter itself is darwin-only;
+the test now skips cleanly on Linux and Windows CI rather than
+failing. No runtime change.
+
 ## 0.18.0
 
 **iMessage adapter rewritten for macOS 26. Recovers rich messages, FSEvents push inbound, groups, attachments, Tahoe-hardened send.**

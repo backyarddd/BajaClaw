@@ -85,7 +85,8 @@ test("buildSendFileAppleScript: uses POSIX file form", async () => {
   assert.match(s, /with timeout of 60 seconds/);
 });
 
-test("chatDbPath points at user Library/Messages", async () => {
+test("chatDbPath points at user Library/Messages", async (t) => {
+  if (process.platform !== "darwin") return t.skip("darwin-only adapter");
   const { chatDbPath } = await import("../dist/channels/imessage.js");
   assert.match(chatDbPath(), /Library\/Messages\/chat\.db$/);
 });
