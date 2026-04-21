@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.14.27
+          autonomous agents on your terms  ·  MIT  ·  v0.15.0
 ```
 
 ## What BajaClaw is
@@ -244,6 +244,37 @@ bajaclaw skill port --link                       # symlink (live sync from Claud
 ```
 
 **Foreign-format compat.** `SKILL.md` files from the `openclaw` and `hermes` ecosystems are read in their native metadata layouts (no conversion required). See [docs/skills.md](docs/skills.md).
+
+**Bundled skills.** The repo ships with a baseline set so the agent is useful on first run:
+
+| skill | what it does |
+|---|---|
+| `github` | PRs, issues, Actions, releases via `gh`; auto-installs + auth |
+| `vercel` | deploy, env, promote/rollback, logs; auto-installs + auth |
+| `supabase` | migrations, types, edge fns, advisors; auto-installs + auth |
+| `pr-review` | four-pass systematic code review |
+| `debug-methodology` | reproduce / bisect / hypothesize / test / fix loop |
+| `conventional-commits` | commit messages the project expects |
+| `ocr-pdf` | PDF and image to text via poppler + tesseract |
+| `web-research` | multi-source search with citations |
+| `email-triage`, `daily-briefing`, `delegate-to-subagent` | routine agent ops |
+| `setup-*` | interactive configuration walkthroughs (telegram, discord, mcp, etc.) |
+
+---
+
+## Fluid tool bootstrap
+
+Tool-facing skills (and any code path that depends on a system CLI) call `bajaclaw ensure <tool>` before their first command. It auto-installs the tool using whichever package manager is present on the box (brew/apt/dnf/pacman/winget/scoop/choco/npm/pipx), and with `--auth` it kicks off the tool's OAuth/login flow. The skill never tells the user "install X first" - it just runs and proceeds.
+
+```
+bajaclaw ensure gh --auth         # install gh, then run `gh auth login`
+bajaclaw ensure vercel --auth
+bajaclaw ensure supabase --auth
+bajaclaw ensure ffmpeg            # no auth needed
+bajaclaw ensure-list              # every tool bajaclaw knows how to bootstrap
+```
+
+Exit codes are structured so skills can branch: 0 ready, 10 install failed, 20 auth pending, 30 unsupported platform, 40 no package manager available. Works on macOS, Linux, and Windows.
 
 ---
 
