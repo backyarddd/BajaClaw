@@ -34,6 +34,7 @@ import * as channel from "./commands/channel.js";
 import { cmdEnsure, cmdEnsureList } from "./commands/ensure.js";
 import { runWatch } from "./commands/watch.js";
 import { runScreenshotCommand } from "./commands/screenshot.js";
+import { cmdBrowserEnable, cmdBrowserDisable, cmdBrowserStatus } from "./commands/browser.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -220,6 +221,22 @@ program.command("ensure <tool>")
     json: !!opts.json,
     checkOnly: !!opts.checkOnly,
   }));
+
+// Browser - enable browser automation via @playwright/mcp. Adds an
+// MCP server entry to the profile's mcp-config.json and runs
+// `npx playwright install chromium` to pre-download the browser. The
+// next cycle auto-discovers browser_* tools via MCP.
+const browserCmd = program.command("browser").description("Browser automation via @playwright/mcp");
+browserCmd.command("enable [profile]")
+  .description("Enable browser tools for this profile (adds MCP server + installs chromium)")
+  .option("--no-install", "skip chromium install (assumes playwright already set up)")
+  .action(async (p, opts) => cmdBrowserEnable(defaultProfile(p), { install: opts.install !== false }));
+browserCmd.command("disable [profile]")
+  .description("Remove the browser MCP server from this profile")
+  .action(async (p) => cmdBrowserDisable(defaultProfile(p)));
+browserCmd.command("status [profile]")
+  .description("Show whether the browser MCP server is enabled")
+  .action(async (p) => cmdBrowserStatus(defaultProfile(p)));
 
 // Screenshot - capture the screen (primary display) to a PNG.
 // macOS uses screencapture, linux tries grim/scrot/maim/import,
