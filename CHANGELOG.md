@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.19.5
+
+**`bajaclaw browser`: browser automation via Playwright MCP.**
+
+One-command enable for real-browser tools (navigate, click, type,
+fill, snapshot, screenshot). Runs Microsoft's `@playwright/mcp` via
+`npx` so there is no global install step; chromium downloads on first
+enable via `npx playwright install chromium`. The next cycle auto-
+discovers the browser_* tool surface.
+
+- `bajaclaw browser enable [profile]` - writes the MCP server entry
+  to the profile's `mcp-config.json` and runs the chromium install.
+  `--no-install` skips the download if the user already has it.
+- `bajaclaw browser status [profile]` - shows whether the `playwright`
+  MCP server is configured for the profile.
+- `bajaclaw browser disable [profile]` - removes the MCP entry.
+- New bundled skill `setup-browser` with the standard NEVER-ASK
+  preamble: triggers on "enable browser", "book a table", "scrape
+  this site", "fill out form" and more. The agent wires it up and
+  continues into the user's actual task without a clarifying
+  question.
+- 3 new tests. 111/111 pass.
+
 ## 0.19.4
 
 **Em-dash hygiene regression in 0.19.3.**
