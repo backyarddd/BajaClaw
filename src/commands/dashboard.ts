@@ -18,7 +18,7 @@ import type { AgentConfig, ChannelConfig } from "../types.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Candidate locations for dashboard.html, resolved per-request so HTML
-// edits hot-reload (see `sendHtml` below — no cache on the body).
+// edits hot-reload (see `sendHtml` below - no cache on the body).
 //
 // - When running from the dev checkout, the TypeScript source sits in
 //   `src/` while the compiled JS lands in `dist/`. We prefer
