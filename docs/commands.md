@@ -112,10 +112,10 @@ with `setup-` or `configure-`.
 Options:
 - `--profile <name>` - use the given profile's skill scopes when looking up the guide.
 
-Built-in guide topics: `telegram`, `discord`, `heartbeat`, `daemon`,
-`dashboard`, `mcp-port`, `memory-sync`, `compaction`, `profile`,
-`self-update`, `uninstall`, `model`, `effort`, `tools`, `subagent`,
-`api`.
+Built-in guide topics: `telegram`, `discord`, `imessage`, `heartbeat`,
+`daemon`, `dashboard`, `mcp-port`, `memory-sync`, `compaction`,
+`profile`, `self-update`, `uninstall`, `model`, `effort`, `tools`,
+`subagent`, `api`.
 
 ### `bajaclaw update`
 Check for and install a newer version.
@@ -174,9 +174,11 @@ dep (already in package.json's optionalDependencies).
 
 | command | purpose |
 |---|---|
-| `bajaclaw channel add [profile] <kind> --token <t> [--channel-id <id>]` | add a telegram/discord channel |
+| `bajaclaw channel add [profile] <kind> [--token <t>] [--channel-id <id>] [--user-id <id>] [--contact <handle>...]` | add a telegram / discord / imessage channel |
 | `bajaclaw channel remove [profile] <kind>` | remove a channel |
 | `bajaclaw channel list [profile]` | list configured channels |
+| `bajaclaw ensure <tool> [--auth] [--check-only]` | install and optionally authenticate a system tool (gh, vercel, supabase, ffmpeg, yt-dlp, tesseract, poppler) |
+| `bajaclaw ensure-list [--json]` | list every tool bajaclaw knows how to install on this platform |
 
 ## Environment variables
 

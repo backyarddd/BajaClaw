@@ -29,8 +29,13 @@ write to `~/.bajaclaw/`, they can do anything the agent can do.
   with `shell: false`.
 - **Explicit confirmation for skill install**: requires `BAJACLAW_CONFIRM=yes`
   in the env and prints the full SKILL.md before writing.
-- **Channel allowlists**: a telegram/discord channel with an empty
-  allowlist accepts no messages.
+- **Channel allowlists**: a telegram/discord/imessage channel with an empty
+  allowlist accepts no messages. iMessage requires explicit contacts; the
+  adapter refuses to start without at least one allowlisted handle.
+- **iMessage local-only**: the iMessage adapter reads `~/Library/Messages/chat.db`
+  through macOS's Full Disk Access gate (which you grant once, per binary) and
+  drives Messages.app via AppleScript through the Automation gate. No network
+  calls, no third-party service, no Apple ID credentials ever touch bajaclaw.
 - **Memory extraction** is scoped to the response text, not the full prompt
   - secrets you pass in don't get extracted back out.
 - **Auto-update** uses the npm registry (HTTPS) by default and only installs

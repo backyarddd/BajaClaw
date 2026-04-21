@@ -195,6 +195,7 @@ skill fires and the agent runs the procedure.
 |---|---|
 | `setup-telegram` | connect a Telegram bot, allowlist, gateway |
 | `setup-discord` | connect a Discord bot with channel + intents |
+| `setup-imessage` | wire up a two-way iMessage bridge (macOS only) |
 | `setup-heartbeat` | schedule recurring cycles via the OS scheduler |
 | `setup-daemon` | start/stop/install the heartbeat supervisor |
 | `setup-dashboard` | launch and configure the local dashboard |
@@ -206,6 +207,18 @@ skill fires and the agent runs the procedure.
 | `configure-model` | change the backend model for a profile |
 | `configure-effort` | change the effort level for a profile |
 | `configure-tools` | edit the allowed/disallowed tool list |
+
+Developer workflows (tool-facing, all auto-install + auto-auth via `bajaclaw ensure`):
+
+| skill | what it knows |
+|---|---|
+| `github` | drive `gh` CLI - PRs, issues, Actions, releases |
+| `vercel` | deploy, env, promote/rollback, logs |
+| `supabase` | migrations, type gen, edge functions, advisors |
+| `pr-review` | four-pass systematic PR review |
+| `debug-methodology` | reproduce / bisect / hypothesize / test / fix loop |
+| `conventional-commits` | commit messages with the project's rules baked in |
+| `ocr-pdf` | text-layer-first PDF + image to text via poppler + tesseract |
 
 Read any of them directly:
 ```

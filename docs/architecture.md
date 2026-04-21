@@ -61,7 +61,8 @@ entry. Step 10 is the only step that leaves the process boundary.
 | `src/mcp/server.ts` | stdio + SSE JSON-RPC server |
 | `src/scheduler/` | launchd / systemd / cron / schtasks adapters |
 | `src/commands/` | one file per top-level command |
-| `src/channels/` | optional telegram + discord gateway |
+| `src/channels/` | telegram + discord + imessage adapters, plus the gateway router (`gateway.ts`) that registers per-profile adapter instances |
+| `src/ensure.ts` + `src/ensure-recipes.ts` | cross-platform tool bootstrap (brew/apt/dnf/pacman/winget/scoop/choco/npm/pipx); recipes for gh/vercel/supabase/ffmpeg/yt-dlp/tesseract/poppler |
 | `src/delegation.ts` | sub-agent delegation for coding tasks |
 
 ## On-disk layout
