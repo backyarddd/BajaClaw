@@ -10,7 +10,7 @@ import { bajaclawHome, profileLogDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
 import { runCycle } from "../agent.js";
-import { sendProgressToSource, broadcastToProfile } from "../channels/gateway.js";
+import { sendProgressToSource, broadcastToProfile, sendAttachmentToSource, broadcastAttachmentToProfile } from "../channels/gateway.js";
 import { loadAllSkillsRaw, runtimeSkipReason } from "../skills/loader.js";
 import { currentVersion } from "../updater.js";
 import type { AgentConfig, ChannelConfig } from "../types.js";
@@ -137,6 +137,25 @@ async function dispatchApi(
       broadcastToProfile(profile, text);
     }
     json(res, { ok: true });
+    return;
+  }
+
+  // POST /api/attach - push an attachment to the originating channel
+  // of a running cycle. Body: {path, source?, caption?}. When source
+  // is set, attachments go to that channel; otherwise the last
+  // active chat for the profile picks it up. Fails quiet.
+  if (url === "/api/attach" && method === "POST") {
+    const body = await readJson(req) as { path?: string; source?: string; caption?: string };
+    const path = (body.path ?? "").trim();
+    if (!path) { json(res, { ok: false, error: "empty path" }, 400); return; }
+    try {
+      let ok = false;
+      if (body.source) ok = await sendAttachmentToSource(profile, body.source, path, body.caption);
+      else ok = await broadcastAttachmentToProfile(profile, path, body.caption);
+      json(res, { ok });
+    } catch (e) {
+      json(res, { ok: false, error: (e as Error).message }, 500);
+    }
     return;
   }
 

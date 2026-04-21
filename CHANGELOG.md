@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.19.6
+
+**Image generation + outbound file attachments across every channel.**
+
+Three pieces ship together:
+
+- `bajaclaw image "<prompt>"` generates a PNG from text. Auto-selects
+  OpenAI (`gpt-image-1`, `OPENAI_API_KEY`) or FAL (`fal-ai/flux/schnell`,
+  `FAL_KEY`). `--provider openai|fal`, `--model`, `--size` all
+  overridable. Saves to `<profileDir>/images/<ts>.png`.
+- `bajaclaw attach <path> [--caption <t>]` pushes a file to the
+  originating channel of a running cycle. Analogue to `bajaclaw say`
+  but for files. Reads `BAJACLAW_SOURCE` + `BAJACLAW_DASHBOARD_PORT`
+  from env. Silent on missing channel.
+- `bajaclaw image ... --attach` chains the two: generate, then
+  immediately push to the chat.
+
+New adapter surface:
+
+- `Adapter.sendFile(chatId, path, caption?)` - optional method on
+  every channel adapter.
+- Telegram: `sendPhoto` for images (png/jpg/gif/webp), `sendDocument`
+  otherwise. Inline caption supported.
+- Discord: `channel.send({files: [path], content: caption})`.
+- iMessage: uses the existing `sendFileViaAppleScript` path; captions
+  go as a follow-up text message since AppleScript file send has no
+  caption field. Groups still unsupported (v1.1).
+- Gateway adds `sendAttachmentToSource` and
+  `broadcastAttachmentToProfile`; dashboard exposes
+  `POST /api/attach`.
+- New bundled skill `image-gen` with usage triggers ("draw me",
+  "generate an image", "mockup", etc.) and provider-selection notes.
+
+Safety:
+
+- OpenAI and FAL responses validated for `b64_json` / `url`; network
+  errors surface with HTTP status and a 300-char body excerpt.
+- Missing API key fails fast with a one-line error naming both keys.
+- Missing attachment file fails fast before hitting the dashboard.
+
+2 new tests. 113/113 pass.
+
 ## 0.19.5
 
 **`bajaclaw browser`: browser automation via Playwright MCP.**
