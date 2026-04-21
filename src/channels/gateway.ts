@@ -272,8 +272,10 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
     const hasVideo = Boolean(msg.video);
     const hasVideoNote = Boolean(msg.video_note);
     const hasVideoDoc = Boolean(msg.document?.mime_type?.startsWith("video/"));
-    const body = msg.text ?? msg.caption ?? "";
-    if (!body && !hasPhoto && !hasDoc && !hasVideo && !hasVideoNote && !hasVideoDoc) return;
+    const hasVoice = Boolean(msg.voice);
+    const hasAudio = Boolean(msg.audio);
+    let body = msg.text ?? msg.caption ?? "";
+    if (!body && !hasPhoto && !hasDoc && !hasVideo && !hasVideoNote && !hasVideoDoc && !hasVoice && !hasAudio) return;
 
     const attachmentPaths: string[] = [];
     if (hasPhoto) {
@@ -309,6 +311,47 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
         const tmpPath = await downloadToTmp(String(url), ext);
         if (tmpPath) attachmentPaths.push(...extractFrames(tmpPath));
       } catch (e) { log.warn("gateway.telegram.download.fail", { type: "video_doc", error: (e as Error).message }); }
+    }
+    // Voice notes (OGG/opus) and audio files. Download for reference;
+    // if OPENAI_API_KEY is set, auto-transcribe and use the transcript
+    // as the task body so the agent can respond to what was said
+    // without needing to read the audio file itself.
+    if (hasVoice && msg.voice) {
+      try {
+        const url = await bot.getFileLink(msg.voice.file_id);
+        const tmpPath = await downloadToTmp(String(url), ".oga");
+        if (tmpPath) {
+          attachmentPaths.push(tmpPath);
+          if (process.env.OPENAI_API_KEY) {
+            try {
+              const { transcribe } = await import("../voice.js");
+              const r = await transcribe(tmpPath);
+              if (r.text) body = body ? `${body}\n\n[voice transcript] ${r.text}` : `[voice] ${r.text}`;
+            } catch (e) {
+              log.warn("gateway.telegram.voice.transcribe-fail", { error: (e as Error).message });
+            }
+          }
+        }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "voice", error: (e as Error).message }); }
+    } else if (hasAudio && msg.audio) {
+      try {
+        const url = await bot.getFileLink(msg.audio.file_id);
+        const rawName = (msg.audio as { file_name?: string }).file_name;
+        const ext = extname(rawName ?? ".mp3") || ".mp3";
+        const tmpPath = await downloadToTmp(String(url), ext);
+        if (tmpPath) {
+          attachmentPaths.push(tmpPath);
+          if (process.env.OPENAI_API_KEY) {
+            try {
+              const { transcribe } = await import("../voice.js");
+              const r = await transcribe(tmpPath);
+              if (r.text) body = body ? `${body}\n\n[audio transcript] ${r.text}` : `[audio] ${r.text}`;
+            } catch (e) {
+              log.warn("gateway.telegram.audio.transcribe-fail", { error: (e as Error).message });
+            }
+          }
+        }
+      } catch (e) { log.warn("gateway.telegram.download.fail", { type: "audio", error: (e as Error).message }); }
     }
 
     const db = openDb(profile);
