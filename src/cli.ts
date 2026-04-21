@@ -33,6 +33,7 @@ import * as daemon from "./commands/daemon.js";
 import * as channel from "./commands/channel.js";
 import { cmdEnsure, cmdEnsureList } from "./commands/ensure.js";
 import { runWatch } from "./commands/watch.js";
+import { runScreenshotCommand } from "./commands/screenshot.js";
 
 const pkg = { name: "bajaclaw", version: currentVersion() };
 
@@ -218,6 +219,26 @@ program.command("ensure <tool>")
     quiet: !!opts.quiet,
     json: !!opts.json,
     checkOnly: !!opts.checkOnly,
+  }));
+
+// Screenshot - capture the screen (primary display) to a PNG.
+// macOS uses screencapture, linux tries grim/scrot/maim/import,
+// windows uses an inline PowerShell snippet. With --profile, saves
+// to <profileDir>/screenshots/<timestamp>.png.
+program.command("screenshot [output]")
+  .description("Capture a screenshot (macOS/Linux/Windows). Default output: <profileDir>/screenshots/<ts>.png")
+  .option("--profile <name>", "profile for default output dir")
+  .option("-i, --interactive", "macOS: interactive selection (click window or drag region)")
+  .option("--region <xywh>", "macOS: capture region x,y,w,h (e.g. 0,0,800,600)")
+  .option("--display <n>", "macOS: 1-indexed display to capture")
+  .option("--quiet", "print only the output path")
+  .action(async (output, opts) => runScreenshotCommand({
+    profile: opts.profile,
+    output,
+    interactive: !!opts.interactive,
+    region: opts.region,
+    display: opts.display ? Number(opts.display) : undefined,
+    quiet: !!opts.quiet,
   }));
 
 // Watch - file watcher that turns `// AI:` / `# AI:` / `<!-- AI: -->`
