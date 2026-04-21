@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.18.0
+
+**iMessage adapter rewritten for macOS 26. Recovers rich messages, FSEvents push inbound, groups, attachments, Tahoe-hardened send.**
+
+The v1 iMessage adapter had a silent data-loss bug on macOS 26: Apple
+now leaves `message.text` NULL for rich messages (edits, effects,
+embedded links, mentions, replies - roughly half of real inbound
+traffic), with the actual content in the `message.attributedBody`
+typedstream blob. Our poll query read `text` only, so those rows
+either arrived empty or were dropped entirely.
+
+The rewrite:
+
+- **`decodeAttributedBody`**: zero-dependency typedstream parser that
+  recovers the primary NSString value. Handles short (single-byte
+  length) and long (`0x81` + uint16-LE) encodings. Verified on real
+  macOS 26.2 blobs. The published npm typedstream parser is 62 MB
+  unpacked; rolling our own keeps install weight flat.
+- **`messageText` fallback**: prefer the `text` column, fall back to
+  attributedBody decode, return empty string only when both miss.
+- **FSEvents push inbound**: `node:fs.watch` recursive on
+  `~/Library/Messages/` with a 200 ms debounce. Inbound latency drops
+  from ~2000 ms (poll interval) to ~100-300 ms. A 30 s slow-poll stays
+  on as a safety net for dropped events.
+- **Group chat support** (opt-in via `channel.includeGroups`):
+  `chat.style = 43` rows route as `imessage:group:<chatGuid>` and
+  reply via `send ... to text chat id "iMessage;+;chat<hex>"`.
+- **Inbound attachments**: query `message_attachment_join` on rows
+  with `cache_has_attachments = 1`, resolve filenames to absolute
+  paths, HEIC -> JPEG via macOS's built-in `sips`. Paths flow through
+  to `tasks.attachments` so the agent sees them.
+- **Outbound attachments**: `sendFile(handle, path)` stages the file
+  into `~/Pictures/bajaclaw-staging/` before osascript (Sequoia /
+  Tahoe reject `send POSIX file` from outside a small set of trusted
+  directories; staging into `~/Pictures` dodges that). Pruned on next
+  adapter start.
+- **Tahoe-hardened send**: `1st service whose service type = iMessage`
+  + `participant` (modern form; the old `1st account` path is the
+  reported `-1700` regressor). `with timeout of 30 seconds` wrapper.
+  Retry tree on `-1712` (timeout), `-1700` (type coercion), `-609`
+  (connection invalid) with 500 ms / 2 s / 5 s backoff. `-1743`
+  (Automation denied) surfaces a clean user-facing error, no retry.
+- **Pre-warm at adapter start**: fires a trivial `get name` osascript
+  asynchronously so the first real send doesn't eat the 10-20 s
+  scripting-dictionary load beachball on Tahoe.
+- **Light-touch delivery verification**: 5 s after a send, read back
+  the last `is_from_me = 1` row and log `{sent, delivered, error,
+  downgraded, service}` for operator cross-check. Non-blocking; we
+  do not retry based on it.
+
+**Typing indicator status unchanged**: still a no-op. The macOS 26
+XPC entitlement gate (`imagent`'s `com.apple.imagent.desktop.auth`)
+rejects any non-Apple-signed process regardless of ad-hoc signing or
+Developer ID. Removed the dead `helpers/` directory and the
+`build-imessage-helper.mjs` build step. `.m` source preserved in
+git history; see HANDOFF landmine 48 for the postmortem.
+
 ## 0.17.3
 
 **iMessage typing indicator: revert to no-op. Approach doesn't work on macOS 26.**

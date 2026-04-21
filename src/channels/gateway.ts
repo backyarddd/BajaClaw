@@ -102,9 +102,20 @@ export async function startAllGateways(profile: string): Promise<void> {
           onInbound: (msg) => {
             insertIMessageTask(profile, msg);
             const nh = normalizeHandle(msg.handle);
-            notifyTargets.set(key(profile, "imessage"), nh);
-            log.info("gateway.imessage.msg", { from: nh, len: msg.text.length, attachment: msg.hasAttachment });
-            beginTyping(profile, `imessage:${nh}`);
+            // Group routing uses the chat GUID as the chatId so the
+            // AppleScript reply path can hit `text chat id "..."`. 1:1
+            // routing uses the sender's handle. Both shapes flow back
+            // through replyToSource unchanged.
+            const chatId = msg.groupGuid ? `group:${msg.groupGuid}` : nh;
+            const source = `imessage:${chatId}`;
+            notifyTargets.set(key(profile, "imessage"), chatId);
+            log.info("gateway.imessage.msg", {
+              from: nh,
+              group: msg.groupGuid,
+              len: msg.text.length,
+              attachments: msg.attachmentPaths?.length ?? 0,
+            });
+            beginTyping(profile, source);
           },
         });
         if (a) adapters.set(k, a);
