@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.19.14
+
+**`bajaclaw browser enable` ships with sensible defaults.**
+
+Previously the Playwright MCP server was wired in with zero flags,
+which meant headed-by-default (a Chrome window popped up on every
+cycle), no cookie/storage tools, no PDF save, no coordinate-click
+fallback, and no consistent viewport.
+
+New defaults:
+
+- `--headless` so no window pops up during autonomous runs
+- `--caps vision,pdf,storage` which unlocks:
+  - `browser_mouse_click_xy` + friends for coordinate clicks when
+    ref-based selection fails
+  - `browser_pdf_save` for saving pages as PDFs
+  - `browser_cookie_*`, `browser_localstorage_*`, `browser_storage_state`
+    so sessions persist across cycles (logins stick)
+- `--viewport-size 1280x800` for consistent snapshot geometry
+
+New CLI escape hatches on `bajaclaw browser enable`:
+
+- `--headed` to pop a visible Chrome window (sites that block
+  headless browsers, or debugging a flaky flow)
+- `--caps <list>` to override caps; pass `--caps ""` for none, or
+  add `network,testing,devtools` as needed
+- `--viewport <WxH>` to change viewport
+
+5 new tests pin `buildBrowserArgs` behavior. `setup-browser` skill
+body now documents the real default tool surface and the override
+flags. 134/136 pass (2 non-darwin skips).
+
 ## 0.19.13
 
 **at-refs Windows path fix #2: handle `~` and other non-word chars.**

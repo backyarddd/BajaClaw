@@ -379,7 +379,20 @@ const browserCmd = program.command("browser").description("Browser automation vi
 browserCmd.command("enable [profile]")
   .description("Enable browser tools for this profile (adds MCP server + installs chromium)")
   .option("--no-install", "skip chromium install (assumes playwright already set up)")
-  .action(async (p, opts) => cmdBrowserEnable(defaultProfile(p), { install: opts.install !== false }));
+  .option("--headed", "launch a visible browser window instead of headless (default: headless)")
+  .option("--caps <list>", "comma-separated extra capabilities (default: vision,pdf,storage). pass empty string to disable all caps.")
+  .option("--viewport <WxH>", "browser viewport size, e.g. 1920x1080 (default: 1280x800)")
+  .action(async (p, opts) => {
+    const caps = typeof opts.caps === "string"
+      ? opts.caps.split(",").map((s: string) => s.trim()).filter(Boolean)
+      : undefined;
+    await cmdBrowserEnable(defaultProfile(p), {
+      install: opts.install !== false,
+      headed: Boolean(opts.headed),
+      caps,
+      viewport: typeof opts.viewport === "string" ? opts.viewport : undefined,
+    });
+  });
 browserCmd.command("disable [profile]")
   .description("Remove the browser MCP server from this profile")
   .action(async (p) => cmdBrowserDisable(defaultProfile(p)));
