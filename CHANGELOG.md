@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.19.13
+
+**at-refs Windows path fix #2: handle `~` and other non-word chars.**
+
+v0.19.12 added `\\` to the at-refs capture class but missed `~`,
+which appears in Windows short-name paths like `RUNNER~1`. The CI
+runner's TMP path is exactly that shape, so all three at-refs file/
+folder/image tests still failed on Windows after v0.19.12.
+
+Switched the regex from a fixed character class to `\S*` (any
+non-whitespace) so any practical path or URL survives intact. Added
+trailing-prose stripping (`[.,;!?)\]]+$`) so refs followed by
+sentence punctuation (`see @file:foo.ts.`) still resolve.
+
+Two new regression tests pin: a Windows-style path with `~`, and a
+sentence with three refs each followed by trailing punctuation.
+
+129/129 pass on darwin.
+
 ## 0.19.12
 
 **Windows CI fixes: path-separator handling in v0.19.0-v0.19.11 surface area.**
