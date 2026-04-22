@@ -19,7 +19,9 @@ import { resolve, extname, relative } from "node:path";
 import { openDb } from "./db.js";
 import { recall } from "./memory/recall.js";
 
-const REF_RE = /(?<!\S)@([a-zA-Z][\w:.\/\-]*)/g;
+// `\\` included so Windows paths (`@file:C:\Users\...`) are captured
+// in full instead of stopping at the first separator.
+const REF_RE = /(?<!\S)@([a-zA-Z][\w:.\/\-\\]*)/g;
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".bmp"]);
 const MAX_FILE_BYTES = 50 * 1024;
 const MAX_FILE_HEAD = 20 * 1024;
