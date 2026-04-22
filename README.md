@@ -27,6 +27,7 @@ Around that subprocess, BajaClaw adds:
 - **OpenAI-compatible HTTP endpoint.** `bajaclaw serve` exposes `/v1/chat/completions`, so Cursor, Open WebUI, LibreChat, LangChain, the `openai` SDK, or any tool that speaks the OpenAI API can drive the agent.
 - **Auto-routing between Haiku, Sonnet, and Opus.** New profiles default to `model: auto`. A heuristic classifier routes trivial tasks to Haiku, normal work to Sonnet, and planning/coding/deep research to Opus. Zero extra backend calls for the routing decision.
 - **Self-configuration.** BajaClaw ships with built-in setup guides for Telegram, Discord, memory sync, MCP porting, heartbeat scheduling, model switching, and more. If the procedure for setting something up is unclear, ask the agent in plain language ("help me set up Telegram"). The matching guide fires, and the agent walks through the full configuration, running the correct `bajaclaw` subcommands as needed. The same guides are available at the CLI via `bajaclaw guide <topic>`.
+- **`@`-context, voice, images, browser, plan mode, rewind (v0.19).** `@file:` / `@folder:` / `@url:` / `@cycle:` / `@memory:` / `@screen` in chat composer. `bajaclaw image "<prompt>" --attach` generates and sends through the active channel. `bajaclaw transcribe` and `bajaclaw tts` for Whisper / TTS in either direction. `bajaclaw browser enable` wires Playwright MCP. `bajaclaw plan create` generates a structured plan; approve in the dashboard before it runs. Per-cycle shadow-git snapshots + `bajaclaw rewind` for unattended automation that needs an undo button. `bajaclaw watch` turns `// AI:` comments in any saved file into tasks. iMessage tapbacks (best-effort on macOS 14+).
 
 Each agent is a self-contained directory. Delete the directory, that agent is gone. Back it up, it's portable.
 
@@ -599,6 +600,17 @@ Full detail in [docs/commands.md](docs/commands.md). Summary:
 | `welcome` | print the welcome + next steps |
 | `say <text>` | send a progress update (used from inside cycles) |
 | `watch [paths...]` | watch files for `// AI:` / `# AI:` / `<!-- AI: -->` comments and enqueue them as tasks |
+| `screenshot [output]` | capture the screen to a PNG (macOS / linux / windows) |
+| `browser enable\|disable\|status` | enable browser automation via `@playwright/mcp` |
+| `image <prompt> [--attach]` | generate an image (OpenAI gpt-image-1 / FAL flux-schnell); optionally attach to channel |
+| `attach <path> [--caption]` | push a file to the originating channel (analogue of `say` for files) |
+| `transcribe <path>` | speech-to-text via OpenAI Whisper |
+| `tts <text> [--attach]` | text-to-speech (OpenAI / ElevenLabs / macOS `say`) |
+| `plan create\|list\|show\|approve\|cancel` | plan-then-approve workflow (cycle proposes, user approves, then executes) |
+| `rewind <cycleId> --yes` | restore the snapshotted work tree to a cycle's pre-state (requires `cfg.snapshots.enabled`) |
+| `snapshot-list` | list shadow-git snapshots for the profile |
+| `tapback send <guid> <type>` | send an iMessage reaction (best-effort on macOS 14+) |
+| `read-receipt` | documented stub - not implementable from userspace on macOS 14+ |
 
 ### Environment variables
 
@@ -613,6 +625,10 @@ Full detail in [docs/commands.md](docs/commands.md). Summary:
 | `BAJACLAW_CONFIRM=yes` | allow `skill install` to write |
 | `BAJACLAW_NO_UPDATE_NOTICE=1` | silence the post-command update notice |
 | `CLAWHUB_REGISTRY` | override the ClawHub registry URL |
+| `OPENAI_API_KEY` | enables `image` (gpt-image-1), `tts` (tts-1), `transcribe` (whisper-1), and inbound voice-note transcription on Telegram |
+| `FAL_KEY` | enables `image` via FAL (flux-schnell) |
+| `ELEVENLABS_API_KEY` | enables `tts` via ElevenLabs |
+| `BAJACLAW_SMOKE_SCREENSHOT=1` | runs the live screenshot test (skipped by default - needs Screen Recording permission) |
 
 ---
 
