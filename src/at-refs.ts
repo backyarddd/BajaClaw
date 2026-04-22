@@ -19,9 +19,12 @@ import { resolve, extname, relative } from "node:path";
 import { openDb } from "./db.js";
 import { recall } from "./memory/recall.js";
 
-// `\\` included so Windows paths (`@file:C:\Users\...`) are captured
-// in full instead of stopping at the first separator.
-const REF_RE = /(?<!\S)@([a-zA-Z][\w:.\/\-\\]*)/g;
+// Capture `@` + letter-led non-whitespace so any practical path or URL
+// survives, including Windows shenanigans (`~`, spaces escaped via
+// path-quoting tools, etc.). Trailing prose punctuation (`.,;!?)]`)
+// is stripped after the match so `look at @file:foo.ts.` works.
+const REF_RE = /(?<!\S)@([a-zA-Z]\S*)/g;
+const TRAILING_PROSE = /[.,;!?)\]]+$/;
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".bmp"]);
 const MAX_FILE_BYTES = 50 * 1024;
 const MAX_FILE_HEAD = 20 * 1024;
@@ -41,7 +44,8 @@ export function parseAtRefs(text: string): ParsedRef[] {
   REF_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = REF_RE.exec(text)) !== null) {
-    const raw = m[1]!;
+    let raw = m[1]!.replace(TRAILING_PROSE, "");
+    if (!raw) continue;
     // URL check MUST come before the colon split - raw URLs contain colons
     // (`https://...`) and would otherwise be parsed as `kind=https`.
     if (raw.startsWith("http://") || raw.startsWith("https://")) {

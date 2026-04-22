@@ -33,6 +33,23 @@ test("parseAtRefs finds @screen / @screenshot", async () => {
   assert.equal(refs[0].kind, "screen");
 });
 
+test("parseAtRefs captures Windows paths with backslashes and ~", async () => {
+  const { parseAtRefs } = await import("../dist/at-refs.js");
+  const refs = parseAtRefs("look at @file:C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\foo\\hello.ts");
+  assert.equal(refs.length, 1);
+  assert.equal(refs[0].kind, "file");
+  assert.equal(refs[0].arg, "C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\foo\\hello.ts");
+});
+
+test("parseAtRefs strips trailing prose punctuation", async () => {
+  const { parseAtRefs } = await import("../dist/at-refs.js");
+  const refs = parseAtRefs("see @file:foo.ts. and @cycle:42, also @file:bar.ts!");
+  assert.equal(refs.length, 3);
+  assert.equal(refs[0].arg, "foo.ts");
+  assert.equal(refs[1].arg, "42");
+  assert.equal(refs[2].arg, "bar.ts");
+});
+
 test("parseAtRefs ignores email-like text", async () => {
   const { parseAtRefs } = await import("../dist/at-refs.js");
   const refs = parseAtRefs("contact foo@example.com now");
