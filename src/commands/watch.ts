@@ -13,7 +13,7 @@
 // exist on its own.
 
 import { watch, readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
-import { join, resolve, sep, relative } from "node:path";
+import { join, resolve, relative } from "node:path";
 import { createHash } from "node:crypto";
 import chalk from "chalk";
 import { openDb } from "../db.js";
@@ -82,7 +82,11 @@ export function scanForAiComments(text: string): AiComment[] {
 }
 
 export function shouldIgnorePath(filePath: string): boolean {
-  const parts = filePath.split(sep).filter(Boolean);
+  // Accept both POSIX and Windows separators so the function behaves
+  // identically when called with paths from either OS (and so the
+  // tests that use forward-slash paths don't have to branch on
+  // process.platform).
+  const parts = filePath.split(/[/\\]+/).filter(Boolean);
   for (const p of parts) if (IGNORE_DIRS.has(p)) return true;
   const name = parts[parts.length - 1] ?? "";
   const lower = name.toLowerCase();

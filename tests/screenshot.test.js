@@ -12,7 +12,8 @@ test("defaultPath returns a .png under a writable dir", async () => {
 test("defaultPath uses profileDir when profile provided", async () => {
   const { defaultPath } = await import("../dist/commands/screenshot.js");
   const p = defaultPath("test-profile");
-  assert.match(p, /profiles\/test-profile\/screenshots\/.*\.png$/);
+  // Cross-platform separator: `/` on POSIX, `\` on Windows.
+  assert.match(p, /profiles[\\/]test-profile[\\/]screenshots[\\/].*\.png$/);
 });
 
 test("takeScreenshot throws on unsupported platform", { skip: ["darwin", "linux", "win32"].includes(platform()) }, async () => {

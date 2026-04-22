@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.19.12
+
+**Windows CI fixes: path-separator handling in v0.19.0-v0.19.11 surface area.**
+
+Five Windows test failures shook out of the v0.19 sprint, all caused
+by POSIX-only path handling. Three were real runtime bugs, two were
+test-only POSIX-path assertions. macOS and Linux CI was green
+throughout - this only ever affected Windows users.
+
+- **at-refs (F2)**: `REF_RE` did not include `\\` in the allowed
+  capture chars, so `@file:C:\Users\...\foo.ts` parsed as
+  `kind=file, arg=C:` (just the drive root) and the resolver listed
+  the C: drive instead of opening the file. Added `\\` to the
+  character class. Three at-refs tests now pass on Windows.
+- **watch (F1)**: `shouldIgnorePath` split on `node:path.sep`. On
+  Windows that's `\`, so a forward-slash path like
+  `/a/node_modules/foo.ts` produced `parts=[whole-string]` and
+  every IGNORE_DIRS check missed. Switched to `split(/[/\\]+/)` so
+  the function accepts paths with either separator regardless of OS.
+  Removes the `sep` import.
+- **screenshot test (F3)**: regex
+  `/profiles\/test-profile\/screenshots\/.*\.png$/` failed on
+  Windows where the joined path uses `\`. Switched to
+  `[\\/]` so the assertion is platform-agnostic.
+
+No runtime delta on macOS or Linux. 127/127 pass on darwin; expecting
+the same on Windows now. Caught by GitHub Actions on the v0.19.11 push.
+
 ## 0.19.11
 
 **iMessage tapbacks (best-effort) + read-receipts documented as out of reach.**
