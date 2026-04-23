@@ -222,11 +222,15 @@ export async function runStream(
   let streamError: string | undefined;
 
   try {
+    // Do NOT pass both `stdin` and `stdio` - execa rejects the combo
+    // ("It's not possible to provide stdio in combination with one of
+    // stdin/stdout/stderr"). `stdio[0] = "ignore"` satisfies landmine 2
+    // (closes stdin so claude doesn't wait for input) without the
+    // explicit top-level stdin key.
     const subp = execa(bin, cmd, {
       cwd: opts.workdir,
       timeout: effectiveTimeout,
       reject: false,
-      stdin: "ignore",
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...cleanSpawnEnv(), ...(opts.env ?? {}) },
     });
