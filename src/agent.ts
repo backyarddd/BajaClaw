@@ -275,10 +275,14 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
         // edit it in place as the narrator reports tool use. Null
         // handle (adapter refused / not loaded) means the open failed
         // and we degrade silently to no live narration.
+        // The opening line acts as a placeholder until the first
+        // real entry arrives, then entries append below it. Every
+        // subsequent edit is additive - we never drop or rewrite
+        // prior lines, so the user watches the running log grow.
         progressHandle = await openProgressMessage(
           input.profile,
           source,
-          verbosity === "full" ? "🔄 starting" : "🔄 starting",
+          "🔄 working…",
         );
         if (progressHandle) {
           const srcRef = source;
@@ -442,12 +446,13 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
 }
 
 /** Format a narrator update for an edit-in-place progress message.
- *  Prefixes a subtle header so the user understands what the live
- *  message is, keeps the full body below. Short bodies render clean
- *  in both Telegram and Discord. */
+ *  The body is already the full accumulating log - we just prefix a
+ *  stable header so the user reads the message as "working + this
+ *  log", and the header doesn't morph between edits. Additive by
+ *  construction: snapshot() never drops entries. */
 function formatLiveBody(u: NarrationUpdate): string {
-  if (!u.body) return "🔄 working";
-  return `🔄 working\n\n${u.body}`;
+  if (!u.body) return "🔄 working…";
+  return `🔄 working…\n${u.body}`;
 }
 
 function formatRecentChat(history?: ChatTurn[]): string {

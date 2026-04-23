@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.20.1
+
+**Two fixes on top of v0.20.0 narration.**
+
+1. `runStream` crashed every narrated cycle with "It's not possible
+   to provide `stdio` in combination with one of `stdin`, `stdout`,
+   `stderr`." The execa call passed both `stdin: "ignore"` and
+   `stdio: ["ignore", "pipe", "pipe"]`; newer execa rejects the
+   combo. Dropped the top-level `stdin` key; `stdio[0]="ignore"`
+   already satisfies landmine 2.
+2. Progress message is now visibly additive. Removed the "starting →
+   working" header swap (which read as a replacement on the first
+   edit). One stable `🔄 working…` header, entries accumulate below
+   it; each edit is strictly additive - prior lines stay put.
+
 ## 0.20.0
 
 **Mid-cycle narration (`cfg.verbosity`).**
