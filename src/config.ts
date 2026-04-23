@@ -19,6 +19,10 @@ const DEFAULT: Partial<AgentConfig> = {
   // Switch to `"1m"` here to opt into Opus's 1M window (API-key auth
   // only; CLI falls back to 200k for subscription users).
   contextWindow: "200k",
+  // Mid-cycle narration level. "medium" narrates phase-changing events
+  // (skills, searches, subagents, builds/tests, writes). "off" is silent
+  // until the final reply. "full" narrates every tool call.
+  verbosity: "medium",
   compaction: {
     enabled: true,
     threshold: 0.75,

@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.20.0
+
+**Mid-cycle narration (`cfg.verbosity`).**
+
+Three levels: `off`, `medium` (default), `full`. The orchestrator
+watches the claude stream, detects tool uses, and emits short natural
+progress lines like "searching the web: X", "editing foo.ts", "running
+tests". Zero Claude-token cost - narration is BajaClaw-side, not
+agent-side. Replaces the old `bajaclaw say` / `buildProgressInstructions`
+approach that made the agent narrate itself via output tokens.
+
+Routing per source:
+
+- **Telegram / Discord**: open a single progress message, edit it in
+  place as events arrive. Deleted at cycle end so the final reply
+  stands alone. Debounce ~800 ms, capped at 40 live edits per cycle to
+  stay inside platform rate limits.
+- **iMessage**: sent messages cannot be edited from an unsigned
+  process (same private-entitlement gate as typing and tapbacks). The
+  narrator collects events and prepends a short summary to the final
+  reply instead.
+- **Chat REPL**: narration renders above the streaming text under the
+  thinking spinner (dim, single latest line).
+- **Dashboard chat**: summary returned alongside the reply; live
+  rendering waits on SSE.
+
+Verbosity presets:
+
+- `medium` surfaces skills, web search, subagent spawns, file writes /
+  edits, and named bash (builds, tests, installs, deploys, git
+  push/commit). No reads, no grep, no short shells.
+- `full` additionally narrates every Read, Grep, Glob, and short
+  bash command.
+- `off` is silent until the final reply. Also strips the
+  progress-instructions prompt block entirely for a small input-token
+  win on channel cycles.
+
+New: verbosity question added to the setup wizard (defaults to
+`medium`), new dashboard Settings field, new `PUT /api/config` key.
+
+Net Claude-usage delta vs v0.19.x: strictly cheaper on channel cycles -
+saves the ~1k input tokens from the retired progress-instructions
+prompt block, plus the output tokens the agent used to spend on self
+narration via `bajaclaw say`. The `bajaclaw say` CLI and
+`/api/progress` endpoint remain available for manual use inside skills
+but are no longer part of the default flow.
+
 ## 0.19.14
 
 **`bajaclaw browser enable` ships with sensible defaults.**
