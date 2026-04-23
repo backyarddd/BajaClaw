@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.20.2
+
+**Keep the progress message around at cycle end.**
+
+v0.20.0/1 deleted the progress message when the cycle finished, so
+the running log vanished right when the user finally had a chance
+to read it. Now the message is finalized in place: the header flips
+to `✓ done` (or `✗ cycle failed`), the full accumulated log stays
+visible, and the agent's actual reply lands as a separate message
+right below - "here's what I did" + "here's the answer".
+
+Edge case: if the cycle produced zero narration entries (rare, e.g. a
+pure-text reply with no tool use), the progress message still gets
+deleted since there's nothing worth keeping.
+
 ## 0.20.1
 
 **Two fixes on top of v0.20.0 narration.**

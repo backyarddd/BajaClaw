@@ -316,14 +316,26 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       : await runOnce(prompt, opts);
     const finished = new Date().toISOString();
 
-    // Finalize the narrator: flush any debounced update and clean up
-    // the progress message so the final reply stands alone.
-    if (narrator) narrator.finalize();
+    // Finalize the narrator and seal the progress message with an
+    // outcome marker, preserving the full log above it. The final
+    // reply is still sent as its own separate message by the daemon -
+    // the two together read as "here's what I did" + "here's the
+    // answer". If the cycle produced no narration entries (e.g. a
+    // pure-text reply with no tool use), the progress message has
+    // nothing worth keeping, so we delete it instead.
+    const finalSnapshot = narrator ? narrator.finalize() : null;
     if (progressHandle && source) {
-      // Best-effort delete so the final reply doesn't trail a stale
-      // progress line. If the delete fails (rate limit, already gone),
-      // the user just sees both messages - not broken, just noisier.
-      await deleteProgressMessage(input.profile, source, progressHandle);
+      if (finalSnapshot && finalSnapshot.body) {
+        const header = result.ok ? "✓ done" : "✗ cycle failed";
+        await editProgressMessage(
+          input.profile,
+          source,
+          progressHandle,
+          `${header}\n${finalSnapshot.body}`,
+        );
+      } else {
+        await deleteProgressMessage(input.profile, source, progressHandle);
+      }
     }
 
     // Optional post-snapshot. Captures the diff for later inspection
