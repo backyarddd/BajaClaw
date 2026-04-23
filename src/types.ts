@@ -15,6 +15,19 @@ export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 // CLI prints a warning and falls back to 200k for subscription users).
 export type ContextWindow = "200k" | "1m";
 
+// Mid-cycle narration level. Controls how chatty the orchestrator
+// gets about what the agent is doing WHILE it runs.
+//   "off"    - no narration, just the final reply
+//   "medium" - phase-changing events only: skills, web search, subagents,
+//              longer bash (builds/tests), writes. Reads are not narrated.
+//   "full"   - every tool use: reads, edits, every bash
+// Narration comes from BajaClaw watching the claude stream - it does
+// NOT cost agent output tokens. Channel adapters that support message
+// edit (Telegram, Discord) update ONE message in place; iMessage
+// prepends a summary to the final reply since sent messages there
+// cannot be edited by an unsigned process.
+export type Verbosity = "off" | "medium" | "full";
+
 export interface ClaudeOptions {
   model?: Model;
   effort?: Effort;
@@ -86,6 +99,9 @@ export interface AgentConfig {
   // Per-profile context window. Default: 200k. Set to "1m" to opt in
   // to Opus's 1-million-token window (API-key auth only).
   contextWindow?: ContextWindow;
+  // Narration level for mid-cycle progress (what tools the agent is
+  // calling). Default: "medium". See the Verbosity type above.
+  verbosity?: Verbosity;
   // Per-cycle cost ceiling in USD. `undefined` = no cap.
   maxBudgetUsd?: number;
   // Cycle subprocess timeout in milliseconds. Default: 10 minutes (600000).

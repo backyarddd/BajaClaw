@@ -24,7 +24,7 @@ import { loadPersona, savePersona } from "../persona-io.js";
 import { TONE_OPTIONS, type Persona } from "../persona.js";
 import { loadConfig, saveConfig } from "../config.js";
 import { mergeCompactionDefaults } from "../memory/compact.js";
-import type { CompactionConfig } from "../types.js";
+import type { CompactionConfig, Verbosity } from "../types.js";
 
 export const DEFAULT_PROFILE_NAME =
   process.env.BAJACLAW_DEFAULT_PROFILE ?? "default";
@@ -95,6 +95,12 @@ export async function runSetup(opts: SetupOptions = {}): Promise<void> {
       await promptModelEffort(name);
     } catch (e) {
       if (!opts.silent) console.log(chalk.yellow(`(skipped model/effort setup: ${(e as Error).message})`));
+    }
+
+    try {
+      await promptVerbosity(name);
+    } catch (e) {
+      if (!opts.silent) console.log(chalk.yellow(`(skipped verbosity setup: ${(e as Error).message})`));
     }
 
     try {
@@ -273,6 +279,32 @@ async function promptModelEffort(profile: string): Promise<void> {
   cfg.effort = effort as typeof cfg.effort;
   saveConfig(cfg);
   console.log(chalk.green(`✓ model=${model}, effort=${effort}`));
+}
+
+async function promptVerbosity(profile: string): Promise<void> {
+  console.log("");
+  console.log(chalk.dim("Verbosity sets how chatty the agent is about what it's doing mid-cycle."));
+  console.log(chalk.dim("BajaClaw narrates tool use (searches, edits, tests) while the agent works."));
+  console.log(chalk.dim("This costs zero Claude tokens - it's orchestrator-side."));
+  console.log("");
+  const choice = await askChoice(
+    chalk.bold("Verbosity:"),
+    [
+      "off - silent until the final reply",
+      "medium (recommended) - phase changes only: skills, web, tests, writes",
+      "full - every tool call, including reads and short bash",
+    ],
+    "medium (recommended) - phase changes only: skills, web, tests, writes",
+  );
+  const verbosity: Verbosity = choice.startsWith("off")
+    ? "off"
+    : choice.startsWith("full")
+      ? "full"
+      : "medium";
+  const cfg = loadConfig(profile);
+  cfg.verbosity = verbosity;
+  saveConfig(cfg);
+  console.log(chalk.green(`✓ verbosity=${verbosity}`));
 }
 
 async function promptChannels(profile: string): Promise<void> {

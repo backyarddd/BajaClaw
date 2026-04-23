@@ -57,6 +57,11 @@ type TypingStarter = (chatId: string | number) => () => void;
 
 export type ChannelKind = "telegram" | "discord" | "imessage";
 
+// A progress-message handle returned by openProgressMessage. The
+// adapter decides the shape; callers treat it as opaque. `null` means
+// the adapter does not support edit-in-place (e.g. iMessage).
+export type ProgressHandle = { messageId: string | number } | null;
+
 interface Adapter {
   kind: ChannelKind;
   send: Sender;
@@ -64,6 +69,16 @@ interface Adapter {
   sendTapback?: (chatId: string | number, messageGuid: string, type: number) => Promise<void>;
   startTyping: TypingStarter;
   stop: () => Promise<void>;
+  // Open a new "progress message" in the given chat. Adapters that
+  // support edit-in-place (Telegram, Discord) send `initialText` and
+  // return a handle the caller uses to edit or delete it. Adapters
+  // that don't (iMessage) should return null so the caller knows to
+  // take the summary-at-cycle-end path instead.
+  openProgressMessage?: (chatId: string | number, initialText: string) => Promise<ProgressHandle>;
+  editProgressMessage?: (chatId: string | number, handle: ProgressHandle, text: string) => Promise<void>;
+  // Optional: delete the progress message at cycle end so the final
+  // reply stands alone. Implementations may swallow errors.
+  deleteProgressMessage?: (chatId: string | number, handle: ProgressHandle) => Promise<void>;
 }
 
 const adapters = new Map<string, Adapter>();
@@ -259,6 +274,60 @@ export async function sendProgressToSource(profile: string, source: string, text
   await a.send(id, text);
 }
 
+/** Open an edit-in-place progress message for the narrator.
+ *  Returns null when the adapter does not support edits (iMessage)
+ *  or is not loaded; callers must fall back to the summary path. */
+export async function openProgressMessage(
+  profile: string,
+  source: string,
+  initialText: string,
+): Promise<ProgressHandle> {
+  const colon = source.indexOf(":");
+  if (colon < 0) return null;
+  const kind = source.slice(0, colon);
+  const id = source.slice(colon + 1);
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return null;
+  const a = adapters.get(key(profile, kind));
+  if (!a || !a.openProgressMessage) return null;
+  try { return await a.openProgressMessage(id, initialText); }
+  catch { return null; }
+}
+
+export async function editProgressMessage(
+  profile: string,
+  source: string,
+  handle: ProgressHandle,
+  text: string,
+): Promise<void> {
+  if (!handle) return;
+  const colon = source.indexOf(":");
+  if (colon < 0) return;
+  const kind = source.slice(0, colon);
+  const id = source.slice(colon + 1);
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return;
+  const a = adapters.get(key(profile, kind));
+  if (!a || !a.editProgressMessage) return;
+  try { await a.editProgressMessage(id, handle, text); }
+  catch { /* swallow: edits are best-effort */ }
+}
+
+export async function deleteProgressMessage(
+  profile: string,
+  source: string,
+  handle: ProgressHandle,
+): Promise<void> {
+  if (!handle) return;
+  const colon = source.indexOf(":");
+  if (colon < 0) return;
+  const kind = source.slice(0, colon);
+  const id = source.slice(colon + 1);
+  if (kind !== "telegram" && kind !== "discord" && kind !== "imessage") return;
+  const a = adapters.get(key(profile, kind));
+  if (!a || !a.deleteProgressMessage) return;
+  try { await a.deleteProgressMessage(id, handle); }
+  catch { /* swallow */ }
+}
+
 /** Send a proactive notification to all active channels for a profile.
  *  Uses the last seen chat/channel ID per adapter. No-ops if no messages
  *  have arrived yet (no chatId to target). Fire-and-forget. */
@@ -407,6 +476,33 @@ async function startTelegram(profile: string, c: ChannelConfig, log: Logger): Pr
         await bot.sendDocument(Number(chatId), path, caption ? { caption } : {});
       }
     },
+    openProgressMessage: async (chatId, initialText) => {
+      // Telegram rejects empty messages. Fall back to a thin marker so
+      // the handle is valid and editProgressMessage can replace it.
+      const body = initialText.trim().length > 0 ? initialText : "…";
+      const msg = await bot.sendMessage(Number(chatId), body);
+      return { messageId: msg.message_id };
+    },
+    editProgressMessage: async (chatId, handle, text) => {
+      if (!handle) return;
+      const body = text.trim().length > 0 ? text : "…";
+      try {
+        await bot.editMessageText(body, {
+          chat_id: Number(chatId),
+          message_id: Number(handle.messageId),
+        });
+      } catch (e) {
+        // Telegram throws on "message is not modified" (no-op edits)
+        // and on rate limit. Both are non-fatal for a progress UI.
+        const msg = (e as Error).message ?? "";
+        if (!/not modified|Too Many Requests/i.test(msg)) throw e;
+      }
+    },
+    deleteProgressMessage: async (chatId, handle) => {
+      if (!handle) return;
+      try { await bot.deleteMessage(Number(chatId), Number(handle.messageId)); }
+      catch { /* ignore */ }
+    },
     startTyping: (chatId) => {
       // Telegram's typing indicator auto-clears after 5s, so re-send
       // every 4s until stopped. `sendChatAction` errors are swallowed
@@ -488,6 +584,34 @@ async function startDiscord(profile: string, c: ChannelConfig, log: Logger): Pro
       if (ch && "send" in ch && typeof (ch as { send?: unknown }).send === "function") {
         await (ch as { send: (t: string) => Promise<unknown> }).send(text);
       }
+    },
+    openProgressMessage: async (channelId, initialText) => {
+      const ch = await client.channels.fetch(String(channelId));
+      if (!ch || !("send" in ch) || typeof (ch as { send?: unknown }).send !== "function") return null;
+      const body = initialText.trim().length > 0 ? initialText : "…";
+      const sent = await (ch as { send: (t: string) => Promise<{ id: string }> }).send(body);
+      return { messageId: sent.id };
+    },
+    editProgressMessage: async (channelId, handle, text) => {
+      if (!handle) return;
+      const ch = await client.channels.fetch(String(channelId));
+      if (!ch || !("messages" in ch)) return;
+      try {
+        const m = await (ch as { messages: { fetch: (id: string) => Promise<{ edit: (t: string) => Promise<unknown> }> } })
+          .messages.fetch(String(handle.messageId));
+        const body = text.trim().length > 0 ? text : "…";
+        await m.edit(body);
+      } catch { /* rate-limited or gone - ignore */ }
+    },
+    deleteProgressMessage: async (channelId, handle) => {
+      if (!handle) return;
+      const ch = await client.channels.fetch(String(channelId));
+      if (!ch || !("messages" in ch)) return;
+      try {
+        const m = await (ch as { messages: { fetch: (id: string) => Promise<{ delete: () => Promise<unknown> }> } })
+          .messages.fetch(String(handle.messageId));
+        await m.delete();
+      } catch { /* ignore */ }
     },
     sendFile: async (channelId, path, caption) => {
       const ch = await client.channels.fetch(String(channelId));

@@ -184,6 +184,10 @@ export function ChatApp({
   // a cycle is in flight. Cleared on thinking=false; the final reply
   // is appended to the Static scrollback, not this live buffer.
   const [streamingText, setStreamingText] = useState<string>("");
+  // Latest narration line (tool use, skill match, etc.) from the
+  // progress narrator. Shown above the streaming text while thinking.
+  // Cleared on thinking=false.
+  const [narrationLine, setNarrationLine] = useState<string>("");
   const [elapsed, setElapsed] = useState(0);
   const [pendingAttachments, setPendingAttachments] = useState<string[]>([]);
   // Ring of submitted inputs for ↑/↓ recall. Newest-last, slash
@@ -306,6 +310,7 @@ export function ChatApp({
     setThinkingStart(Date.now());
     setElapsed(0);
     setStreamingText("");
+    setNarrationLine("");
 
     let r: CycleOutput | null = null;
     let caughtError: Error | null = null;
@@ -318,6 +323,7 @@ export function ChatApp({
         sessionHistory: recent,
         attachments: mergedAttachments,
         onPartialText: (_delta, accumulated) => setStreamingText(accumulated),
+        onNarration: (u) => setNarrationLine(u.latest),
       });
     } catch (e) {
       caughtError = e as Error;
@@ -326,6 +332,7 @@ export function ChatApp({
     thinkingRef.current = false;
     setThinking(false);
     setStreamingText("");
+    setNarrationLine("");
 
     if (caughtError) {
       appendTurn({
@@ -439,6 +446,11 @@ export function ChatApp({
               <Text color="cyan"> · {messageQueue.length} queued</Text>
             )}
           </Box>
+          {narrationLine && (
+            <Box>
+              <Text dimColor>  {narrationLine}</Text>
+            </Box>
+          )}
           {streamingText && (
             <Box marginTop={1}>
               <Text>{streamingText}</Text>

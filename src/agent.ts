@@ -29,10 +29,17 @@ import { shouldCompact, compact as compactMemory } from "./memory/compact.js";
 import { loadAllSkills } from "./skills/loader.js";
 import { matchSkills } from "./skills/matcher.js";
 import { synthesize as synthesizeSkill } from "./skills/auto-skiller.js";
-import { broadcastToProfile, sendProgressToSource } from "./channels/gateway.js";
+import {
+  broadcastToProfile,
+  openProgressMessage,
+  editProgressMessage,
+  deleteProgressMessage,
+  type ProgressHandle,
+} from "./channels/gateway.js";
 import { buildMcpConfig } from "./mcp/consumer.js";
 import { pickModel, budgetFor } from "./model-picker.js";
 import { serialize } from "./concurrency.js";
+import { ProgressNarrator, type NarrationUpdate } from "./progress-narrator.js";
 import type { AgentConfig, ClaudeOptions, ChatTurn } from "./types.js";
 
 export interface CycleInput {
@@ -57,6 +64,11 @@ export interface CycleInput {
   // assistant emits incremental text. The final CycleOutput is
   // otherwise identical in shape to the non-streaming path.
   onPartialText?: (delta: string, accumulated: string) => void;
+  // Optional live narration sink for in-process callers (chat REPL,
+  // dashboard chat). When set, the progress narrator streams updates
+  // here as tool-use events arrive. Channel-sourced cycles route
+  // narration to the adapter's progress message instead.
+  onNarration?: (u: NarrationUpdate) => void;
 }
 
 export interface CycleOutput {
@@ -77,6 +89,11 @@ export interface CycleOutput {
   // Set when the task came from an inbound channel (telegram/discord).
   // Format: "<kind>:<id>" - passed to channels/gateway.replyToSource.
   source?: string;
+  // Narration summary from the progress narrator. For iMessage cycles,
+  // this is already prepended to `text` before return. For other
+  // callers (dashboard chat), it's exposed separately so the caller
+  // can decide whether to render it.
+  narrationSummary?: string;
 }
 
 export async function runCycle(input: CycleInput): Promise<CycleOutput> {
@@ -155,33 +172,26 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     const sessionHistory = input.sessionHistory
       ?? (popped?.source ? loadSourceHistory(db, popped.source, popped.id, 8) : undefined);
 
-    // Live-feedback policy. For sonnet/opus cycles that originate
-    // from a channel (telegram, discord), the agent gets a prompt
-    // block telling it to call `bajaclaw say "..."` for intake + mid-
-    // flight progress. Skipped for haiku (short+trivial tasks stay
-    // snappy) and heartbeat cycles. Also skipped on dry runs.
+    // Source routing.
     const source = popped?.source;
-    const channelSource = source && (source.startsWith("telegram:") || source.startsWith("discord:"));
-    const liveFeedback = !isHeartbeat
-      && !input.dryRun
-      && channelSource
-      && (picked.tier === "sonnet" || picked.tier === "opus");
+    const editableSource = Boolean(source) && (
+      source!.startsWith("telegram:") || source!.startsWith("discord:")
+    );
+    const iMessageSource = Boolean(source) && source!.startsWith("imessage:");
 
-    // No separate intake-ack backend call. The older design fired a
-    // haiku pass before the main cycle to produce a quick "got it"
-    // reply; it had two problems: (1) the haiku didn't get session
-    // history, so follow-up messages got clueless replies ("which
-    // model for what part?"), and (2) the user saw two messages per
-    // task - the ack AND the main reply - which felt like spam.
-    // Instead, the progress-instructions block below tells the main
-    // agent (which HAS full session history) to emit its own plan
-    // ack via `bajaclaw say` as its first action on multi-part
-    // tasks. One cycle, one voice, one source of truth.
+    // Mid-cycle narration. Driven by cfg.verbosity ("off" | "medium" | "full"),
+    // runs entirely in BajaClaw (no extra prompt tokens, no agent output
+    // tokens). See progress-narrator.ts.
+    //   - Telegram / Discord: open a single progress message, edit in place.
+    //   - iMessage: no edit API - collect a summary and prepend to final reply.
+    //   - In-process callers (chat REPL, dashboard): route to input.onNarration.
+    //   - Dry runs and heartbeat cycles: no narration.
+    const verbosity = cfg.verbosity ?? "medium";
+    const narrateEnabled = verbosity !== "off" && !isHeartbeat && !input.dryRun;
 
     const prompt = assemblePrompt({
       task,
       attachments,
-      progressInstructions: liveFeedback ? buildProgressInstructions() : "",
       memories: memories
         .map((m) => `- [${m.kind}] ${m.content.slice(0, budget.memoryCharsEach)}`)
         .join("\n"),
@@ -212,16 +222,15 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     // claude's --effort level is the real knob for "how much runway
     // does the agent get". No --max-turns flag exists in claude CLI;
     // `effort: "max"` gives the biggest internal turn budget.
-    // Env vars injected into the spawned claude subprocess so the
-    // agent can call `bajaclaw say "..."` from its Bash tool without
-    // us having to template them into the prompt. The `say` command
-    // POSTs to the dashboard's /api/progress endpoint running in the
-    // daemon, which forwards to the channel.
+    // Env vars injected into the spawned claude subprocess. BAJACLAW_SOURCE
+    // is still set for channel cycles so manual callers of `bajaclaw say`
+    // inside skills have somewhere to route; the main progress path is
+    // now orchestrator-driven (progress-narrator.ts) and doesn't need it.
     const spawnEnv: Record<string, string> = {
       BAJACLAW_PROFILE: input.profile,
       BAJACLAW_DASHBOARD_PORT: String(cfg.dashboardPort ?? 7337),
     };
-    if (liveFeedback && source) spawnEnv.BAJACLAW_SOURCE = source;
+    if (source && (editableSource || iMessageSource)) spawnEnv.BAJACLAW_SOURCE = source;
 
     const opts: ClaudeOptions & { dryRun?: boolean } = {
       model: picked.model,
@@ -252,13 +261,66 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       else log.warn("snapshot.pre.fail", { cycleId, error: r.error });
     }
 
-    // Stream when the caller asked for partial-text callbacks;
-    // otherwise fall through to the blocking JSON path so the rest
-    // of the codebase (channels, dashboard, HTTP API) stays unchanged.
-    const result = input.onPartialText
-      ? await runStream(prompt, opts, { onPartialText: input.onPartialText })
+    // Mid-cycle narrator. Built after the prompt is assembled so the
+    // initial skill list can be seeded. Passes events from runStream
+    // to the narrator; live updates route to the right sink.
+    let progressHandle: ProgressHandle = null;
+    let narrator: ProgressNarrator | null = null;
+    if (narrateEnabled) {
+      // Pick the live sink based on the cycle's source.
+      let liveSink: ((u: NarrationUpdate) => void) | undefined;
+
+      if (editableSource && source) {
+        // Open a single progress message on Telegram / Discord; we
+        // edit it in place as the narrator reports tool use. Null
+        // handle (adapter refused / not loaded) means the open failed
+        // and we degrade silently to no live narration.
+        progressHandle = await openProgressMessage(
+          input.profile,
+          source,
+          verbosity === "full" ? "🔄 starting" : "🔄 starting",
+        );
+        if (progressHandle) {
+          const srcRef = source;
+          const handleRef = progressHandle;
+          liveSink = (u) => {
+            void editProgressMessage(input.profile, srcRef, handleRef, formatLiveBody(u));
+          };
+        }
+      } else if (input.onNarration) {
+        // In-process caller (chat REPL, dashboard chat). Route to
+        // their callback verbatim - they pick the rendering.
+        liveSink = input.onNarration;
+      }
+      // iMessage and no-source cycles: no live sink. The summary is
+      // prepended to the final reply below.
+
+      narrator = new ProgressNarrator({ verbosity, onUpdate: liveSink });
+      for (const s of matched) narrator.addSkill(s.name);
+    }
+
+    // Stream when the caller asked for partial-text callbacks OR when
+    // narration is enabled (narrator needs tool_use events). Falls
+    // back to the blocking JSON path for dry runs, heartbeats, and
+    // other non-interactive cycles to keep them lean.
+    const useStream = Boolean(input.onPartialText) || narrator !== null;
+    const result = useStream
+      ? await runStream(prompt, opts, {
+          onPartialText: input.onPartialText,
+          onEvent: narrator ? (ev) => narrator!.handleEvent(ev as Record<string, unknown>) : undefined,
+        })
       : await runOnce(prompt, opts);
     const finished = new Date().toISOString();
+
+    // Finalize the narrator: flush any debounced update and clean up
+    // the progress message so the final reply stands alone.
+    if (narrator) narrator.finalize();
+    if (progressHandle && source) {
+      // Best-effort delete so the final reply doesn't trail a stale
+      // progress line. If the delete fails (rate limit, already gone),
+      // the user just sees both messages - not broken, just noisier.
+      await deleteProgressMessage(input.profile, source, progressHandle);
+    }
 
     // Optional post-snapshot. Captures the diff for later inspection
     // even when the user never rewinds.
@@ -273,6 +335,8 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       db.prepare("UPDATE cycles SET pre_sha=?, post_sha=?, snapshot_root=? WHERE id=?")
         .run(preSha, postSha, snapshotRoot, cycleId);
     }
+
+    const narrationSummary = narrator?.summary() ?? "";
 
     if (!result.ok) {
       recordFailure(db);
@@ -294,6 +358,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
         command: result.command,
         error: result.error,
         source: popped?.source,
+        narrationSummary: narrationSummary || undefined,
       };
     }
 
@@ -346,10 +411,18 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
 
     log.info("cycle.ok", { cycleId, costUsd: result.costUsd, turns: result.turns });
 
+    // iMessage cannot edit sent messages, so we prepend a short
+    // narration summary to the final reply instead. On other sources
+    // the live progress message already showed this; repeating it
+    // would be spammy.
+    const outText = (iMessageSource && narrationSummary)
+      ? `${narrationSummary}\n\n${result.text}`
+      : result.text;
+
     return {
       cycleId,
       ok: true,
-      text: result.text,
+      text: outText,
       costUsd: result.costUsd,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
@@ -361,10 +434,20 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       prompt,
       command: result.command,
       source: popped?.source,
+      narrationSummary: narrationSummary || undefined,
     };
   } finally {
     db.close();
   }
+}
+
+/** Format a narrator update for an edit-in-place progress message.
+ *  Prefixes a subtle header so the user understands what the live
+ *  message is, keeps the full body below. Short bodies render clean
+ *  in both Telegram and Discord. */
+function formatLiveBody(u: NarrationUpdate): string {
+  if (!u.body) return "🔄 working";
+  return `🔄 working\n\n${u.body}`;
 }
 
 function formatRecentChat(history?: ChatTurn[]): string {
@@ -466,55 +549,6 @@ interface AssembleInput {
   heartbeat: string;
   skills: string;
   recentChat?: string;
-  progressInstructions?: string;
-}
-
-export function buildProgressInstructions(): string {
-  return `# Side-channel chat tool (do not let this distract from the actual task)
-
-CRITICAL: Your job is to fully complete the task in "# Current Task" below. If it has multiple parts (a AND b AND c), finish all of them before your final reply. Do not stop halfway and summarize, do not defer parts to a follow-up, do not treat the chat as a substitute for doing the work.
-
-You have one extra tool: \`bajaclaw say "<short text>"\` via your Bash tool. It sends a line to the user's chat mid-flight without blocking or ending the typing indicator.
-
-## When to send the first ping (plan ack)
-
-ONLY if the task is genuinely multi-part or will take noticeable time to complete. Examples:
-- "add X, then test Y, then ship Z"
-- "investigate this bug, find the root cause, and fix it"
-- "scaffold a new agent named Shirty, run the dev server, tell me when ready"
-
-For multi-part tasks: before your first real tool call, send ONE short ping acknowledging the plan in your own voice. Natural, under 20 words. Look at Recent Chat to understand what the user means (e.g. if they say "that" or "the model", figure out what they're referring to from context).
-
-For single-question tasks, do NOT ack. The typing indicator is enough; go straight to your final reply. Examples that need NO ack:
-- "what model are you using?"
-- "is the server up?"
-- "summarize what you just did"
-
-## When to send mid-flight pings
-
-Only for genuine milestones on long tasks:
-- You hit something unexpected the user should know ("heads up, migration is dirty, fixing first")
-- A long step is about to start and silence would look like a hang ("running the full test suite")
-- You crossed a real phase boundary ("scaffolding done, wiring up the handler")
-
-## When to stay quiet
-
-- Announcing what you're about to do ("on it!", "starting now", "let me take a look"). Just do it.
-- Every tool call, file edit, or search.
-- Thinking out loud.
-- Short or simple tasks.
-- Filling silence when you don't have something real to say.
-
-Hard cap: at most 3 \`bajaclaw say\` calls per cycle (including the plan ack if you send one). Zero is fine. If you're tempted to ping a fourth time, you're chatting instead of working - stop and finish the task.
-
-## Style for pings
-
-- Under 20 words, one line of prose
-- Same voice as your final reply
-- No "Update:", "Status:", "Plan:" prefixes - just say the thing
-- No em dashes, no emojis
-
-Your final reply at cycle end is the deliverable. It must cover every part the user asked about: findings, results, file paths, errors, whatever they need. Pings are bonuses on top of that, never a replacement.`;
 }
 
 export function assemblePrompt(input: AssembleInput): string {
@@ -522,7 +556,6 @@ export function assemblePrompt(input: AssembleInput): string {
   if (input.soulMd.trim()) sections.push(`# Agent Identity\n${input.soulMd.trim()}`);
   if (input.agentMd.trim()) sections.push(`# Operating Guide\n${input.agentMd.trim()}`);
   if (input.heartbeat.trim()) sections.push(`# Heartbeat Schedule\n${input.heartbeat.trim()}`);
-  if (input.progressInstructions?.trim()) sections.push(input.progressInstructions.trim());
   if (input.memories.trim()) sections.push(`# Recalled Memories\n${input.memories.trim()}`);
   if (input.skills.trim()) sections.push(`# Active Skills\n${input.skills.trim()}`);
   if (input.recentChat?.trim()) sections.push(`# Recent Chat\n${input.recentChat.trim()}`);

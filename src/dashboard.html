@@ -636,6 +636,18 @@
             </div>
             <div class="row mt-3">
               <div>
+                <label class="label">Verbosity</label>
+                <select class="select" id="f-verbosity">
+                  <option value="off">off (silent)</option>
+                  <option value="medium">medium (phase changes)</option>
+                  <option value="full">full (every tool call)</option>
+                </select>
+                <div class="help">Mid-cycle narration. Runs in BajaClaw, zero Claude-token cost.</div>
+              </div>
+              <div></div>
+            </div>
+            <div class="row mt-3">
+              <div>
                 <label class="label">Dashboard port</label>
                 <input class="input mono" id="f-port" type="number" min="1" max="65535" />
                 <div class="help">Takes effect on next daemon restart.</div>
@@ -1474,6 +1486,7 @@
     $("#f-model").value = cfg.model;
     $("#f-effort").value = cfg.effort;
     $("#f-context").value = cfg.contextWindow;
+    $("#f-verbosity").value = cfg.verbosity ?? "medium";
     $("#f-port").value = cfg.dashboardPort;
     $("#f-budget").value = cfg.maxBudgetUsd ?? "";
     setToggle("t-autostart", cfg.dashboardAutostart);
@@ -1496,6 +1509,7 @@
       model: $("#f-model").value,
       effort: $("#f-effort").value,
       contextWindow: $("#f-context").value,
+      verbosity: $("#f-verbosity").value,
       dashboardPort: Number($("#f-port").value),
       dashboardAutostart: $("#t-autostart").dataset.on === "1",
       memorySync: $("#t-memsync").dataset.on === "1",

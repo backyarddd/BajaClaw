@@ -118,6 +118,10 @@ async function dispatchApi(
       model: out.model,
       tier: out.tier,
       error: out.error,
+      // Narration summary. Dashboard chat blocks per request so live
+      // narration isn't possible today; the summary lets the UI show
+      // a collapsed "what it did" block above the reply.
+      narrationSummary: out.narrationSummary,
     });
     return;
   }
@@ -597,6 +601,7 @@ interface PublicConfig {
   model: string;
   effort: string;
   contextWindow: "200k" | "1m";
+  verbosity: "off" | "medium" | "full";
   dashboardPort: number;
   dashboardAutostart: boolean;
   memorySync: boolean;
@@ -617,6 +622,7 @@ function publicConfig(cfg: AgentConfig): PublicConfig {
     model: String(cfg.model ?? "auto"),
     effort: cfg.effort,
     contextWindow: cfg.contextWindow ?? "200k",
+    verbosity: cfg.verbosity ?? "medium",
     dashboardPort: cfg.dashboardPort ?? 7337,
     dashboardAutostart: cfg.dashboardAutostart ?? true,
     memorySync: cfg.memorySync ?? false,
@@ -635,7 +641,7 @@ function publicConfig(cfg: AgentConfig): PublicConfig {
 // else is silently ignored - prevents an injection from rewriting e.g.
 // the allowedTools list via the dashboard.
 const ALLOWED_FIELDS = new Set<keyof AgentConfig>([
-  "model", "effort", "contextWindow", "dashboardPort",
+  "model", "effort", "contextWindow", "verbosity", "dashboardPort",
   "dashboardAutostart", "memorySync", "maxBudgetUsd",
 ]);
 
