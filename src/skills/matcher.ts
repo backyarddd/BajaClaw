@@ -8,10 +8,24 @@ export interface MatchContext {
 
 export function matchSkills(skills: Skill[], task: string, topN = 3, ctx: MatchContext = {}): Skill[] {
   const taskLower = task.toLowerCase();
+  const interrogative = isInterrogative(task);
   const candidates = skills.filter((s) => isActiveForContext(s, ctx));
-  const scored = candidates.map((s) => ({ s, score: scoreSkill(s, taskLower) }));
+  const scored = candidates.map((s) => ({ s, score: scoreSkill(s, taskLower, interrogative) }));
   scored.sort((a, b) => b.score - a.score);
   return scored.filter((x) => x.score > 0).slice(0, topN).map((x) => x.s);
+}
+
+function isInterrogative(task: string): boolean {
+  const trimmed = task.trim();
+  if (!trimmed.endsWith("?")) return false;
+  const lower = trimmed.toLowerCase();
+  const interrogativeStarts = [
+    "what ", "who ", "when ", "where ", "why ", "how ",
+    "is ", "are ", "was ", "were ", "can ", "could ",
+    "should ", "would ", "will ", "do ", "does ", "did ",
+    "tell me ", "explain ", "describe ", "ask "
+  ];
+  return interrogativeStarts.some((start) => lower.startsWith(start));
 }
 
 function isActiveForContext(skill: Skill, ctx: MatchContext): boolean {
@@ -30,21 +44,30 @@ function isActiveForContext(skill: Skill, ctx: MatchContext): boolean {
   return true;
 }
 
-function scoreSkill(skill: Skill, taskLower: string): number {
+function scoreSkill(skill: Skill, taskLower: string, interrogative: boolean): number {
   let score = 0;
   for (const trig of skill.triggers ?? []) {
-    if (taskLower.includes(trig.toLowerCase())) score += 5;
+    const trigLower = trig.toLowerCase();
+    if (taskLower.includes(trigLower)) {
+      if (trigLower.startsWith("/")) {
+        score += 10;
+      } else if (!interrogative) {
+        score += 5;
+      }
+    }
   }
-  for (const tag of skill.tags ?? []) {
-    if (taskLower.includes(tag.toLowerCase())) score += 3;
-  }
-  for (const word of (skill.description ?? "").toLowerCase().split(/\s+/)) {
-    if (word.length < 4) continue;
-    if (taskLower.includes(word)) score += 1;
-  }
-  for (const word of skill.name.toLowerCase().split(/[-_\s]+/)) {
-    if (word.length < 4) continue;
-    if (taskLower.includes(word)) score += 2;
+  if (!interrogative) {
+    for (const tag of skill.tags ?? []) {
+      if (taskLower.includes(tag.toLowerCase())) score += 3;
+    }
+    for (const word of (skill.description ?? "").toLowerCase().split(/\s+/)) {
+      if (word.length < 4) continue;
+      if (taskLower.includes(word)) score += 1;
+    }
+    for (const word of skill.name.toLowerCase().split(/[-_\s]+/)) {
+      if (word.length < 4) continue;
+      if (taskLower.includes(word)) score += 2;
+    }
   }
   return score;
 }
