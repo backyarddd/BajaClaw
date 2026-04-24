@@ -21,9 +21,10 @@ function isInterrogative(task: string): boolean {
   const lower = trimmed.toLowerCase();
   const interrogativeStarts = [
     "what ", "who ", "when ", "where ", "why ", "how ",
-    "is ", "are ", "was ", "were ", "can ", "could ",
-    "should ", "would ", "will ", "do ", "does ", "did ",
-    "tell me ", "explain ", "describe ", "ask "
+    "which ", "whose ", "whom ",
+    "is ", "are ", "was ", "were ",
+    "do ", "does ", "did ",
+    "tell me ", "explain ", "describe "
   ];
   return interrogativeStarts.some((start) => lower.startsWith(start));
 }
