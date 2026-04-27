@@ -121,9 +121,16 @@ test("matchSkills: fallback_for_tools hides skill when a listed tool is present"
     triggers: ["search"],
     fallbackForTools: ["web_search"],
   };
-  const activeWhenMissing = matchSkills([skill], "search cats", 3, { allowedTools: ["Bash", "Read"] });
+  // strategy: "keyword" exercises the context filter without making a backend call.
+  const activeWhenMissing = await matchSkills([skill], "search cats", 3, {
+    allowedTools: ["Bash", "Read"],
+    strategy: "keyword",
+  });
   assert.equal(activeWhenMissing.length, 1);
-  const hiddenWhenPresent = matchSkills([skill], "search cats", 3, { allowedTools: ["Bash", "web_search"] });
+  const hiddenWhenPresent = await matchSkills([skill], "search cats", 3, {
+    allowedTools: ["Bash", "web_search"],
+    strategy: "keyword",
+  });
   assert.equal(hiddenWhenPresent.length, 0);
 });
 
@@ -137,6 +144,8 @@ test("matchSkills: tags contribute to score", async () => {
     name: "b", description: "x", body: "", path: "/b", scope: "bajaclaw-user",
     origin: "bajaclaw",
   };
-  const matched = matchSkills([tagged, plain], "show me some astronomy data", 3);
+  const matched = await matchSkills([tagged, plain], "show me some astronomy data", 3, {
+    strategy: "keyword",
+  });
   assert.equal(matched[0].name, "a");
 });

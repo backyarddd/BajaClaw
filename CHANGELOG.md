@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.20.5
+
+**LLM-based skill matching.**
+
+The previous matcher scored skills by substring-matching the task
+against each skill's name, description, tags, and triggers. That
+fired skills on any keyword overlap, even in messages that were
+discussions or questions rather than actual requests. The user-
+visible bug: a message proposing to "use images instead of videos"
+activated `image-gen`; the same message contained "graphics" which
+matches `graph` as a substring of `graphify`'s description, so
+graphify also fired.
+
+The matcher now routes through a haiku call that classifies intent.
+A skill activates only when the model decides the user is requesting
+that skill's action - not when they merely mention a related word.
+Explicit slash triggers (`/graphify ...`) bypass the LLM entirely
+through a fast path. On any LLM error or unparseable response, the
+matcher falls back to the legacy keyword scorer so the agent still
+makes progress. Configurable per profile via `skillMatcher: "llm"`
+(default) or `"keyword"`.
+
+Adds 3-5s of latency to cycles that don't hit the slash fast path.
+
 ## 0.20.2
 
 **Keep the progress message around at cycle end.**

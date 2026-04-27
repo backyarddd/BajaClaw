@@ -119,6 +119,11 @@ export interface AgentConfig {
     minToolUses?: number;
     maxPerDay?: number;
   };
+  // Skill selection strategy. "llm" (default) classifies the task with
+  // a fast haiku call so skills only activate on actual requests, not
+  // keyword mentions. "keyword" uses the legacy substring matcher (also
+  // the automatic fallback if the LLM call fails).
+  skillMatcher?: "llm" | "keyword";
   // Sub-agent relationships. Set on the parent to list owned sub-agents
   // (used by `bajaclaw subagent list`). Set on the child to point at its
   // orchestrator.
