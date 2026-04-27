@@ -76,6 +76,13 @@ export class ProgressNarrator {
   private liveUpdateCount = 0;
   private timer: NodeJS.Timeout | null = null;
   private dirty = false;
+  // claude's stream-json fires the same tool_use twice: once as
+  // `content_block_start` (often before the input has streamed in),
+  // once as the final `assistant` message (with full input). Without
+  // this set we'd emit "editing" (no file) followed by "editing
+  // foo.ts" - the spam from issue 0.20.5+. Key is name+stable input
+  // hash so re-edits with different inputs still narrate.
+  private readonly seenToolUses = new Set<string>();
 
   constructor(opts: NarratorOptions) {
     this.verbosity = opts.verbosity;
@@ -116,8 +123,11 @@ export class ProgressNarrator {
   }
 
   private ingestToolUse(tu: { name: string; input: Record<string, unknown> }): void {
+    const key = `${tu.name}:${stableStringify(tu.input)}`;
+    if (this.seenToolUses.has(key)) return;
     const entry = formatToolUse(tu, this.verbosity);
     if (!entry) return;
+    this.seenToolUses.add(key);
     this.push(entry, { immediate: false });
   }
 
@@ -288,13 +298,17 @@ function extractToolUses(ev: Record<string, unknown>): { name: string; input: Re
   const innerType = inner.type;
 
   // {type:"content_block_start", content_block:{type:"tool_use", name, input}}
+  // claude opens the block before the tool arguments have streamed in,
+  // so `input` is usually `{}` here. The full input arrives later in
+  // the `assistant` message form below. Skip empty inputs to avoid
+  // narrating bare "editing" / "searching the web:" placeholders.
   if (innerType === "content_block_start") {
     const block = inner.content_block as Record<string, unknown> | undefined;
     if (block && block.type === "tool_use" && typeof block.name === "string") {
-      out.push({
-        name: block.name,
-        input: (block.input as Record<string, unknown>) ?? {},
-      });
+      const input = (block.input as Record<string, unknown>) ?? {};
+      if (Object.keys(input).length > 0) {
+        out.push({ name: block.name, input });
+      }
     }
   }
 
@@ -326,6 +340,16 @@ function baseName(fp: string): string {
   if (!fp) return "";
   const parts = fp.split(/[/\\]+/);
   return parts[parts.length - 1] || fp;
+}
+
+// JSON.stringify with sorted keys at every level. Stable across
+// claude CLI versions even if they reorder fields.
+function stableStringify(v: unknown): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
+  const obj = v as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return "{" + keys.map((k) => JSON.stringify(k) + ":" + stableStringify(obj[k])).join(",") + "}";
 }
 
 function prettifyUrl(url: string): string {

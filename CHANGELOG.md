@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.20.6
+
+**Stop the progress-narrator double-spam.**
+
+claude's stream-json fires every tool_use twice: once as
+`content_block_start` (emitted before the tool input has streamed
+in, so input is `{}`), and again as the final `assistant` message
+with the complete input. The narrator was rendering both, producing
+the bare-then-detailed pairs in the progress log:
+
+  searching the web:
+  searching the web: Wan 2.1 video model
+  editing
+  editing videos.js
+  editing
+  editing videos.js
+
+Two changes to fix it: (1) skip `content_block_start` events whose
+input is empty, since the same call will arrive again with full
+input on the assistant message; (2) dedup tool_uses by
+`(name, stable-stringified-input)` so calls that arrive on both
+shapes only narrate once. Distinct calls (different file, different
+query) still narrate separately.
+
 ## 0.20.5
 
 **LLM-based skill matching.**
