@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.20.7
+
+**Hang-tolerant cycle queue + real OpenAI-compatible streaming.**
+
+The OpenAI-compatible API at `/v1/chat/completions` had two bugs that
+combined into the symptom: requests hanging for 300+ seconds, then
+the cycle exiting 143 (SIGTERM).
+
+1. **Mutex head-of-line block.** `serialize()` stored the queue head
+   as `next.catch(() => undefined)` so a rejected cycle didn't block
+   future work - but `.catch()` only fires on rejection. A truly
+   hung cycle (subprocess grandchildren keeping pipes open past
+   execa's timeout, MCP server deadlock) leaves the head pending
+   forever. Every subsequent serialize() call chained onto a promise
+   that would never settle, pinning the daemon. Now serialize takes
+   a `deadlineMs` and races the queue head against it - the queue
+   advances even when work() doesn't. Caller in agent.ts passes
+   `cycleTimeoutMs + 60s` so the deadline only fires on real hangs,
+   not on normal long-running cycles.
+
+2. **Fake streaming.** Even when the client requested `stream: true`,
+   the server awaited the FULL cycle to completion, then word-chunked
+   the result with 20ms delays. Clients saw a blank screen for the
+   entire cycle - looked identical to a hang and made them disconnect.
+   Disconnected clients didn't cancel the cycle, leaving dead-letter
+   work that re-poisoned the queue. Now SSE chunks emit as `claude`
+   produces text via `onPartialText`. `res.on("close")` is wired so a
+   client disconnect stops further writes (subprocess cancellation
+   is a follow-up).
+
+Also adds `cycle.queued` / `cycle.dequeued` / `cycle.stage` log
+lines at every major await (skill match, narrator open, backend
+spawn) so a future hang shows up as a long gap between specific
+stage markers in the daemon log.
+
 ## 0.20.6
 
 **Stop the progress-narrator double-spam.**

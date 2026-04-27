@@ -26,7 +26,6 @@ import {
   taskFromMessages,
   resolveRequest,
   cycleToCompletion,
-  chunkText,
   makeChunk,
   type OpenAIChatRequest,
 } from "./translate.js";
@@ -48,7 +47,6 @@ export interface ServeOptions extends ApiConfig {
 
 const DEFAULT_PORT = 8765;
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_STREAM_DELAY_MS = 20;
 
 export function serveApi(opts: ServeOptions = {}): Server {
   const host = opts.host ?? DEFAULT_HOST;
@@ -143,7 +141,12 @@ async function handleChat(
     return sendJson(res, 200, completion);
   }
 
-  // SSE pseudo-stream: run the cycle to completion, then chunk.
+  // True SSE: emit chunks as `claude` produces text. Passing
+  // onPartialText to runCycle switches the agent to runStream
+  // (claude's stream-json output) and forwards each delta here. The
+  // post-hoc word-chunking path was a placeholder - it left clients
+  // staring at a blank screen for the full cycle, which looked
+  // identical to a hang and caused them to disconnect.
   res.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache, no-transform",
@@ -152,27 +155,49 @@ async function handleChat(
 
   const id = `chatcmpl-bc-${Date.now()}`;
   const model = body.model ?? resolved.profile;
-  const delay = opts.streamDelayMs ?? DEFAULT_STREAM_DELAY_MS;
 
   writeEvent(res, makeChunk(id, model, { role: "assistant" }));
 
+  // Track what we've streamed already so the cycle's final text can
+  // be diffed against it. claude's stream emits the same content via
+  // partial deltas, so the final result.text usually matches what
+  // we've already streamed - emit nothing extra in that case.
+  let streamed = "";
+  let aborted = false;
+  res.on("close", () => { aborted = true; });
+
   try {
-    const out = await runCycle({ profile: resolved.profile, task, modelOverride: resolved.modelOverride });
-    if (!out.ok) {
-      writeEvent(res, makeChunk(id, model, { content: out.text || out.error || "error" }, "error"));
+    const out = await runCycle({
+      profile: resolved.profile,
+      task,
+      modelOverride: resolved.modelOverride,
+      onPartialText: (delta) => {
+        if (aborted || !delta) return;
+        streamed += delta;
+        writeEvent(res, makeChunk(id, model, { content: delta }));
+      },
+    });
+    if (aborted) {
+      // Client gave up; don't try to write a stop frame.
+    } else if (!out.ok) {
+      writeEvent(res, makeChunk(id, model, { content: out.error ?? out.text ?? "error" }, "error"));
     } else {
-      const chunks = chunkText(out.text);
-      for (const c of chunks) {
-        writeEvent(res, makeChunk(id, model, { content: c }));
-        if (delay > 0) await sleep(delay);
+      // If runStream wasn't actually used (e.g., the backend fell back
+      // to runOnce because streaming wasn't supported), nothing was
+      // streamed yet - emit the full text now so the client doesn't
+      // get an empty completion.
+      if (streamed.length === 0 && out.text) {
+        writeEvent(res, makeChunk(id, model, { content: out.text }));
       }
       writeEvent(res, makeChunk(id, model, {}, "stop"));
     }
   } catch (e) {
-    writeEvent(res, makeChunk(id, model, { content: (e as Error).message }, "error"));
+    if (!aborted) writeEvent(res, makeChunk(id, model, { content: (e as Error).message }, "error"));
   }
-  res.write("data: [DONE]\n\n");
-  res.end();
+  if (!aborted) {
+    res.write("data: [DONE]\n\n");
+    res.end();
+  }
 }
 
 function listProfilesAsModels(exposed?: string[]): { id: string; object: "model"; created: number; owned_by: "bajaclaw" }[] {
@@ -252,8 +277,4 @@ function err(msg: string): { error: { message: string; type: string } } {
 
 function writeEvent(res: ServerResponse, event: unknown): void {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }
