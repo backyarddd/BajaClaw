@@ -186,6 +186,62 @@ test("caps live update emissions past the limit", async () => {
   assert.equal(lines.length, 9); // 8 shown + "and 2 more"
 });
 
+test("dedupes the content_block_start + assistant double-emit (real-stream pattern)", async () => {
+  const { ProgressNarrator } = await import("../dist/progress-narrator.js");
+  const n = new ProgressNarrator({ verbosity: "medium", debounceMs: 5 });
+  // claude opens the block before the input has streamed in, so this
+  // first event has empty input and would otherwise render as bare
+  // "editing" with no filename.
+  n.handleEvent(toolUseContentBlockStart("Edit", {}));
+  // Then the assistant turn finalizes with the full input.
+  n.handleEvent(assistantMessage("Edit", { file_path: "/x/videos.js", old_string: "a", new_string: "b" }));
+  n.finalize();
+  const lines = n.summary().split("\n").filter(Boolean);
+  assert.equal(lines.length, 1, `expected one entry, got: ${JSON.stringify(lines)}`);
+  assert.match(lines[0], /editing videos\.js/);
+});
+
+test("dedupes WebSearch double-emit (empty content_block_start + full assistant)", async () => {
+  const { ProgressNarrator } = await import("../dist/progress-narrator.js");
+  const n = new ProgressNarrator({ verbosity: "medium", debounceMs: 5 });
+  n.handleEvent(toolUseContentBlockStart("WebSearch", {}));
+  n.handleEvent(assistantMessage("WebSearch", { query: "Wan 2.1 video model" }));
+  n.finalize();
+  const lines = n.summary().split("\n").filter(Boolean);
+  assert.equal(lines.length, 1, `expected one entry, got: ${JSON.stringify(lines)}`);
+  assert.match(lines[0], /searching the web: Wan 2.1 video model/);
+  // No bare "searching the web:" placeholder.
+  assert.doesNotMatch(lines[0], /^.+searching the web:\s*$/);
+});
+
+test("dedupes when content_block_start AND assistant both have full input", async () => {
+  const { ProgressNarrator } = await import("../dist/progress-narrator.js");
+  const n = new ProgressNarrator({ verbosity: "medium", debounceMs: 5 });
+  // Some claude versions populate the input on content_block_start
+  // already. The (name+input) hash still collapses the dupe.
+  const input = { file_path: "/x/Layout.jsx", old_string: "x", new_string: "y" };
+  n.handleEvent(toolUseContentBlockStart("Edit", input));
+  n.handleEvent(assistantMessage("Edit", input));
+  n.finalize();
+  const lines = n.summary().split("\n").filter(Boolean);
+  assert.equal(lines.length, 1, `expected one entry, got: ${JSON.stringify(lines)}`);
+});
+
+test("edits to different files produce separate entries", async () => {
+  const { ProgressNarrator } = await import("../dist/progress-narrator.js");
+  const n = new ProgressNarrator({ verbosity: "medium", debounceMs: 5 });
+  // The (name+input) hash key must not be so coarse that distinct
+  // tool uses get collapsed. Different file_path -> different hash
+  // -> different rendered text -> two entries.
+  n.handleEvent(assistantMessage("Edit", { file_path: "/x/videos.js", old_string: "a", new_string: "b" }));
+  n.handleEvent(assistantMessage("Edit", { file_path: "/x/Layout.jsx", old_string: "a", new_string: "b" }));
+  n.finalize();
+  const lines = n.summary().split("\n").filter(Boolean);
+  assert.equal(lines.length, 2, `expected two entries, got: ${JSON.stringify(lines)}`);
+  assert.match(lines[0], /editing videos\.js/);
+  assert.match(lines[1], /editing Layout\.jsx/);
+});
+
 test("config.verbosity default is medium", async () => {
   const { mergedDefaults } = await import("../dist/config.js");
   const cfg = mergedDefaults({ name: "x", profile: "x", template: "custom", model: "auto", effort: "high" });
