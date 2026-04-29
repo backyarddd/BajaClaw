@@ -14,6 +14,7 @@
 
 import { watch, readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, resolve, relative } from "node:path";
+import { wakeAgent } from "./daemon.js";
 import { createHash } from "node:crypto";
 import chalk from "chalk";
 import { openDb } from "../db.js";
@@ -172,6 +173,7 @@ function enqueue(
         "INSERT INTO tasks(created_at, priority, status, body, source) VALUES(?,?,?,?,?)",
       ).run(new Date().toISOString(), "normal", "pending", body, `watch:${filePath}:${c.line}`);
     } finally { db.close(); }
+    wakeAgent(profile);
   }
   state.hashes[hash] = {
     path: filePath,

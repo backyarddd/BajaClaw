@@ -210,7 +210,10 @@ export async function runStream(
   }
 
   const cmd = [...buildCommand(prompt, opts), "--output-format", "stream-json", "--include-partial-messages", "--verbose"];
-  const effectiveTimeout = opts.timeout ?? DEFAULT_TIMEOUT;
+  // Inactivity timeout: kill the subprocess only if no stdout is received for
+  // this duration. Unlike a hard wall-clock timeout, active cycles can run
+  // indefinitely as long as Claude keeps producing output (tool use, text, etc).
+  const inactivityMs = opts.timeout ?? DEFAULT_TIMEOUT;
 
   let accumulatedText = "";
   const events: ClaudeEvent[] = [];
@@ -221,6 +224,10 @@ export async function runStream(
   let resultText: string | undefined;
   let streamError: string | undefined;
 
+  let lastActivity = Date.now();
+  let inactivityKilled = false;
+  let watchdog: ReturnType<typeof setInterval> | null = null;
+
   try {
     // Do NOT pass both `stdin` and `stdio` - execa rejects the combo
     // ("It's not possible to provide stdio in combination with one of
@@ -229,11 +236,21 @@ export async function runStream(
     // explicit top-level stdin key.
     const subp = execa(bin, cmd, {
       cwd: opts.workdir,
-      timeout: effectiveTimeout,
+      // No hard timeout here. The inactivity watchdog below handles stuck
+      // processes; as long as Claude produces output the cycle keeps running.
       reject: false,
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...cleanSpawnEnv(), ...(opts.env ?? {}) },
     });
+
+    watchdog = setInterval(() => {
+      if (Date.now() - lastActivity > inactivityMs) {
+        clearInterval(watchdog!);
+        watchdog = null;
+        inactivityKilled = true;
+        subp.kill();
+      }
+    }, 15_000);
 
     const stdout = subp.stdout;
     if (!stdout) {
@@ -243,6 +260,7 @@ export async function runStream(
     let buf = "";
     stdout.setEncoding("utf8");
     stdout.on("data", (chunk: string) => {
+      lastActivity = Date.now();
       buf += chunk;
       let nl: number;
       while ((nl = buf.indexOf("\n")) >= 0) {
@@ -285,6 +303,10 @@ export async function runStream(
     });
 
     const r = await subp;
+    if (watchdog) { clearInterval(watchdog); watchdog = null; }
+    if (inactivityKilled && !streamError) {
+      streamError = `no output for ${Math.round(inactivityMs / 1000)}s (inactivity timeout)`;
+    }
     // Flush any final partial line that did not end in newline.
     const tail = buf.trim();
     if (tail) {
@@ -306,11 +328,9 @@ export async function runStream(
       costUsd, inputTokens, outputTokens, turns,
     };
   } catch (e) {
+    if (watchdog) { clearInterval(watchdog); watchdog = null; }
     const err = e as Error & { timedOut?: boolean; exitCode?: number; stderr?: string };
-    let msg = err.message;
-    if (err.timedOut) {
-      msg = `backend timed out after ${Math.round(effectiveTimeout / 1000)}s (cycleTimeoutMs=${effectiveTimeout}).`;
-    }
+    const msg = err.message;
     return {
       ok: false,
       text: "",

@@ -129,6 +129,8 @@ export async function cmdPlanApprove(profile: string, id: number, opts: { edited
     db.prepare("UPDATE plans SET status='approved', approved_at=?, approved_task_id=?, plan_text=? WHERE id=?").run(
       new Date().toISOString(), Number(info.lastInsertRowid), finalPlan, id,
     );
+    const { wakeAgent } = await import("./daemon.js");
+    wakeAgent(profile);
     console.log(chalk.green(`✓ plan #${id} approved; enqueued as task #${info.lastInsertRowid}`));
   } finally { db.close(); }
 }
