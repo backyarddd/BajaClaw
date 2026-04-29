@@ -104,8 +104,9 @@ export interface AgentConfig {
   verbosity?: Verbosity;
   // Per-cycle cost ceiling in USD. `undefined` = no cap.
   maxBudgetUsd?: number;
-  // Cycle subprocess timeout in milliseconds. Default: 10 minutes (600000).
-  // Increase for tasks that run long shell commands or installs.
+  // Inactivity timeout in milliseconds for streaming cycles. The subprocess is
+  // killed only if no output is received for this duration - not after a fixed
+  // wall-clock time. Active cycles can run indefinitely. Default: 10 min (600000).
   cycleTimeoutMs?: number;
   // Extra claude beta flags to include verbatim.
   betas?: string[];

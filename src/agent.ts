@@ -103,10 +103,16 @@ export async function runCycle(input: CycleInput): Promise<CycleOutput> {
   // subprocess hangs past its own timeout (grandchildren keeping pipes
   // open, MCP server deadlock), the queue head must still settle so
   // the next request isn't pinned forever waiting on a dead cycle.
-  let deadlineMs = 660_000; // 10 min default + 1 min buffer
+  // Backstop for the queue head. The inactivity watchdog in runStream is the
+  // primary hang detector; this deadline only frees the queue if the subprocess
+  // refuses to die (grandchildren keeping pipes open, MCP deadlock, etc).
+  // Set to 10x the inactivity timeout so normal long-running active cycles
+  // are never prematurely unblocked.
+  let deadlineMs = 4 * 60 * 60 * 1000; // 4h default
   try {
     const cfg = loadConfig(input.profile);
-    deadlineMs = (cfg.cycleTimeoutMs ?? 600_000) + 60_000;
+    const inactivityMs = cfg.cycleTimeoutMs ?? 600_000;
+    deadlineMs = inactivityMs * 10;
   } catch { /* missing profile errors surface from runCycleInner */ }
 
   // Stage logging across the queue boundary so a hang shows up as a

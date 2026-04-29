@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { loadConfig, saveConfig } from "../config.js";
 import { loadPersona } from "../persona-io.js";
-import { isDaemonRunning } from "./daemon.js";
+import { isDaemonRunning, wakeAgent } from "./daemon.js";
 import { bajaclawHome, profileLogDir } from "../paths.js";
 import { openDb } from "../db.js";
 import { listRecent } from "../memory/recall.js";
@@ -475,6 +475,7 @@ async function dispatchApi(
       ).run(new Date().toISOString(), body.priority ?? "normal", task);
       json(res, { ok: true, taskId: result.lastInsertRowid });
     } finally { tdb.close(); }
+    wakeAgent(targetProfile);
     return;
   }
 

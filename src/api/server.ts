@@ -30,6 +30,7 @@ import {
   type OpenAIChatRequest,
 } from "./translate.js";
 import { KNOWN_MODELS } from "../model-picker.js";
+import { wakeAgent } from "../commands/daemon.js";
 
 export interface ApiConfig {
   host?: string;
@@ -113,6 +114,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ServeOpti
         "INSERT INTO tasks(created_at, priority, status, body, source) VALUES(?,?,?,?,?)"
       ).run(new Date().toISOString(), body.priority ?? "normal", "pending", body.task ?? "", "api");
     } finally { db.close(); }
+    wakeAgent(profile);
     return sendJson(res, 202, { status: "enqueued" });
   }
 

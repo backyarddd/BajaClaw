@@ -150,6 +150,11 @@ async function runLoop(profile: string): Promise<void> {
   log.info("daemon.start", { pid: process.pid });
   process.on("SIGTERM", () => { log.info("daemon.sigterm"); process.exit(0); });
   process.on("SIGINT", () => { log.info("daemon.sigint"); process.exit(0); });
+  // SIGUSR1: wake the poll loop early (fired by wakeAgent from task-insertion callers).
+  let wakeResolve: (() => void) | null = null;
+  if (process.platform !== "win32") {
+    process.on("SIGUSR1", () => { log.info("daemon.wake"); wakeResolve?.(); });
+  }
 
   // Start channel gateways (telegram/discord) if any are configured.
   // Adapters run in the background; inbound messages enqueue tasks,
@@ -203,7 +208,8 @@ async function runLoop(profile: string): Promise<void> {
       await sleep(backoff);
       backoff = Math.min(backoff * 2, maxBackoff);
     }
-    await sleep(pollMs);
+    await new Promise<void>((resolve) => { wakeResolve = resolve; setTimeout(resolve, pollMs); });
+    wakeResolve = null;
   }
 }
 
@@ -213,6 +219,16 @@ async function hasAnyChannel(profile: string): Promise<boolean> {
     const cfg = loadConfig(profile);
     return (cfg.channels ?? []).length > 0;
   } catch { return false; }
+}
+
+// Send SIGUSR1 to the daemon for `profile` to skip its current sleep and poll immediately.
+// No-op if the daemon is not running or the platform doesn't support SIGUSR1 (Windows).
+export function wakeAgent(profile: string): void {
+  if (process.platform === "win32") return;
+  const pid = readReferencedPid(profile);
+  if (pid > 0 && isRunning(pid)) {
+    try { process.kill(pid, "SIGUSR1"); } catch { /* daemon gone */ }
+  }
 }
 
 function sleep(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)); }

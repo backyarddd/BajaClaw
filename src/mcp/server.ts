@@ -8,6 +8,7 @@ import { bajaclawHome } from "../paths.js";
 import { openDb } from "../db.js";
 import { recall, listRecent } from "../memory/recall.js";
 import { loadAllSkills } from "../skills/loader.js";
+import { wakeAgent } from "../commands/daemon.js";
 
 export interface ServeOptions {
   profile?: string;
@@ -221,6 +222,7 @@ function callTool(params: { name?: string; arguments?: Record<string, unknown> }
         db.prepare(
           "INSERT INTO tasks(created_at, priority, status, body, source) VALUES(?,?,?,?,?)"
         ).run(new Date().toISOString(), priority, "pending", body, "mcp");
+        wakeAgent(profile);
         return toolOk("enqueued");
       } finally { db.close(); }
     }
