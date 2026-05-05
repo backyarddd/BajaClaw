@@ -28,6 +28,7 @@ import { currentVersion } from "./updater.js";
 import { printBanner } from "./banner.js";
 import * as mcp from "./commands/mcp.js";
 import * as skill from "./commands/skill.js";
+import { registerCuratorCommands } from "./commands/curator.js";
 import * as profile from "./commands/profile.js";
 import * as daemon from "./commands/daemon.js";
 import * as channel from "./commands/channel.js";
@@ -160,6 +161,21 @@ skillCmd.command("promote")
   .argument("<name>")
   .option("--force", "overwrite existing skill with the same name")
   .action(async (name, opts) => skill.cmdPromote(name, { force: !!opts.force }));
+skillCmd.command("pin")
+  .description("Pin a skill so the curator and skill_manage cannot mutate it")
+  .argument("<name>")
+  .option("-p, --profile <p>", "profile", "default")
+  .action(async (name, opts) => skill.cmdPin(opts.profile, name));
+skillCmd.command("unpin")
+  .description("Unpin a skill")
+  .argument("<name>")
+  .option("-p, --profile <p>", "profile", "default")
+  .action(async (name, opts) => skill.cmdUnpin(opts.profile, name));
+skillCmd.command("stats")
+  .description("Show usage telemetry for a skill (sidecar entry)")
+  .argument("<name>")
+  .option("-p, --profile <p>", "profile", "default")
+  .action(async (name, opts) => skill.cmdStats(opts.profile, name));
 skillCmd.command("port")
   .description("Port skills from the desktop CLI scope into BajaClaw's scope")
   .option("--source <dir>", "source dir (default: ~/.claude/skills)")
@@ -686,6 +702,8 @@ program.hook("postAction", async () => {
   if (cmd === "update" || cmd === "banner" || cmd === "uninstall" || cmd === "setup") return;
   await maybeNoticeAtExit();
 });
+
+registerCuratorCommands(program);
 
 // Run the first-run welcome before command dispatch. Non-blocking -
 // a failure here should never prevent the user's command from running.
