@@ -1147,9 +1147,8 @@ that readline actually handles correctly.**
    between turns, a plain ` › ` one-line prompt handed to
    `rl.question`. readline draws it natively, echoes the typed line,
    and leaves it on screen as the history row for that turn. No CSI
-   cursor math, no multi-line prompt, no erase dance. Hermes-agent
-   builds a box composer on top of Ink (React TUI); we don't need a
-   TUI framework for this, we just need to stop asking readline to
+   cursor math, no multi-line prompt, no erase dance. We don't need
+   a TUI framework for this, we just need to stop asking readline to
    do something it wasn't built for.
 
 ## 0.14.22
@@ -1494,7 +1493,7 @@ unframed, then the next turn's sandwich draws fresh.
 
 ## 0.14.8
 
-**Chat CLI: scrolling-clean layout inspired by Hermes + Claude Code.**
+**Chat CLI: scrolling-clean layout inspired by Claude Code.**
 The rule-sandwich from 0.14.7 left history looking cluttered (every
 past turn framed in horizontal rules). Ripped out. The new layout
 scrolls cleanly with bullet prefixes: `> user` and `● agent`.
@@ -1505,7 +1504,7 @@ scrolls cleanly with bullet prefixes: `> user` and `● agent`.
    two-column info block - left column has agent name, model,
    profile, effort, context, version, cwd; right column is the live
    **Available Skills** inventory with counts per origin (bajaclaw /
-   openclaw / hermes). Usage line (5h + week) rendered muted below.
+   openclaw). Usage line (5h + week) rendered muted below.
 2. **Per-turn**: `> user input` on submit, `● agent response` after
    the cycle, indented stats line directly under the response, blank,
    next prompt. No framing rules in scrollback.
@@ -1671,9 +1670,9 @@ soda.
 
 **New dashboard.** Orbit design system, sidebar navigation, in-browser
 chat with the agent, live config editor. The old dashboard was a
-four-pane readonly dump - this one is a workbench. Directly inspired
-by what Hermes Agent's web dashboard does well (config form, sessions
-view), stitched onto BajaClaw's existing cycle/memory/task data model.
+four-pane readonly dump - this one is a workbench. Modeled on what
+solid agent dashboards do well (config form, sessions view), stitched
+onto BajaClaw's existing cycle/memory/task data model.
 
 ### Views
 
@@ -1687,7 +1686,7 @@ view), stitched onto BajaClaw's existing cycle/memory/task data model.
 3. **Cycles / Memory / Tasks / Schedules** - same data as before,
    restyled. Memory gets a live client-side filter.
 4. **Skills** - every active + inactive skill, color-coded by origin
-   (bajaclaw / openclaw / hermes). Inactive skills show the reason
+   (bajaclaw / openclaw). Inactive skills show the reason
    (missing bin, wrong platform).
 5. **Channels** - telegram / discord entries with masked tokens and
    allowlist; Remove button wired to `DELETE /api/channels/:kind`.
@@ -1787,12 +1786,11 @@ telegram message.
 
 ## 0.13.0
 
-**Load skills from OpenClaw (ClawHub) and Hermes Agent.** BajaClaw used
-to parse one format: its own flavour of `SKILL.md`. Now the loader
-reads all three - the two external formats share the same file shape,
-with extra metadata blocks that declare platform, env, and tool
-requirements. A skill from ClawHub or the Hermes skills hub drops into
-`~/.bajaclaw/skills/` and Just Works.
+**Load skills from OpenClaw (ClawHub).** BajaClaw used to parse one
+format: its own flavour of `SKILL.md`. Now the loader reads multiple
+formats - external formats share the same file shape, with extra
+metadata blocks that declare platform, env, and tool requirements. A
+skill from ClawHub drops into `~/.bajaclaw/skills/` and Just Works.
 
 ### What changed
 
@@ -1801,20 +1799,20 @@ requirements. A skill from ClawHub or the Hermes skills hub drops into
    quotes, multiline strings - everything the two foreign formats
    need. Existing bajaclaw skills continue to parse identically.
 2. **`origin` field on every skill**. Derived from the frontmatter:
-   `metadata.hermes` → "hermes", `metadata.openclaw` (or legacy
-   `clawdbot`/`clawdis`) → "openclaw", otherwise "bajaclaw".
+   `metadata.openclaw` (or legacy `clawdbot`/`clawdis`) → "openclaw",
+   otherwise "bajaclaw".
 3. **Platform + bin gating**. Skills declaring `platforms: [macos]`
-   (hermes) or `metadata.openclaw.os: [linux]` are skipped on boxes
-   that don't match. Skills declaring `requires.bins: [sonos]` are
-   skipped if `which sonos` fails. `skill list` still shows them but
-   marked inactive with reason.
-4. **Hermes conditional activation**. `requires_tools` and
-   `fallback_for_tools` in the hermes metadata are honored at match
-   time against the profile's `allowedTools`. A skill flagged as a
-   fallback for `web_search` disappears from the prompt when
-   `web_search` is in the toolset.
-5. **Tags contribute to matcher scoring**. Hermes skills usually ship
-   without explicit `triggers` but always have `tags`; those now
+   or `metadata.openclaw.os: [linux]` are skipped on boxes that don't
+   match. Skills declaring `requires.bins: [sonos]` are skipped if
+   `which sonos` fails. `skill list` still shows them but marked
+   inactive with reason.
+4. **Conditional activation**. `requires_tools` and
+   `fallback_for_tools` are honored at match time against the
+   profile's `allowedTools`. A skill flagged as a fallback for
+   `web_search` disappears from the prompt when `web_search` is in
+   the toolset.
+5. **Tags contribute to matcher scoring**. Imported skills sometimes
+   ship without explicit `triggers` but always have `tags`; those now
    score alongside triggers so the matcher picks them up.
 6. **`bajaclaw skill install` grew teeth**. New source schemes:
    - `clawhub:<slug>[@version]` - resolve + download + extract from
@@ -1833,8 +1831,8 @@ bajaclaw skill install clawhub:sonoscli  # drop a skill into ~/.bajaclaw/skills/
 bajaclaw skill list default              # see active vs inactive
 ```
 
-Hermes-format skills don't have a dedicated registry URL scheme yet -
-clone or download them by hand (they're regular folders with a
+External-format skills without a dedicated registry URL scheme can
+be cloned or downloaded by hand (they're regular folders with a
 `SKILL.md`) and `bajaclaw skill install <path>` picks them up.
 
 ### Landmines (for next session)

@@ -9,7 +9,7 @@ type Runner = (prompt: string, opts?: ClaudeOptions) => Promise<ClaudeResult>;
 
 export interface MatchContext {
   // Active tool list (from AgentConfig.allowedTools). Used to honor
-  // hermes conditional activation: `requires_tools` and `fallback_for_tools`.
+  // conditional activation: `requires_tools` and `fallback_for_tools`.
   allowedTools?: string[];
   // Selection strategy. "llm" (default) routes the task through a haiku
   // call that returns the names of skills the user is actually requesting.

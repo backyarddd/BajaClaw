@@ -5,7 +5,7 @@
 // manual promotion step.
 //
 // Inspired by the "create a skill after complex tasks" pattern popularized
-// by agents like Hermes. Our implementation is our own.
+// that emerged in agent ecosystems. Our implementation is our own.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { userSkillsDir } from "../paths.js";
