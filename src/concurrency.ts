@@ -40,11 +40,15 @@ export function serialize<T>(
 
 function deadline(ms: number): Promise<undefined> {
   return new Promise<undefined>((resolve) => {
-    const t = setTimeout(() => resolve(undefined), ms);
-    // Don't keep the event loop alive for the deadline timer alone.
-    // Long-lived daemons rely on other refs; one-shot CLI calls
-    // shouldn't hang on this.
-    if (typeof t.unref === "function") t.unref();
+    setTimeout(() => resolve(undefined), ms);
+    // We deliberately DON'T unref the timer. unref'ing it lets the
+    // process exit while the timer is pending, which Node 22's test
+    // runner detects as "Promise resolution is still pending but the
+    // event loop has already resolved" and cancels in-flight tests.
+    // The cost of keeping the loop alive is at most `ms` (typically
+    // tens to hundreds of ms) for one-shot CLI calls; long-lived
+    // daemons aren't affected. The correctness benefit (deterministic
+    // promise settlement) is worth that small wait.
   });
 }
 
