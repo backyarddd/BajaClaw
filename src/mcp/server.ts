@@ -8,6 +8,8 @@ import { bajaclawHome } from "../paths.js";
 import { openDb } from "../db.js";
 import { recall, listRecent } from "../memory/recall.js";
 import { loadAllSkills } from "../skills/loader.js";
+import { skillView } from "../skills/skill-view.js";
+import { skillList } from "../skills/skill-list.js";
 import { wakeAgent } from "../commands/daemon.js";
 
 export interface ServeOptions {
@@ -193,8 +195,28 @@ function listTools() {
     },
     {
       name: "bajaclaw_skill_list",
-      description: "List skills visible to BajaClaw (all scopes)",
-      inputSchema: { type: "object", properties: { profile: { type: "string" } } },
+      description: "List skills visible to BajaClaw with usage stats, state, and pinned flag.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          profile: { type: "string" },
+          category: { type: "string" },
+          state: { type: "string", enum: ["active", "stale", "archived"] },
+          includeArchived: { type: "boolean" },
+        },
+      },
+    },
+    {
+      name: "bajaclaw_skill_view",
+      description: "Read a skill's full SKILL.md body. Increments view_count in the sidecar.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          profile: { type: "string" },
+        },
+        required: ["name"],
+      },
     },
   ];
 }
@@ -236,8 +258,23 @@ function callTool(params: { name?: string; arguments?: Record<string, unknown> }
     }
     if (name === "bajaclaw_skill_list") {
       const profile = String(args.profile ?? firstProfile() ?? "");
-      const skills = loadAllSkills(profile).map((s) => ({ name: s.name, scope: s.scope, description: s.description }));
-      return toolOk(JSON.stringify(skills, null, 2));
+      if (!profile) return toolErr("no profile available");
+      const items = skillList(
+        {
+          category: typeof args.category === "string" ? args.category : undefined,
+          state: typeof args.state === "string" ? (args.state as "active" | "stale" | "archived") : undefined,
+          includeArchived: typeof args.includeArchived === "boolean" ? args.includeArchived : false,
+        },
+        profile,
+      );
+      return toolOk(JSON.stringify(items, null, 2));
+    }
+    if (name === "bajaclaw_skill_view") {
+      const profile = String(args.profile ?? firstProfile() ?? "");
+      if (!profile) return toolErr("no profile available");
+      const r = skillView({ name: String(args.name ?? "") }, profile);
+      if (!r.ok) return toolErr(`${r.status ?? 500}: ${r.reason}`);
+      return toolOk(JSON.stringify({ name: r.name, description: r.description, body: r.body, frontmatter: r.frontmatter, state: r.state }, null, 2));
     }
   } catch (e) {
     return toolErr((e as Error).message);
