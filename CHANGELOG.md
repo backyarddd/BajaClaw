@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.21.3
+
+**Stop unref'ing the concurrency deadline timer.**
+
+The previous v0.21.2 fix to the concurrency tests didn't address the
+root cause. The actual issue was in `src/concurrency.ts`: the
+`deadline()` timer was `unref()`'d, which let Node 22's test runner
+exit the event loop while the timer was still pending and trigger
+"Promise resolution is still pending but the event loop has already
+resolved" — cancelling all three deadline-using concurrency tests.
+
+Removed the unref. The cost is at most `deadlineMs` (typically tens
+to hundreds of ms) of extra one-shot CLI tail; the benefit is
+deterministic test behavior on every supported Node version.
+
 ## 0.21.2
 
 **Fix Node 22 CI flake in concurrency tests.**
