@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.2
+
+**Fix Node 22 CI flake in concurrency tests.**
+
+Three concurrency tests on Node 22 were getting `cancelledByParent`
+because the "hung work" test left a forever-pending promise in
+observable scope. Node 22's test runner detects unresolvable promises
+at end-of-event-loop and bails, which cascades into cancelling the
+sibling tests.
+
+Replaced the forever-pending promise with an externally-resolvable
+one that gets drained at the end of the test. Same coverage (the
+deadline still fires before work() settles), no leaked promise.
+
 ## 0.21.1
 
 **Cross-platform fix for path-safety on Windows.**

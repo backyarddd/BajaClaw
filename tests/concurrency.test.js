@@ -48,12 +48,14 @@ test("serialize: a rejected work item does not block subsequent work", async () 
 test("serialize: a HUNG work item does not permanently jam the queue (deadline)", async () => {
   const { serialize, _resetQueues } = await import("../src/concurrency.ts");
   _resetQueues();
-  // The hung work never resolves. Without a deadline, every subsequent
-  // serialize() call would wait forever on the queue head.
-  const hung = serialize("p3", () => new Promise(() => { /* never */ }), 50);
-  // We don't await `hung` - the caller's promise is genuinely stuck.
-  // What matters is that the NEXT submission can proceed past the
-  // deadline.
+  // Simulate hung work with an externally-resolvable promise so the
+  // test can drain it before exit. node:test on Node 22 cancels tests
+  // that leave a forever-pending promise in observable scope.
+  let releaseHung;
+  const hungWork = () => new Promise((resolve) => { releaseHung = resolve; });
+  const hung = serialize("p3", hungWork, 50);
+  hung.catch(() => {}); // suppress dangling-rejection warning on resolution.
+
   const start = Date.now();
   const next = serialize("p3", async () => "second", 50);
   const got = await next;
@@ -62,9 +64,10 @@ test("serialize: a HUNG work item does not permanently jam the queue (deadline)"
   // Deadline was 50ms; allow generous slack for slow CI but it must
   // be way under any "infinite wait" threshold.
   assert.ok(elapsed < 1000, `expected to unblock fast, took ${elapsed}ms`);
-  // The hung promise stays pending - we don't observe it to avoid
-  // leaving an unhandled rejection. Suppress the dangling promise.
-  hung.catch(() => {});
+
+  // Drain the hung promise before the test ends.
+  releaseHung(undefined);
+  await hung;
 });
 
 test("serialize: deadline fires only on actual hangs, not on normal runs", async () => {
