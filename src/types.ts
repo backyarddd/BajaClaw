@@ -113,17 +113,12 @@ export interface AgentConfig {
   // When true, the desktop CLI's MCP config is merged into the cycle
   // subprocess. Off by default - BajaClaw keeps its own MCP config separate.
   mergeDesktopMcp?: boolean;
-  // Per-cycle auto-skill synthesis settings (inspired by the "skill after
-  // complex tasks" pattern). Override defaults here per profile.
-  autoSkill?: {
-    enabled?: boolean;
-    minToolUses?: number;
-    maxPerDay?: number;
-  };
-  // Skill selection strategy. "llm" (default) classifies the task with
-  // a fast haiku call so skills only activate on actual requests, not
-  // keyword mentions. "keyword" uses the legacy substring matcher (also
-  // the automatic fallback if the LLM call fails).
+  // Curator: idle-triggered library consolidation. Replaces the old
+  // post-cycle auto-skiller. See docs/specs/2026-05-05-self-learning-skills-design.md.
+  curator?: CuratorConfig;
+  // Skill selection: kept for slash-trigger hint generation. The LLM
+  // matcher route is removed in v0.21+; the agent reads skills via the
+  // system-prompt index and skill_view MCP tool.
   skillMatcher?: "llm" | "keyword";
   // Sub-agent relationships. Set on the parent to list owned sub-agents
   // (used by `bajaclaw subagent list`). Set on the child to point at its
@@ -277,4 +272,66 @@ export interface CycleRow {
   output_tokens?: number;
   turns?: number;
   error?: string;
+}
+
+// ── Self-learning skills ──────────────────────────────────────────────
+
+export type SkillProvenance = "agent" | "user" | "bundled";
+export type SkillState = "active" | "stale" | "archived";
+
+export interface SkillUsageEntry {
+  use_count: number;
+  view_count: number;
+  patch_count: number;
+  last_used_at: string | null;
+  last_viewed_at: string | null;
+  last_patched_at: string | null;
+  created_at: string;
+  state: SkillState;
+  pinned: boolean;
+  provenance: SkillProvenance;
+}
+
+export interface SkillDeletedEntry {
+  absorbed_into: string;
+  deleted_at: string;
+  reason?: string;
+}
+
+export interface SkillSidecar {
+  schema_version: 1;
+  skills: Record<string, SkillUsageEntry>;
+  deleted: Record<string, SkillDeletedEntry>;
+}
+
+export interface CuratorConfig {
+  enabled?: boolean;
+  intervalHours?: number;
+  dryRun?: boolean;
+  minIdleHours?: number;
+  maxActionsPerRun?: number;
+}
+
+export interface CuratorState {
+  last_curator_at: string | null;
+  first_run_marker_at: string | null;
+  dry_run_count: number;
+}
+
+export type CuratorActionKind =
+  | "merge"
+  | "create_umbrella"
+  | "demote_to_references"
+  | "prune";
+
+export interface CuratorProposedAction {
+  kind: CuratorActionKind;
+  rationale: string;
+  skills?: string[];
+  into?: string;
+  children?: string[];
+  umbrella_name?: string;
+  children_become?: "references";
+  target_skill?: string;
+  skill?: string;
 }

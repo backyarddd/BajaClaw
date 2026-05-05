@@ -454,7 +454,6 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
           task,
           response: result.text,
           events: result.events,
-          cfg: cfg.autoSkill,
         }, log);
         if (as.wrote) {
           log.info("auto-skill.wrote", { path: as.wrote, cycleId });

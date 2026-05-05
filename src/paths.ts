@@ -30,6 +30,26 @@ export function userSkillsDir(): string {
   return join(bajaclawHome(), "skills");
 }
 
+export function profileSkillUsagePath(profile: string): string {
+  return join(profileSkillsDir(profile), ".usage.json");
+}
+
+export function profileSkillIndexCachePath(profile: string): string {
+  return join(profileSkillsDir(profile), ".skills_prompt_snapshot.json");
+}
+
+export function profileSkillsArchiveDir(profile: string): string {
+  return join(profileSkillsDir(profile), ".archive");
+}
+
+export function profileCuratorStatePath(profile: string): string {
+  return join(profileSkillsDir(profile), ".curator_state.json");
+}
+
+export function profileCuratorLogsDir(profile: string): string {
+  return join(profileDir(profile), "logs", "curator");
+}
+
 export function claudeAgentsDir(profile: string): string {
   return join(claudeHome(), "agents", profile);
 }
