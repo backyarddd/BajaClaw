@@ -15,7 +15,7 @@
     "build": "tsc -p tsconfig.json && node scripts/copy-static.js",
     "dev": "tsx src/cli.ts",
     "dashboard:dev": "tsx watch src/cli.ts dashboard",
-    "test": "node scripts/run-tests.js",
+    "test": "npm run build && node scripts/run-tests.js",
     "lint": "tsc --noEmit",
     "prepare": "npm run build",
     "postinstall": "node scripts/postinstall.js"
