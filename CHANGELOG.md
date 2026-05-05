@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.1
+
+**Cross-platform fix for path-safety on Windows.**
+
+`validateSkillSubpath` was hard-coded to POSIX separators, so the
+`skill_manage` write_file/remove_file containment check rejected valid
+paths on Windows. Switched to `path.relative` + the platform `sep`,
+which works across POSIX and Windows. The bundled tests now pass on
+windows-latest CI runners.
+
 ## 0.21.0
 
 **Self-learning skills.**
