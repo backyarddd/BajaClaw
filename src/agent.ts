@@ -27,6 +27,7 @@ import { extract } from "./memory/extract.js";
 import { syncFromClaude } from "./memory/claude-compat.js";
 import { shouldCompact, compact as compactMemory } from "./memory/compact.js";
 import { getOrBuildIndex } from "./skills/index-cache.js";
+import { maybeRunCurator } from "./skills/curator.js";
 import {
   openProgressMessage,
   editProgressMessage,
@@ -442,6 +443,12 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
     }
 
     log.info("cycle.ok", { cycleId, costUsd: result.costUsd, turns: result.turns });
+
+    // Idle-triggered curator pass. Cheap when not eligible (default 7d
+    // interval); fire-and-forget so the cycle's reply isn't gated on it.
+    maybeRunCurator(input.profile, cfg.curator, log).catch((e) => {
+      log.warn("curator.fail", { error: (e as Error).message });
+    });
 
     // iMessage cannot edit sent messages, so we prepend a short
     // narration summary to the final reply instead. On other sources

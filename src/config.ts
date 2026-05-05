@@ -31,6 +31,15 @@ const DEFAULT: Partial<AgentConfig> = {
     keepRecentPerKind: 25,
     pruneCycleDays: 30,
   },
+  // Curator: idle-triggered library consolidation. Default 7-day
+  // interval, dry-run mode for safety. Replaces the old auto-skiller.
+  curator: {
+    enabled: true,
+    intervalHours: 168,
+    dryRun: true,
+    minIdleHours: 2,
+    maxActionsPerRun: 5,
+  },
 };
 
 export function configPath(profile: string): string {
@@ -42,13 +51,18 @@ export function loadConfig(profile: string): AgentConfig {
   if (!existsSync(path)) {
     throw new Error(`Profile not found: ${profile} (expected ${path}). Run \`bajaclaw init\`.`);
   }
-  let raw: unknown;
+  let raw: Record<string, unknown>;
   try {
-    raw = JSON.parse(readFileSync(path, "utf8"));
+    raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
   } catch (e) {
     throw new Error(`config.json parse error in ${path}: ${(e as Error).message}`);
   }
-  return { ...DEFAULT, ...(raw as object), profile } as AgentConfig;
+  // Deprecation: drop the old autoSkill block silently with a one-time warn.
+  if (raw.autoSkill !== undefined) {
+    process.stderr.write("[bajaclaw] config field 'autoSkill' is deprecated and ignored. The new curator (curator: { enabled, dryRun, intervalHours }) replaces it. Remove autoSkill from config.json to silence this warning.\n");
+    delete raw.autoSkill;
+  }
+  return { ...DEFAULT, ...raw, profile } as AgentConfig;
 }
 
 export function saveConfig(cfg: AgentConfig): void {

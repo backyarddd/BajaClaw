@@ -323,6 +323,30 @@ export async function cmdPromote(name: string, opts: { force?: boolean } = {}): 
   console.log(chalk.green(`✓ promoted ${name} -> ${to}`));
 }
 
+export async function cmdPin(profile: string, name: string): Promise<void> {
+  const { recordPin } = await import("../skills/usage.js");
+  recordPin(profile, name, true);
+  console.log(chalk.green(`✓ pinned ${name} in profile ${profile}`));
+}
+
+export async function cmdUnpin(profile: string, name: string): Promise<void> {
+  const { recordPin } = await import("../skills/usage.js");
+  recordPin(profile, name, false);
+  console.log(chalk.green(`✓ unpinned ${name} in profile ${profile}`));
+}
+
+export async function cmdStats(profile: string, name: string): Promise<void> {
+  const { readSidecar } = await import("../skills/usage.js");
+  const s = readSidecar(profile);
+  const e = s.skills[name];
+  if (!e) {
+    console.error(chalk.red(`no telemetry record for ${name} in profile ${profile}`));
+    process.exitCode = 1;
+    return;
+  }
+  console.log(JSON.stringify(e, null, 2));
+}
+
 export async function cmdSearch(query: string, opts: InstallOptions = {}): Promise<void> {
   const registry = (opts.registry ?? process.env.CLAWHUB_REGISTRY ?? CLAWHUB_DEFAULT).replace(/\/+$/, "");
   const r = await fetch(`${registry}/api/v1/search?q=${encodeURIComponent(query)}`);
