@@ -40,7 +40,7 @@ Fields:
 | `triggers` | phrases that score highly in the matcher |
 | `effort` | `low` / `medium` / `high` |
 | `auto_generated` | present when BajaClaw wrote this skill itself |
-| `source_cycle_id` | which cycle produced an auto-generated skill |
+| `created_at` | ISO timestamp when the agent first wrote this skill |
 
 ## Scopes
 
@@ -66,15 +66,88 @@ bajaclaw skill port --source /some/dir       # custom source
 made via the desktop CLI show up in BajaClaw too. `--copy` (default) takes
 a snapshot that BajaClaw owns independently.
 
-## Matching
+## Discovery (system-prompt index)
 
-`src/skills/matcher.ts` scores each skill against the current task:
+Each cycle's system prompt embeds a flat skills index under
+`<available_skills>`. Each line is `name: <truncated description>`,
+grouped by category (General / Setup / Auto-generated). The agent reads
+the full body of any skill on demand via the `skill_view` MCP tool.
 
-- Trigger hit: +5
-- Name token hit: +2
-- Description token hit: +1
+Two-layer cache (in-process LRU + on-disk snapshot at
+`.skills_prompt_snapshot.json`) keeps this nearly free. Cache key is the
+manifest hash of all visible `SKILL.md` files (path, mtime, size).
 
-Top 3 (score > 0) are injected into the prompt as `# Active Skills`.
+When the user invokes a skill explicitly via `/<trigger>`, the prompt
+includes a hint pointing the agent at it; otherwise the agent decides
+which skills to view based on the description index alone.
+
+## Self-learning (skill_manage)
+
+The agent has a `skill_manage` MCP tool to save reusable procedures
+mid-cycle. Actions: `create | edit | patch | delete | write_file |
+remove_file`. Saved skills live in
+`~/.bajaclaw/profiles/<profile>/skills/<name>/`.
+
+Guards:
+
+- **Pinned** skills reject all mutations. Use `bajaclaw skill pin
+  <name>` to fence a skill against future agent edits.
+- **Bundled** (`<repo>/skills/`) and **user-authored**
+  (`~/.bajaclaw/skills/`) skills are read-only to the agent.
+- `delete` requires `absorbed_into` - either the umbrella that absorbed
+  the content, or empty string with a `reason` for true prune. Deletes
+  archive to `.archive/<name>/` (recoverable), they're not hard-removed.
+
+`patch` uses fuzzy matching: exact substring -> whitespace-normalized
+-> character-level similarity (>=0.85). Multiple matches at any phase
+reject as ambiguous.
+
+## Curator
+
+Idle-triggered library consolidation. Default 7-day interval, requires
+the cycle queue to have been quiet for >=2 hours, dry-run mode for the
+first runs.
+
+**Phase 1** (pure-function lifecycle transitions, no LLM call):
+
+- `active -> stale` after 30 days without usage
+- `stale -> archived` after 90 days; physical move to `.archive/`
+- `stale -> active` on any usage event
+
+Pinned, bundled, and user-authored skills are immune.
+
+**Phase 2** (forked Haiku review with separate prompt cache):
+
+The auxiliary model receives the active skill index plus per-skill
+usage stats and proposes one or more of:
+
+- `merge` - consolidate near-duplicates into a single named skill
+- `create_umbrella` - 3+ siblings sharing a procedure shape; originals
+  demote to `references/<child>.md`
+- `demote_to_references` - one-off skill becomes reference doc under a
+  parent
+- `prune` - never-used, no reusable shape
+
+Per-run cap of 5 mutations (configurable). Reports written to
+`~/.bajaclaw/profiles/<profile>/logs/curator/<ts>/REPORT.md`.
+
+## Telemetry sidecar
+
+`~/.bajaclaw/profiles/<profile>/skills/.usage.json` tracks per-skill:
+
+| field | meaning |
+|---|---|
+| `use_count` | times `skill_manage` mutated it |
+| `view_count` | times `skill_view` opened it |
+| `patch_count` | edit / patch / write_file / remove_file |
+| `last_used_at`, `last_viewed_at`, `last_patched_at` | ISO timestamps |
+| `created_at` | when first observed |
+| `state` | `active` \| `stale` \| `archived` |
+| `pinned` | bool, set via `bajaclaw skill pin/unpin` |
+| `provenance` | `agent` \| `user` \| `bundled` |
+
+Atomic writes (tempfile + rename). No locking; cycles serialize per
+profile and the curator never runs while a cycle is pending.
 
 ## Commands
 
@@ -84,94 +157,33 @@ Top 3 (score > 0) are injected into the prompt as `# Active Skills`.
 | `bajaclaw skill new <name>` | scaffold a blank `SKILL.md` |
 | `bajaclaw skill install <path\|url>` | install with explicit confirmation |
 | `bajaclaw skill port [--names …] [--link] [--scope …]` | copy/symlink from the desktop CLI scope |
-| `bajaclaw skill review` | list auto-generated candidates in `~/.bajaclaw/skills/auto/` |
-| `bajaclaw skill promote <name>` | move an auto-generated candidate into the user scope |
+| `bajaclaw skill pin <name>` | freeze a skill against agent mutations |
+| `bajaclaw skill unpin <name>` | unfreeze |
+| `bajaclaw skill stats <name>` | dump the sidecar entry |
+| `bajaclaw curator run [profile]` | trigger a curator pass now (defaults to dry-run) |
+| `bajaclaw curator status [profile]` | last/next run, recent reports |
 
-## Auto-generated skills
-
-BajaClaw watches every cycle. When a cycle uses enough tools (5+ by default)
-to look like a real procedure, a follow-up call analyzes the task, the tool
-sequence, and the response, and - if the procedure is reusable - writes a
-structured SKILL.md to `~/.bajaclaw/skills/auto/<name>/`.
-
-The idea is: **if the agent just figured out how to do something non-trivial,
-capture the procedure so the next time is faster.**
-
-### Synthesized skill shape
-
-Auto-generated skills follow the same SKILL.md format plus these sections,
-which guide the synthesizer:
-
-```markdown
-## When to use
-<conditions>
-
-## Quick reference
-<key facts, 3-5 lines>
-
-## Procedure
-1. ...
-2. ...
-
-## Pitfalls
-- ...
-
-## Verification
-- ...
-```
-
-The frontmatter is always marked `auto_generated: true` and carries the
-`source_cycle_id`. This lets you filter auto-generated skills and trace them
-back to the cycle that produced them.
-
-### Configuration
+## Configuration
 
 In the profile's `config.json`:
 
 ```json
 {
-  "autoSkill": {
+  "curator": {
     "enabled": true,
-    "minToolUses": 5,
-    "maxPerDay": 10
+    "intervalHours": 168,
+    "dryRun": true,
+    "minIdleHours": 2,
+    "maxActionsPerRun": 5
   }
 }
 ```
 
 - `enabled` - master switch (default `true`).
-- `minToolUses` - tool-use count required to trigger synthesis. Tasks that
-  used fewer tools are considered too trivial to capture.
-- `maxPerDay` - hard cap on auto-generated candidates per day. Protects
-  against runaway synthesis.
-
-### Review + promote
-
-Auto-skills live in `~/.bajaclaw/skills/auto/<name>/` until you review them.
-They are **not** injected into prompts from there - only after you promote.
-
-```
-bajaclaw skill review                  # print each candidate's SKILL.md
-bajaclaw skill promote <name>          # move <name> from auto/ to user scope
-bajaclaw skill promote <name> --force  # overwrite an existing user skill
-```
-
-Or, to discard a candidate:
-
-```
-rm -rf ~/.bajaclaw/skills/auto/<name>
-```
-
-### Trimming the auto dir
-
-Candidates you never promote accumulate in `~/.bajaclaw/skills/auto/`. They
-are harmless - unreviewed candidates don't affect prompts. Occasional
-cleanup:
-
-```
-rm -rf ~/.bajaclaw/skills/auto
-```
-
-Nothing will notice.
+- `intervalHours` - cooldown between curator runs. Default 168 (7 days).
+- `dryRun` - report what would happen without mutating. Default `true`.
+- `minIdleHours` - cycle queue must have been quiet at least this long.
+- `maxActionsPerRun` - hard cap on per-pass mutations. Default 5.
 
 ## Built-ins
 

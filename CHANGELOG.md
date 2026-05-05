@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.21.0
+
+**Self-learning skills.**
+
+The post-cycle auto-skiller never produced a single skill across 407
+cycles, and the per-cycle LLM matcher was burning 7 to 15 seconds of
+Haiku per cycle to almost always return `[]`. Both replaced.
+
+### What's new
+
+1. **`skill_manage` MCP tool**. The agent saves reusable procedures
+   mid-cycle via `skill_manage(action="create"|"edit"|"patch"|"delete"|"write_file"|"remove_file")`.
+   The decision happens in the main agent's context, not a context-blind
+   post-hoc reviewer. Atomic writes; pinned / bundled / user-authored
+   skills are read-only to the agent. Patch uses fuzzy matching (exact
+   -> whitespace-normalized -> similarity >=0.85).
+2. **`skill_view` MCP tool**. Read a skill's full body on demand.
+   Increments `view_count` in the sidecar telemetry.
+3. **System-prompt index injection**. Each cycle's prompt embeds a flat
+   `<available_skills>` block (name + 120-char description) grouped by
+   category. Two-layer cache (in-process LRU + on-disk snapshot keyed by
+   manifest hash). Sub-50ms typical; replaces the 7-15s LLM matcher.
+4. **Curator**. Idle-triggered library consolidation. Default 7-day
+   interval, `>=2h` quiet cycle queue. Phase 1: pure-function lifecycle
+   transitions (`active -> stale @30d -> archived @90d`). Phase 2:
+   forked Haiku review pass that proposes `merge`, `create_umbrella`,
+   `demote_to_references`, or `prune`. Dry-run by default; per-run cap
+   of 5 mutations. Report written to
+   `~/.bajaclaw/profiles/<profile>/logs/curator/<ts>/`.
+5. **Sidecar telemetry**. `.usage.json` tracks `use_count`,
+   `view_count`, `patch_count`, `last_*_at`, `state`, `pinned`,
+   `provenance` per skill. Atomic writes via tempfile + rename.
+6. **Per-profile storage**. Agent-created skills land in
+   `~/.bajaclaw/profiles/<profile>/skills/`. Manually-authored shared
+   skills in `~/.bajaclaw/skills/` stay read-only to the agent.
+
+### CLI
+
+- `bajaclaw skill pin <name>` / `unpin` / `stats` — sidecar surface.
+- `bajaclaw curator run|status|approve|dry-run-only` — manual control.
+
+### Removed
+
+- `src/skills/auto-skiller.ts` (silent zero-output post-cycle synthesizer).
+- LLM router path in `src/skills/matcher.ts` (per-cycle Haiku tax).
+- `autoSkill` config block (deprecated; warns once on load and is dropped).
+
+### Migration
+
+Existing profiles boot fine. The deprecated `autoSkill` block is
+ignored with a one-time stderr warning. The new `curator` defaults to
+dry-run mode for safety; flip `curator.dryRun: false` in
+`config.json` to enable live consolidation.
+
 ## 0.20.7
 
 **Hang-tolerant cycle queue + real OpenAI-compatible streaming.**
