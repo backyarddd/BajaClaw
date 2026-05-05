@@ -5,7 +5,8 @@
 // category. The agent reads full bodies on demand via skill_view.
 
 import { createHash } from "node:crypto";
-import { statSync } from "node:fs";
+import { statSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { loadAllSkills } from "./loader.js";
 import { readSidecar } from "./usage.js";
 import type { Skill, SkillUsageEntry } from "../types.js";
@@ -110,14 +111,19 @@ function computeManifestHash(skills: Skill[]): string {
   const sorted = [...skills].sort((a, b) => a.path.localeCompare(b.path));
   const h = createHash("sha256");
   for (const s of sorted) {
+    // skill.path is the skill directory; SKILL.md is the file we
+    // actually want to hash by.
+    const skillFile = existsSync(join(s.path, "SKILL.md"))
+      ? join(s.path, "SKILL.md")
+      : join(s.path, "skill.md");
     let mtime = 0;
     let size = 0;
     try {
-      const st = statSync(s.path);
+      const st = statSync(skillFile);
       mtime = st.mtimeMs;
       size = st.size;
     } catch { /* ignore */ }
-    h.update(`${s.path}|${mtime}|${size}\n`);
+    h.update(`${skillFile}|${mtime}|${size}\n`);
   }
   return h.digest("hex");
 }
