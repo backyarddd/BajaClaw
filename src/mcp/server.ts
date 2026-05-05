@@ -10,6 +10,7 @@ import { recall, listRecent } from "../memory/recall.js";
 import { loadAllSkills } from "../skills/loader.js";
 import { skillView } from "../skills/skill-view.js";
 import { skillList } from "../skills/skill-list.js";
+import { skillManage } from "../skills/skill-manage.js";
 import { wakeAgent } from "../commands/daemon.js";
 
 export interface ServeOptions {
@@ -218,6 +219,29 @@ function listTools() {
         required: ["name"],
       },
     },
+    {
+      name: "bajaclaw_skill_manage",
+      description: "Create / edit / patch / delete / write_file / remove_file skills. The agent's self-learning entry point. Saving a procedure via action='create' makes it reusable in future cycles.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["create", "edit", "patch", "delete", "write_file", "remove_file"] },
+          name: { type: "string" },
+          profile: { type: "string" },
+          description: { type: "string" },
+          body: { type: "string" },
+          triggers: { type: "array", items: { type: "string" } },
+          effort: { type: "string", enum: ["low", "medium", "high"] },
+          find: { type: "string" },
+          replace: { type: "string" },
+          absorbed_into: { type: "string" },
+          reason: { type: "string" },
+          path: { type: "string" },
+          content: { type: "string" },
+        },
+        required: ["action", "name"],
+      },
+    },
   ];
 }
 
@@ -275,6 +299,13 @@ function callTool(params: { name?: string; arguments?: Record<string, unknown> }
       const r = skillView({ name: String(args.name ?? "") }, profile);
       if (!r.ok) return toolErr(`${r.status ?? 500}: ${r.reason}`);
       return toolOk(JSON.stringify({ name: r.name, description: r.description, body: r.body, frontmatter: r.frontmatter, state: r.state }, null, 2));
+    }
+    if (name === "bajaclaw_skill_manage") {
+      const profile = String(args.profile ?? firstProfile() ?? "");
+      if (!profile) return toolErr("no profile available");
+      const r = skillManage(args, profile);
+      if (!r.ok) return toolErr(r.reason ?? "skill_manage failed");
+      return toolOk(JSON.stringify(r, null, 2));
     }
   } catch (e) {
     return toolErr((e as Error).message);
