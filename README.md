@@ -19,7 +19,7 @@ Every cycle is a subprocess of the real `claude` CLI. BajaClaw never calls the A
 Around that subprocess, BajaClaw adds:
 
 - **Persistent memory.** An FTS5 full-text index of facts, decisions, preferences, todos, and references. Every non-Haiku cycle extracts new memories automatically. Every subsequent cycle pulls the top matches into the prompt as context.
-- **Skill matching.** Each cycle scores installed skills against the task body and injects the top matches as `# Active Skills` in the prompt. Compatible with the Claude Code `SKILL.md` format plus `openclaw` and `hermes` variants.
+- **Skill matching.** Each cycle scores installed skills against the task body and injects the top matches as `# Active Skills` in the prompt. Compatible with the Claude Code `SKILL.md` format plus the `openclaw` variant.
 - **OS-native scheduling.** Heartbeat cycles run on `launchd`, `systemd`, `cron`, or `schtasks`, depending on the host. Agents keep working when no terminal is open.
 - **Chat channels.** Two-way bridges to Telegram and Discord. Inbound messages become tasks; outbound replies route back through the same channel. Photos and videos land as attachments the agent can read directly.
 - **Local dashboard.** A single-page HTML UI at `http://localhost:7337` with a live cycle feed, in-browser chat, memory search, clickable cycle drilldown, task queue, schedule editor, skill inventory, channel config, and a settings form.
@@ -244,7 +244,7 @@ bajaclaw skill port --link                       # symlink (live sync from Claud
 }
 ```
 
-**Foreign-format compat.** `SKILL.md` files from the `openclaw` and `hermes` ecosystems are read in their native metadata layouts (no conversion required). See [docs/skills.md](docs/skills.md).
+**Foreign-format compat.** `SKILL.md` files in the `openclaw` ecosystem are read in their native metadata layout (no conversion required). See [docs/skills.md](docs/skills.md).
 
 **Bundled skills.** The repo ships with a baseline set so the agent is useful on first run:
 
@@ -343,7 +343,7 @@ A single HTML file served by an in-process HTTP server. Nine views via sidebar n
 - **Memory.** FTS-searchable memory browser with a client-side filter.
 - **Tasks.** Pending/running/done task queue.
 - **Schedules.** Heartbeat schedule editor.
-- **Skills.** Installed skills with origin color coding (bajaclaw, openclaw, hermes). Inactive skills show the reason.
+- **Skills.** Installed skills with origin color coding (bajaclaw, openclaw). Inactive skills show the reason.
 - **Channels.** Configured Telegram/Discord channels with masked tokens and allowlist.
 - **Settings.** Whitelisted form editor for model, effort, context window, dashboard port, autostart, memory sync, max budget.
 

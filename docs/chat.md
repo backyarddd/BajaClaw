@@ -129,9 +129,8 @@ practice because BajaClaw keeps the per-cycle prompt tight.
 - **Claude Code** (`claude`): a coding agent. Has its own memory,
   files-in-scope, and is tuned for the local repo. BajaClaw chat is
   a general agent that drives `claude` as a subprocess.
-- **OpenClaw / Hermes-style REPLs**: similar REPL UX. BajaClaw adds
-  the persistent memory DB, skills, MCP integration, and 24/7
-  heartbeat mode.
+- **OpenClaw-style REPLs**: similar REPL UX. BajaClaw adds the
+  persistent memory DB, skills, MCP integration, and 24/7 heartbeat mode.
 
 ## Exiting
 

@@ -1,4 +1,4 @@
-# Self-learning skills (full Hermes parity)
+# Self-learning skills
 
 Status: approved
 Date: 2026-05-05
@@ -19,13 +19,12 @@ Bajaclaw's existing skill system has two structural problems:
    pick top-N skills and almost always returns `[]` because the available
    library is dominated by one-time `setup-*` skills. Pure overhead.
 
-Hermes (NousResearch/hermes-agent) solves both with a different shape:
-the agent itself decides mid-cycle whether to save a skill (via a
-`skill_manage` tool), and skills are advertised through a system-prompt
-index that the agent reads with a `skill_view` tool. A separate Curator
-process consolidates the library on idle.
+The new shape: the agent itself decides mid-cycle whether to save a
+skill (via a `skill_manage` tool), and skills are advertised through a
+system-prompt index that the agent reads with a `skill_view` tool. A
+separate Curator process consolidates the library on idle.
 
-This design ports that pattern to bajaclaw with a few changes:
+This design adapts that pattern to bajaclaw with a few changes:
 per-profile storage instead of single-user, sidecar telemetry, and an
 explicit dry-run period for the curator before live mutations.
 
@@ -114,9 +113,7 @@ per profile and the curator never runs while a cycle is pending.
 
 ### Frontmatter additions
 
-Conditional activation fields go under `metadata.bajaclaw.*` to mirror
-Hermes' `metadata.hermes.*` namespace. The loader already handles
-hermes-format; we mirror the same fields:
+Conditional activation fields live under `metadata.bajaclaw.*`:
 
 ```yaml
 metadata:

@@ -44,18 +44,17 @@ metadata:
 # Sonos CLI
 `;
 
-const HERMES_SAMPLE = `---
+const COMPAT_SAMPLE = `---
 name: arxiv
 description: Search arXiv from the shell.
 version: 1.0.0
-author: nous
 license: MIT
 platforms: [macos, linux]
 required_environment_variables:
   - name: ARXIV_API_KEY
     prompt: "Enter your arXiv API key"
 metadata:
-  hermes:
+  bajaclaw:
     tags: [Research, arXiv, Academic]
     requires_tools: [web_search]
     fallback_for_tools: [deep_research]
@@ -79,11 +78,11 @@ test("parseSkill: openclaw-origin detection and field normalization", async () =
   assert.equal(parsed.install[0].module, "github.com/steipete/sonoscli/cmd/sonos@latest");
 });
 
-test("parseSkill: hermes-origin detection and field normalization", async () => {
+test("parseSkill: bajaclaw metadata block field normalization", async () => {
   const { parseSkill } = await import("../dist/skills/loader.js");
-  const parsed = parseSkill(HERMES_SAMPLE, "/tmp/arxiv", "bajaclaw-user");
+  const parsed = parseSkill(COMPAT_SAMPLE, "/tmp/arxiv", "bajaclaw-user");
   assert.ok(parsed);
-  assert.equal(parsed.origin, "hermes");
+  assert.equal(parsed.origin, "bajaclaw");
   assert.equal(parsed.name, "arxiv");
   assert.deepEqual(parsed.platforms, ["macos", "linux"]);
   assert.deepEqual(parsed.tags, ["Research", "arXiv", "Academic"]);
@@ -117,7 +116,7 @@ test("matchSkills: fallback_for_tools hides skill when a listed tool is present"
     body: "",
     path: "/tmp/ddg",
     scope: "bajaclaw-user",
-    origin: "hermes",
+    origin: "bajaclaw",
     triggers: ["search"],
     fallbackForTools: ["web_search"],
   };
@@ -138,7 +137,7 @@ test("matchSkills: tags contribute to score", async () => {
   const { matchSkills } = await import("../dist/skills/matcher.js");
   const tagged = {
     name: "a", description: "x", body: "", path: "/a", scope: "bajaclaw-user",
-    origin: "hermes", tags: ["astronomy"],
+    origin: "bajaclaw", tags: ["astronomy"],
   };
   const plain = {
     name: "b", description: "x", body: "", path: "/b", scope: "bajaclaw-user",

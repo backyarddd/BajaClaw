@@ -94,9 +94,7 @@ to look like a real procedure, a follow-up call analyzes the task, the tool
 sequence, and the response, and - if the procedure is reusable - writes a
 structured SKILL.md to `~/.bajaclaw/skills/auto/<name>/`.
 
-This is BajaClaw's take on the "create a skill after a complex task"
-behavior popularized by agents like Hermes. The implementation is our own;
-the idea is: **if the agent just figured out how to do something non-trivial,
+The idea is: **if the agent just figured out how to do something non-trivial,
 capture the procedure so the next time is faster.**
 
 ### Synthesized skill shape

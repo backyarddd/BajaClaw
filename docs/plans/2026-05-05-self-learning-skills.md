@@ -1,8 +1,8 @@
-# Self-Learning Skills (Hermes-parity) Implementation Plan
+# Self-Learning Skills Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace bajaclaw's silent post-cycle auto-skiller and 7-15s LLM matcher with the Hermes pattern: agent calls `skill_manage`/`skill_view` mid-cycle, system-prompt index advertises skills, idle curator consolidates the library.
+**Goal:** Replace bajaclaw's silent post-cycle auto-skiller and 7-15s LLM matcher with a self-learning pattern: agent calls `skill_manage`/`skill_view` mid-cycle, system-prompt index advertises skills, idle curator consolidates the library.
 
 **Architecture:** Three new MCP tools (`skill_manage`, `skill_view`, `skill_list`) added to the existing MCP server. Pre-cycle prompt assembly switches from "match top-N skills, inline bodies" to "inject flat index, agent reads bodies on demand." Sidecar `.usage.json` tracks view/use counts. Curator runs idle (>=2h cycle pause, >=7d since last) with phase-1 pure transitions and phase-2 forked Haiku review (dry-run for first 3 runs). Per-profile storage at `~/.bajaclaw/profiles/<profile>/skills/`.
 
@@ -985,7 +985,7 @@ export function buildSkillsIndex(profile: string, allowedTools: string[] = []): 
 
 function isVisible(skill: Skill, usage: SkillUsageEntry | undefined, allowedTools: string[]): boolean {
   if (usage?.state === "archived") return false;
-  // Hermes-style conditional gates:
+  // Conditional gates (requires_tools / fallback_for_tools):
   const tools = new Set(allowedTools);
   if (skill.requiresTools && skill.requiresTools.length > 0 && tools.size > 0) {
     for (const t of skill.requiresTools) if (!tools.has(t)) return false;
@@ -2907,7 +2907,7 @@ Add an entry at the top:
 ```markdown
 ## v0.21.0 - 2026-05-05
 
-Self-learning skills (Hermes-parity).
+Self-learning skills.
 
 - New MCP tools: skill_manage, skill_view, skill_list. The agent saves
   reusable procedures mid-cycle via skill_manage(action="create").
@@ -2969,7 +2969,7 @@ Expected: all green.
 
 ```bash
 git add package.json
-git commit -m "v0.21.0: self-learning skills (Hermes parity)"
+git commit -m "v0.21.0: self-learning skills"
 git tag v0.21.0
 ```
 
