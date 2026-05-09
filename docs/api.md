@@ -1,156 +1,301 @@
 # HTTP API
 
-BajaClaw can expose itself as an OpenAI-compatible HTTP endpoint. Any
-client that speaks the OpenAI chat API - Cursor, Open WebUI, LibreChat,
-LangChain, LlamaIndex, curl, the `openai` SDKs - can drive BajaClaw as if
-it were an LLM. Each request is a full BajaClaw cycle: memory recall,
-skill matching, MCP inheritance, the backend call, post-cycle extract.
+BajaClaw exposes itself as an OpenAI-compatible HTTP server. Anything
+that speaks the OpenAI Chat Completions API can drive it: Cursor, Open
+WebUI, LibreChat, Continue.dev, LangChain, LlamaIndex, the official
+`openai` SDKs, raw curl. Each request runs a full BajaClaw cycle.
 
-**Endpoint cycles run with `--bare`** to keep API behavior predictable:
-the underlying `claude` invocation skips CLAUDE.md auto-discovery, hooks,
-plugin sync, attribution, auto-memory, background prefetches, and
-keychain reads. BajaClaw's own memory/skills/MCP still flow through (they
-go into the assembled prompt, not Claude's auto-discovery), so this
-strips host-machine state without losing anything BajaClaw injects.
+What "full cycle" means per request:
 
-Auth implication: `--bare` forces strict `ANTHROPIC_API_KEY` (or
-`apiKeyHelper` via `--settings`, or 3P provider creds for
-Bedrock/Vertex/Foundry). OAuth and keychain reads are disabled.
+1. Optional pre-cycle shadow-git snapshot (`cfg.snapshots.enabled`).
+2. Memory recall against the task text.
+3. Skill matching against the task and tool allowlist.
+4. MCP config assembly (per-profile + optional desktop merge).
+5. Backend call to `claude` with `--bare` and the assembled prompt.
+6. Response parsing, cost + token accounting, response storage.
+7. Post-cycle memory extraction (skipped on Haiku-tier and dry-run).
 
-`bajaclaw serve` resolves outbound auth in this order:
+Per-profile cycles are serialized FIFO; concurrent requests for the
+same profile queue rather than spawning parallel `claude` subprocesses.
+Different profiles run in parallel.
 
-1. `process.env.ANTHROPIC_API_KEY` (whatever is exported)
-2. `anthropicApiKey` field in `~/.bajaclaw/api.json` (saved by setup)
-3. On a TTY: prompts to run `claude setup-token` and saves the result
+---
 
-For Pro/Max/Team/Enterprise subscribers, **`claude setup-token` mints a
-1-year inference-scoped token** that works as `ANTHROPIC_API_KEY` and
-bills against subscription quota - no separate API credits needed.
+## Quickstart
 
-To pre-set up auth without an interactive `bajaclaw serve` start:
+```bash
+# 1. One-time auth setup (subscription users; Pro/Max/Team/Enterprise)
+bajaclaw setup-token
 
-```
-bajaclaw setup-token         # walks claude setup-token, saves to api.json
-bajaclaw setup-token --force # replace an existing saved token
-```
+# 2. Start the server
+bajaclaw serve
 
-The saved file is chmod 600.
-
-## Starting the server
-
-```
-bajaclaw serve                                    # 127.0.0.1:8765, no auth
-bajaclaw serve --port 9000                        # custom port
-bajaclaw serve --api-key <secret>                 # require bearer auth
-bajaclaw serve --host 0.0.0.0 --api-key <secret>  # bind all interfaces (auth required)
-bajaclaw serve --expose default research          # only these profiles
-bajaclaw serve --stream-delay 10                  # faster streamed chunks
+# 3. Send a request from another terminal
+curl http://localhost:8765/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "default",
+    "messages": [{"role":"user","content":"hello"}]
+  }'
 ```
 
-Non-localhost binds without an API key are refused.
+That's it. You'll get back a normal OpenAI Chat Completion response,
+backed by a real BajaClaw cycle on your `default` profile.
 
-## Persistent config
+---
 
-Instead of CLI flags, put defaults at `~/.bajaclaw/api.json`:
+## Authentication
+
+There are two independent auth layers. Don't confuse them:
+
+| layer | what | how it's set | who needs it |
+|---|---|---|---|
+| **outbound** | bajaclaw -> Anthropic | `ANTHROPIC_API_KEY` (env, file, or `setup-token`) | always |
+| **inbound** | client -> bajaclaw | `apiKey` (config or `--api-key`) | when binding non-localhost, or any time you want to gate access |
+
+### Outbound auth (bajaclaw -> Anthropic)
+
+Endpoint cycles run with `--bare` (see `src/claude.ts`). `--bare` strips
+host-machine sluttery: CLAUDE.md auto-discovery, hooks, plugin sync,
+attribution, auto-memory, background prefetches, keychain reads. Net
+effect: behavior is reproducible across machines, but Anthropic auth is
+tightened to one of:
+
+- `ANTHROPIC_API_KEY` env var
+- `apiKeyHelper` in a settings file (a shell command that prints a key;
+  configure via `--settings <path>` if you want this path)
+- 3P provider creds: AWS (Bedrock), GCP (Vertex), Azure (Foundry)
+
+OAuth and macOS keychain reads are explicitly disabled.
+
+`bajaclaw serve` resolves outbound auth at startup in this order:
+
+1. `process.env.ANTHROPIC_API_KEY` (if set, used as-is)
+2. `anthropicApiKey` field in `~/.bajaclaw/api.json`
+3. **TTY only:** prompts to run `claude setup-token` and saves the result
+
+If none of those resolves and you're not on a TTY, the server starts
+anyway with a yellow warning; every `/v1/chat/completions` request will
+then 401 at the Anthropic layer until a key is in scope.
+
+#### Subscription users: `claude setup-token`
+
+`claude setup-token` walks an OAuth browser flow and prints a 1-year
+inference-scoped token. The token works as `ANTHROPIC_API_KEY` and
+**bills against your subscription quota**. No separate API credits
+required. Pro, Max, Team, and Enterprise plans are all eligible.
+
+Run it through bajaclaw to save the result automatically:
+
+```bash
+bajaclaw setup-token              # save the minted token
+bajaclaw setup-token --force      # replace an existing saved token
+```
+
+The token lands at `~/.bajaclaw/api.json` with `chmod 600`. After that,
+every `bajaclaw serve` start finds it without prompting.
+
+#### Manual env var
+
+If you'd rather export the key yourself:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+bajaclaw serve
+```
+
+This wins over the saved file.
+
+#### 3P providers
+
+If you point `claude` at AWS Bedrock, Vertex, or Foundry via its own
+settings (`CLAUDE_CODE_USE_BEDROCK=1`, `AWS_BEARER_TOKEN_BEDROCK`,
+etc.), you don't need an Anthropic key. `bajaclaw serve` still runs the
+auth resolver and warns if no key is found, but the spawned `claude`
+will pick up its 3P creds normally.
+
+### Inbound auth (clients -> bajaclaw)
+
+If you set `apiKey` in `~/.bajaclaw/api.json` or pass `--api-key`,
+every request (except `/health`) must carry:
+
+```
+Authorization: Bearer <your-api-key>
+```
+
+Anything else returns `401`.
+
+`bajaclaw serve` **refuses to bind a non-localhost host without an
+inbound api-key**. Binding to `0.0.0.0` or a LAN interface always
+requires `--api-key`.
+
+```bash
+bajaclaw serve --host 0.0.0.0 --api-key $(openssl rand -hex 24)
+```
+
+CORS is permissive (`*`) on every response. If you want a tighter
+policy, terminate at nginx or Caddy.
+
+---
+
+## Server configuration
+
+### `~/.bajaclaw/api.json`
+
+Default location for persistent config. Created by `bajaclaw
+setup-token` if it doesn't exist; otherwise hand-edit.
 
 ```json
 {
   "host": "127.0.0.1",
   "port": 8765,
-  "apiKey": "your-long-secret",
-  "exposedProfiles": ["default"],
+  "apiKey": "your-long-inbound-secret",
+  "exposedProfiles": ["default", "research"],
   "streamDelayMs": 20,
   "anthropicApiKey": "sk-ant-..."
 }
 ```
 
-`apiKey` is the **inbound** bearer token clients must send to call this
-server. `anthropicApiKey` is the **outbound** key bajaclaw uses when
-spawning `claude` for each cycle - they're independent. The outbound
-key is normally written by `bajaclaw setup-token`, not by hand.
+| field | type | default | meaning |
+|---|---|---|---|
+| `host` | string | `127.0.0.1` | bind interface |
+| `port` | number | `8765` | bind port |
+| `apiKey` | string \| null | `null` | inbound bearer token; `null` = no auth (localhost only) |
+| `exposedProfiles` | string[] | `[]` | allowlist of profile names; empty = expose all |
+| `streamDelayMs` | number | `20` | legacy, unused since v0.19.7 (real streaming) |
+| `anthropicApiKey` | string | `undefined` | outbound key for spawned `claude` cycles |
 
-CLI flags override the file.
+### CLI flags
+
+```bash
+bajaclaw serve [--host <h>] [--port <n>] [--api-key <k>]
+               [--expose <names...>] [--stream-delay <ms>]
+```
+
+CLI flags override file values. Common patterns:
+
+```bash
+bajaclaw serve                                      # 127.0.0.1:8765, no auth
+bajaclaw serve --port 9000                          # custom port
+bajaclaw serve --api-key $(openssl rand -hex 24)    # require bearer auth on localhost
+bajaclaw serve --host 0.0.0.0 --api-key <secret>    # bind all interfaces (auth required)
+bajaclaw serve --expose default research            # only these profiles
+```
+
+---
 
 ## Endpoints
 
+| method | path | purpose |
+|---|---|---|
+| GET | `/health` | liveness probe (no auth required) |
+| GET | `/v1/models` | list exposed profiles + virtual model entries |
+| POST | `/v1/chat/completions` | OpenAI Chat Completions (sync or stream) |
+| POST | `/v1/bajaclaw/cycle` | native: full `CycleOutput` (cost, tokens, prompt, command) |
+| POST | `/v1/bajaclaw/tasks` | native: enqueue a task without waiting |
+
 ### `GET /health`
 
-Liveness probe. Returns `{"status": "ok"}`.
+Liveness probe. No auth, even if `apiKey` is set.
+
+```bash
+curl http://localhost:8765/health
+# {"status":"ok"}
+```
 
 ### `GET /v1/models`
 
-Lists exposed BajaClaw profiles as OpenAI-format model entries.
+Lists exposed profiles in OpenAI's model-list shape. Three kinds of
+entries:
+
+1. Bare profile names (one per exposed profile).
+2. `<profile>:<model>` virtuals (one per profile per known model).
+3. Bare model-id shortcuts (apply to the `default` profile).
+
+```bash
+curl http://localhost:8765/v1/models | jq
+```
 
 ```json
 {
   "object": "list",
   "data": [
-    { "id": "default",                        "object": "model", "owned_by": "bajaclaw" },
-    { "id": "default:auto",                   "object": "model", "owned_by": "bajaclaw" },
-    { "id": "default:claude-opus-4-7",        "object": "model", "owned_by": "bajaclaw" },
-    { "id": "default:claude-sonnet-4-6",      "object": "model", "owned_by": "bajaclaw" },
-    { "id": "default:claude-haiku-4-5",       "object": "model", "owned_by": "bajaclaw" },
-    { "id": "auto",                           "object": "model", "owned_by": "bajaclaw" },
-    { "id": "claude-opus-4-7",                "object": "model", "owned_by": "bajaclaw" }
+    { "id": "default",                   "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "research",                  "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "default:auto",              "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "default:claude-haiku-4-5",  "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "default:claude-sonnet-4-6", "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "default:claude-opus-4-7",   "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "research:claude-opus-4-7",  "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "auto",                      "object": "model", "created": 1700000000, "owned_by": "bajaclaw" },
+    { "id": "claude-opus-4-7",           "object": "model", "created": 1700000000, "owned_by": "bajaclaw" }
   ]
 }
 ```
 
-The endpoint lists the bare profile names, then `<profile>:<model>`
-virtual entries for each known model, and finally bare model-id
-shortcuts (which apply to the `default` profile). Any string you send
-is still parsed - the list is a hint, not a hard whitelist.
+The list is a hint, not a hard whitelist. Any string accepted by the
+parser at request time works (see Model selection below).
 
 ### `POST /v1/chat/completions`
 
-OpenAI ChatCompletion. Non-streaming or SSE streaming.
+Standard OpenAI Chat Completions. Synchronous or SSE-streaming.
 
-**Request:**
+Request fields read by bajaclaw:
+
+| field | type | meaning |
+|---|---|---|
+| `model` | string | profile, profile:model, or model-shortcut (see Model selection) |
+| `messages` | array | ordered chat turns; last is the current task |
+| `stream` | boolean | `true` -> SSE response |
+| `stream_options.include_usage` | boolean | `true` -> emit final usage-only chunk before `[DONE]` |
+
+Ignored fields (silently): `temperature`, `max_tokens`, `top_p`,
+`frequency_penalty`, `presence_penalty`, `tools`, `tool_choice`,
+`response_format`, `n`, `seed`, `user`, `logit_bias`, `stop`,
+`logprobs`. The agent runs at the profile's configured `effort` level
+and uses tools internally.
+
+#### Message handling
+
+- **Single message:** `messages[0].content` becomes the task.
+- **Multi-message:** earlier messages are rendered as a labeled
+  transcript prefix; the last message is the current task. Roles map
+  to labels: `system -> SYSTEM`, `user -> USER`, `assistant ->
+  ASSISTANT`, `tool -> TOOL`.
+
+So a request like:
 
 ```json
 {
   "model": "default",
   "messages": [
-    {"role": "user", "content": "summarize the last three cycles"}
-  ],
-  "stream": false
+    {"role": "system", "content": "Be concise."},
+    {"role": "user", "content": "What's the weather?"},
+    {"role": "assistant", "content": "Where?"},
+    {"role": "user", "content": "Sydney"}
+  ]
 }
 ```
 
-**Model field - how it's parsed**
+becomes a task with body:
 
-BajaClaw supports three forms. Each resolves to a `(profile, modelOverride?)` pair:
+```
+You are continuing a conversation. Prior exchange:
 
-| request `model` | profile | model override | meaning |
-|---|---|---|---|
-| `default` | `default` | - | use the profile's configured model (may be `auto`) |
-| `bajaclaw:default` | `default` | - | same, with explicit namespace |
-| `researcher` | `researcher` | - | any profile name works |
-| `default:claude-opus-4-7` | `default` | `claude-opus-4-7` | **force Opus for this one request** |
-| `bajaclaw:researcher:claude-sonnet-4-6` | `researcher` | `claude-sonnet-4-6` | same, namespaced |
-| `default:auto` | `default` | `auto` | force auto-routing for this request |
-| `auto` | `default` | `auto` | shortcut: default profile, auto |
-| `claude-opus-4-7` | `default` | `claude-opus-4-7` | shortcut: default profile, forced Opus |
+SYSTEM: Be concise.
 
-So: if your profile's configured model is `auto` and you send
-`"model": "default"`, you get auto-routing. If you send
-`"model": "default:claude-opus-4-7"` on the same profile, you force
-Opus for just that request - the profile's config is not modified.
+USER: What's the weather?
 
-**Answer to "does it auto-route to the model BajaClaw is pointed at?"**
-Yes. The request uses the profile's configured model unless you
-explicitly override it. If the profile is `auto`, it routes per task.
+ASSISTANT: Where?
 
-**Answer to "can I send my own model in the API call?"**
-Yes. Use any of the override forms above.
+Current message:
+Sydney
+```
 
-Message handling:
-- If one message is provided, its content is the task.
-- If multiple messages are provided, earlier messages are rendered as a
-  prior transcript, and the last message is the current task.
-- System / user / assistant / tool roles all render with labels.
+BajaClaw's own memory recall, skills index, and MCP config still stack
+on top of that body before the cycle runs.
 
-**Non-streaming response:**
+#### Non-streaming response
 
 ```json
 {
@@ -161,37 +306,66 @@ Message handling:
   "choices": [
     {
       "index": 0,
-      "message": {"role": "assistant", "content": "…"},
+      "message": {"role": "assistant", "content": "Mid-20s, partly cloudy."},
       "finish_reason": "stop"
     }
   ],
-  "usage": {"prompt_tokens": 1234, "completion_tokens": 256, "total_tokens": 1490}
+  "usage": {
+    "prompt_tokens": 1234,
+    "completion_tokens": 256,
+    "total_tokens": 1490
+  }
 }
 ```
 
-`prompt_tokens` is the displayed "in" count: input + cache_creation + cache_read summed together, matching what the cycle was billed for. `completion_tokens` is output tokens. Both fall back to `0` if the backend didn't report usage (haiku-tier or stream-aborted cycles).
+`prompt_tokens` is the displayed "in" count: `input + cache_creation +
+cache_read` summed (matches what the cycle was billed for).
+`completion_tokens` is output tokens. Both fall back to `0` if the
+backend didn't report usage (Haiku-tier responses, stream-aborted
+cycles). `total_tokens` is the sum.
 
-**Streaming response (`"stream": true`):**
+`finish_reason` is `"stop"` on success, `"error"` if the cycle failed
+(message content is the error text in that case).
 
-Server-Sent Events with standard OpenAI `chat.completion.chunk` shape:
+#### Streaming response
+
+Server-Sent Events; standard OpenAI `chat.completion.chunk` shape.
+
+Request:
+
+```json
+{
+  "model": "default",
+  "messages": [{"role":"user","content":"walk me through yesterday"}],
+  "stream": true
+}
+```
+
+Wire format (chunked as the backend produces text via claude's
+`--output-format stream-json`):
 
 ```
-data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"model":"default","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":1700000000,"model":"default","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"model":"default","choices":[{"index":0,"delta":{"content":"Hello "},"finish_reason":null}]}
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":1700000000,"model":"default","choices":[{"index":0,"delta":{"content":"On "},"finish_reason":null}]}
 
-…
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":1700000000,"model":"default","choices":[{"index":0,"delta":{"content":"Tuesday "},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"model":"default","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+...
+
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":1700000000,"model":"default","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
 
 data: [DONE]
 ```
 
-Real token streaming. Each `delta.content` chunk is emitted as the
-backend produces it (via claude's `--output-format stream-json`).
+If the client disconnects mid-stream, no further chunks are written
+(the cycle continues to completion server-side; the partial isn't
+replayed).
 
-**Streaming usage:** set `stream_options.include_usage: true` to receive
-a final usage-only chunk before `[DONE]`, matching OpenAI's spec:
+##### Usage on stream
+
+Set `stream_options.include_usage: true` to receive a final usage-only
+chunk before `[DONE]`, matching OpenAI's spec.
 
 ```json
 {
@@ -202,19 +376,26 @@ a final usage-only chunk before `[DONE]`, matching OpenAI's spec:
 }
 ```
 
-Final chunk shape (note `choices: []`):
+Final two events:
 
 ```
-data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"model":"default","choices":[],"usage":{"prompt_tokens":1234,"completion_tokens":256,"total_tokens":1490}}
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":1700000000,"model":"default","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":1700000000,"model":"default","choices":[],"usage":{"prompt_tokens":1234,"completion_tokens":256,"total_tokens":1490}}
 
 data: [DONE]
 ```
 
+The usage chunk has `choices: []` and only sends on successful cycles
+(error paths surface `finish_reason: "error"` and skip the usage frame).
+
 ### `POST /v1/bajaclaw/cycle`
 
-Native endpoint. Runs a cycle, returns the full `CycleOutput`.
+Native endpoint. Returns the full `CycleOutput` shape; useful when you
+want cycle id, cost, the exact assembled prompt, the spawned command
+line, etc.
 
-**Request:**
+Request:
 
 ```json
 {
@@ -224,133 +405,623 @@ Native endpoint. Runs a cycle, returns the full `CycleOutput`.
 }
 ```
 
-**Response:**
+Response:
 
 ```json
 {
-  "cycleId": 42,
+  "cycleId": 142,
   "ok": true,
-  "text": "…",
+  "text": "Three open tasks: ...",
+  "model": "claude-sonnet-4-6",
+  "tier": "sonnet",
   "durationMs": 1200,
   "costUsd": 0.0012,
-  "prompt": "(the assembled prompt for this cycle)",
-  "command": ["claude", "-p", "…", "--model", "claude-sonnet-4-6", "…"]
+  "inputTokens": 1234,
+  "outputTokens": 256,
+  "turns": 3,
+  "prompt": "(the assembled prompt for this cycle, as sent to claude)",
+  "command": ["claude", "-p", "...", "--model", "claude-sonnet-4-6", "--bare", "..."],
+  "source": "api"
 }
 ```
 
-Use this when you want the cycle id, cost, and assembled prompt - not
-just the chat-shaped reply.
+Same `--bare` semantics apply: this endpoint resolves outbound auth via
+the same path as `/v1/chat/completions`.
+
+`dryRun: true` runs the full pipeline (memory recall, skills, MCP
+assembly, prompt build) but skips the backend call. Returns
+`text: "[dry-run] no exec"` and the assembled command. Useful for
+testing prompt shape without spending tokens.
 
 ### `POST /v1/bajaclaw/tasks`
 
-Enqueue a task without waiting. Returns 202 immediately.
+Enqueue a task into the profile's tasks table and return immediately.
 
-**Request:**
+Request:
 
 ```json
-{"profile": "default", "task": "check the Grafana latency board", "priority": "normal"}
+{
+  "profile": "default",
+  "task": "check the Grafana latency board",
+  "priority": "normal"
+}
 ```
 
-**Response:**
+`priority`: `"high"` | `"normal"` | `"low"`. High-priority tasks jump
+the queue when the daemon (or any cycle-runner on this profile) calls
+`popTask`.
+
+Response:
 
 ```json
 {"status": "enqueued"}
 ```
 
-The next cycle (heartbeat or on-demand) picks it up.
+Status: `202 Accepted`. The task is durable (SQLite). It will be picked
+up the next time something runs a cycle for that profile (usually the
+heartbeat daemon).
 
-## Auth
+Use this when you want to fire-and-forget tasks at a long-running
+profile without blocking on the cycle.
 
-If `apiKey` is set in config or via `--api-key`, every request (except
-`/health`) must carry `Authorization: Bearer <key>`. Anything else returns
-`401`.
+---
 
-Non-localhost binds (`--host 0.0.0.0` or a real interface) require an API
-key - the server refuses to start without one.
+## Model selection
 
-## CORS
+The `model` field in a Chat Completions request is parsed into a
+`(profile, modelOverride?)` pair. The parser is in
+`src/api/translate.ts` (`resolveRequest`).
 
-Every response carries permissive CORS headers (`*`). If you want a
-tighter policy, run behind nginx or Caddy.
+### All accepted forms
 
-## Client examples
+| `model` value | profile resolved | model override | what runs |
+|---|---|---|---|
+| `default` | `default` | none | profile's configured model |
+| `bajaclaw:default` | `default` | none | same, namespaced |
+| `research` | `research` | none | any profile name works |
+| `default:auto` | `default` | `auto` | force auto-routing this request |
+| `default:claude-haiku-4-5` | `default` | haiku | force haiku |
+| `default:claude-sonnet-4-6` | `default` | sonnet | force sonnet |
+| `default:claude-opus-4-7` | `default` | opus | force opus |
+| `research:claude-opus-4-7` | `research` | opus | force opus on `research` profile |
+| `bajaclaw:research:claude-sonnet-4-6` | `research` | sonnet | same, namespaced |
+| `auto` | `default` | `auto` | shortcut: default profile, auto-routed |
+| `claude-opus-4-7` | `default` | opus | shortcut: default profile, force opus |
+| `claude-haiku-4-5` | `default` | haiku | shortcut: default profile, force haiku |
 
-### Python (`openai` SDK)
+The override is one-shot: it overrides the profile's configured model
+for that request only. The profile config is **not modified** on disk.
+
+If the resolved profile doesn't exist on this box, the server returns
+`404` with `{"error": {"message": "unknown profile: <name>"}}`.
+
+### Known model IDs
+
+| id | tier | notes |
+|---|---|---|
+| `auto` | (router) | routes per task: heartbeat -> haiku, short -> haiku, opus markers -> opus, otherwise sonnet |
+| `claude-haiku-4-5` | haiku | fast, cheap; triage and simple answers |
+| `claude-sonnet-4-6` | sonnet | balanced default |
+| `claude-opus-4-7` | opus | planning, coding, deep research |
+
+Other model strings are passed through verbatim to the `claude --model`
+flag. The CLI validates against your subscription / API access.
+
+### `auto` routing
+
+When the effective model is `auto` (either because the profile is
+configured that way or because the request used `auto`), the picker in
+`src/model-picker.ts` runs:
+
+1. **Heartbeat?** -> haiku. (Heartbeat tasks are the daemon's empty
+   wake-up cycles; not normally a thing for API requests.)
+2. **Opus markers** in the task (`plan`, `architect`, `design`,
+   `refactor`, `debug` etc.) -> opus.
+3. **Short and trivial** task (under ~6 words, no code/markup) -> haiku.
+4. **Very short** (under ~3 words) -> haiku.
+5. Otherwise -> sonnet.
+
+Token "in" reporting is correct across tiers (sums input +
+cache_creation + cache_read). Cost reporting is correct across tiers
+(cache reads are priced cheap).
+
+### Forcing a model per request
+
+Even if a profile is configured for `auto`, you can pin a model for a
+single request:
+
+```bash
+# pin opus for one request, leaving the profile's config alone
+curl http://localhost:8765/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "default:claude-opus-4-7",
+    "messages": [{"role":"user","content":"design a rate limiter"}]
+  }'
+```
+
+```bash
+# heavy task, force opus on a different profile
+curl http://localhost:8765/v1/chat/completions \
+  -d '{
+    "model": "research:claude-opus-4-7",
+    "messages": [{"role":"user","content":"compare these three vendors"}]
+  }'
+```
+
+```bash
+# trivial task on default, route via auto (will pick haiku)
+curl http://localhost:8765/v1/chat/completions \
+  -d '{
+    "model": "auto",
+    "messages": [{"role":"user","content":"what time is it"}]
+  }'
+```
+
+---
+
+## Errors
+
+Standard HTTP statuses + an OpenAI-shaped error body.
+
+```json
+{"error": {"message": "<text>", "type": "<category>"}}
+```
+
+| status | type | when |
+|---|---|---|
+| `400` | `invalid_request_error` | malformed JSON, missing `messages`, missing required field |
+| `401` | `invalid_request_error` | missing or wrong `Authorization: Bearer` (only when inbound `apiKey` is set) |
+| `404` | `invalid_request_error` | unknown profile or unknown path |
+| `500` | `server_error` | unexpected exception inside the handler |
+
+Cycle-level failures (e.g., upstream Anthropic 401, rate limit, model
+timeout) come back inside a successful HTTP response with
+`finish_reason: "error"` and the error text in the message content;
+HTTP status is still `200`. Check `finish_reason`, not just the status.
+
+---
+
+## Per-request cycle behavior
+
+Each request runs the full BajaClaw pipeline, not a stateless LLM call.
+Be aware of:
+
+- **Memory:** the profile's recalled memories prepend to the task as
+  context. Prior conversations shape responses. For a stateless API
+  surface, point at a profile with `memorySync: false` and prune
+  `memories` periodically (or use a dedicated profile for the API and
+  another for chat).
+- **Skills:** the skills index is injected into the prompt. The agent
+  can invoke skills via the `skill_view` MCP tool.
+- **MCP servers:** the profile's MCP servers (and optionally desktop
+  MCP, if `mergeDesktopMcp: true`) are attached. The agent has access
+  to whatever tools they expose.
+- **Cycle history:** every API request creates a row in `cycles` with
+  `source: "api"`. Visible in the dashboard's Cycles view, queryable
+  via the BajaClaw MCP server, etc.
+- **Cost:** every request bills against your subscription (or
+  configured 3P account). Use the `/v1/bajaclaw/cycle` endpoint or
+  `stream_options.include_usage` to see per-request cost / token
+  numbers.
+
+---
+
+## Client recipes
+
+### curl: simple request
+
+```bash
+curl http://localhost:8765/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "default",
+    "messages": [{"role":"user","content":"hello"}]
+  }'
+```
+
+### curl: streaming
+
+```bash
+curl -N http://localhost:8765/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "default",
+    "messages": [{"role":"user","content":"walk me through yesterday"}],
+    "stream": true
+  }'
+```
+
+### curl: streaming + usage
+
+```bash
+curl -N http://localhost:8765/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "default:claude-sonnet-4-6",
+    "messages": [{"role":"user","content":"what changed in main this week"}],
+    "stream": true,
+    "stream_options": {"include_usage": true}
+  }'
+```
+
+### curl: with inbound auth
+
+```bash
+curl http://localhost:8765/v1/chat/completions \
+  -H 'authorization: Bearer your-inbound-secret' \
+  -H 'content-type: application/json' \
+  -d '{"model":"default","messages":[{"role":"user","content":"hi"}]}'
+```
+
+### Python: openai SDK
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8765/v1",
-    api_key="your-secret-or-any-string",  # required by the SDK, ignored if no server-side key
+    api_key="ignored-or-your-inbound-secret",  # the SDK requires a string; ignored if no inbound apiKey
 )
 
+# Sync
 r = client.chat.completions.create(
     model="default",
     messages=[{"role": "user", "content": "hello"}],
 )
 print(r.choices[0].message.content)
+print(r.usage)  # populated: prompt_tokens, completion_tokens, total_tokens
+
+# Pin opus for one request
+r = client.chat.completions.create(
+    model="default:claude-opus-4-7",
+    messages=[{"role": "user", "content": "design a rate limiter"}],
+)
+
+# Streaming
+stream = client.chat.completions.create(
+    model="default",
+    messages=[{"role": "user", "content": "walk me through yesterday"}],
+    stream=True,
+    stream_options={"include_usage": True},
+)
+for chunk in stream:
+    if chunk.choices and chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end="", flush=True)
+    if chunk.usage:
+        print(f"\nusage: {chunk.usage}")
 ```
 
-### Node.js (`openai` SDK)
+### Node.js: openai SDK
 
 ```js
 import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "http://localhost:8765/v1",
-  apiKey: "your-secret-or-any-string",
+  apiKey: "ignored-or-your-inbound-secret",
 });
 
+// Sync
 const r = await client.chat.completions.create({
   model: "default",
   messages: [{ role: "user", content: "hello" }],
 });
 console.log(r.choices[0].message.content);
+console.log(r.usage);
+
+// Streaming
+const stream = await client.chat.completions.create({
+  model: "default",
+  messages: [{ role: "user", content: "walk me through yesterday" }],
+  stream: true,
+  stream_options: { include_usage: true },
+});
+for await (const chunk of stream) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
+  if (chunk.usage) console.log("\nusage:", chunk.usage);
+}
 ```
 
-### curl streaming
+### LangChain (Python)
+
+```python
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model="default",                        # any bajaclaw model string
+    base_url="http://localhost:8765/v1",
+    api_key="ignored-or-your-inbound-secret",
+    temperature=0,                          # ignored by bajaclaw, fine to pass
+)
+
+print(llm.invoke("summarize the last cycles").content)
+```
+
+### LlamaIndex
+
+```python
+from llama_index.llms.openai_like import OpenAILike
+
+llm = OpenAILike(
+    model="default:claude-sonnet-4-6",
+    api_base="http://localhost:8765/v1",
+    api_key="ignored-or-your-inbound-secret",
+    is_chat_model=True,
+)
+
+print(llm.complete("hello").text)
+```
+
+### Continue.dev
+
+In `~/.continue/config.json`:
+
+```json
+{
+  "models": [
+    {
+      "title": "BajaClaw default",
+      "provider": "openai",
+      "apiBase": "http://localhost:8765/v1",
+      "model": "default",
+      "apiKey": "ignored-or-your-inbound-secret"
+    },
+    {
+      "title": "BajaClaw research (opus)",
+      "provider": "openai",
+      "apiBase": "http://localhost:8765/v1",
+      "model": "research:claude-opus-4-7",
+      "apiKey": "ignored-or-your-inbound-secret"
+    }
+  ]
+}
+```
+
+### Cursor
+
+Settings -> Models -> Override OpenAI Base URL. Set:
+
+- Base URL: `http://localhost:8765/v1`
+- Model: `default` (or any bajaclaw model string)
+- API Key: any non-empty string (or your inbound bearer token)
+
+### Open WebUI
+
+Settings -> Connections -> OpenAI API. Add:
+
+- API Base URL: `http://localhost:8765/v1`
+- API Key: any string (or your inbound bearer token)
+
+The model dropdown will populate from `/v1/models`. Pick a profile or
+profile:model entry.
+
+### LibreChat
+
+In `librechat.yaml`:
+
+```yaml
+endpoints:
+  custom:
+    - name: "BajaClaw"
+      apiKey: "ignored-or-your-inbound-secret"
+      baseURL: "http://localhost:8765/v1"
+      models:
+        default: ["default", "default:claude-opus-4-7", "auto"]
+        fetch: true
+      titleConvo: true
+      titleModel: "default:claude-haiku-4-5"
+```
+
+---
+
+## Headless deployment
+
+`bajaclaw serve` is a long-running foreground process. It's separate
+from the BajaClaw heartbeat daemon (`bajaclaw daemon`). You can run
+either or both.
+
+### Pre-stage auth
+
+Before deploying headless, mint a token on a TTY:
+
+```bash
+bajaclaw setup-token   # one-time, persists to ~/.bajaclaw/api.json
+```
+
+After this, `bajaclaw serve` can run from launchd / systemd / cron with
+no interactive prompt.
+
+### macOS (launchd)
+
+`~/Library/LaunchAgents/com.bajaclaw.serve.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.bajaclaw.serve</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/bajaclaw</string>
+    <string>serve</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/bajaclaw-serve.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/bajaclaw-serve.err</string>
+</dict>
+</plist>
+```
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.bajaclaw.serve.plist
+```
+
+### Linux (systemd, user unit)
+
+`~/.config/systemd/user/bajaclaw-serve.service`:
+
+```ini
+[Unit]
+Description=BajaClaw OpenAI-compatible HTTP server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/bajaclaw serve
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now bajaclaw-serve.service
+journalctl --user -u bajaclaw-serve -f
+```
+
+### pm2
+
+```bash
+pm2 start "bajaclaw serve" --name bajaclaw-serve
+pm2 save
+pm2 startup           # follow the printed instructions to make persistent
+```
+
+### nginx reverse proxy (TLS + LAN exposure)
+
+```nginx
+server {
+  listen 443 ssl http2;
+  server_name bajaclaw.your-domain.tld;
+
+  ssl_certificate     /etc/letsencrypt/live/bajaclaw.your-domain.tld/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/bajaclaw.your-domain.tld/privkey.pem;
+
+  client_max_body_size 8m;
+
+  location / {
+    proxy_pass http://127.0.0.1:8765;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+    # Streaming
+    proxy_buffering off;
+    proxy_read_timeout 1h;
+    proxy_send_timeout 1h;
+    proxy_set_header Connection "";
+  }
+}
+```
+
+Pair with `bajaclaw serve --api-key <secret>` so the public endpoint
+demands a bearer token.
+
+### Caddy
 
 ```
-curl -N http://localhost:8765/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "default",
-    "messages": [{"role": "user", "content": "walk me through yesterday"}],
-    "stream": true
-  }'
+bajaclaw.your-domain.tld {
+    reverse_proxy 127.0.0.1:8765 {
+        flush_interval -1     # disable buffering for SSE
+        transport http {
+            read_timeout 1h
+            write_timeout 1h
+        }
+    }
+}
 ```
 
-### Cursor / Open WebUI / LibreChat / Tool of choice
+---
 
-Point the tool's "OpenAI-compatible" settings at
-`http://localhost:8765/v1`. Use any exposed profile name as the "model".
-If the tool requires an API key field, put any string - BajaClaw ignores
-it unless you've enabled auth.
+## CORS
 
-## Running under a supervisor
+Every response carries permissive CORS headers:
 
-`bajaclaw serve` is a long-running foreground process. Options:
+```
+access-control-allow-origin: *
+access-control-allow-methods: GET,POST,OPTIONS
+access-control-allow-headers: authorization,content-type
+```
 
-- **launchd/systemd/pm2**: wrap it so it auto-starts and restarts on
-  crash. BajaClaw's own daemon (`bajaclaw daemon`) is separate - it
-  handles the heartbeat loop, not the HTTP API.
-- **nginx/Caddy reverse proxy**: put TLS in front, add rate limits, map
-  to a subdomain. BajaClaw only needs an inbound HTTP connection.
+`OPTIONS` requests return `204` immediately (preflight handler).
 
-## Caveats
+If you want a tighter policy (per-origin, restricted methods, etc.),
+terminate at nginx or Caddy and rewrite headers there. The bajaclaw
+server itself doesn't expose a CORS-policy knob.
 
-- Every request = one full cycle = one backend call. Rate-limit in front
-  if you expose the API broadly.
-- BajaClaw's memory, skills, and MCP servers apply to every API request.
-  Callers are not fresh sessions - prior memory shapes responses. For a
-  stateless service, use a profile with `memorySync: false` and prune
-  the memories table periodically.
-- No function/tool calling in the ChatCompletion contract yet. The agent
-  uses tools internally; the API returns the final assistant content.
-- `tools` and `tool_choice` fields in the request are ignored.
-- `--bare` strips host-machine state from the underlying claude call.
-  Resolved auth precedence: `ANTHROPIC_API_KEY` env → `anthropicApiKey`
-  in `~/.bajaclaw/api.json` → interactive `claude setup-token` prompt
-  on a TTY. Run `bajaclaw setup-token` once to pre-save a token for
-  headless `bajaclaw serve` (launchd / systemd).
+---
+
+## Performance and limits
+
+- **Per-profile FIFO.** `runCycle` serializes by profile via
+  `serialize(profile, ...)` in `src/concurrency.ts`. Two API requests
+  for `default` queue. Two requests for `default` + `research` run in
+  parallel.
+- **Cycle deadline.** Each cycle has a backstop deadline of
+  `cycleTimeoutMs * 10` (default 100 minutes per cycle). Stuck cycles
+  free the queue head after that. `cfg.cycleTimeoutMs` is the per-
+  profile inactivity timeout (default 10 min).
+- **No throughput rate-limiter.** Add one in front (nginx, Caddy)
+  before exposing the API broadly. Each request equals one full
+  backend call and one `claude` subprocess.
+- **Memory growth.** Every API request adds a row to `cycles` and may
+  add memories via the post-cycle extractor. Long-lived profiles will
+  grow. `bajaclaw compact` consolidates memories; pruning `cycles` is
+  manual.
+
+---
+
+## Caveats and known gaps
+
+- **No tool/function calling in the contract.** The agent uses tools
+  internally; the API returns the final assistant content only.
+  `tools` and `tool_choice` request fields are silently ignored.
+- **Pre-v0.21.4 cycles** stored `usage: {0,0,0}`. Old cycles in the
+  database don't have token counts; new cycles do.
+- **Fresh sessions are not free.** Every API request still runs the
+  full BajaClaw pipeline (recall, skills, MCP, extract). For a truly
+  stateless service, configure a profile with `memorySync: false` and
+  prune the `memories` table periodically.
+- **No SSE keep-alive ping.** If a cycle takes minutes, intermediaries
+  may close the idle TCP connection. Reverse-proxy timeouts above are
+  set to 1h; tune your client too.
+- **`--bare` and 3P providers.** `--bare` doesn't block 3P provider
+  routing (Bedrock, Vertex, Foundry). It only disables OAuth and
+  keychain reads on the Anthropic path. If you've configured `claude`
+  to use a 3P provider, that path keeps working.
+- **The OpenAI endpoint and the daemon are independent.** `bajaclaw
+  daemon` runs the heartbeat loop and channel adapters; `bajaclaw
+  serve` runs the HTTP API. Run either, both, or neither.
+
+---
+
+## Troubleshooting
+
+| symptom | likely cause | fix |
+|---|---|---|
+| Every request returns text "API Error: 401 Invalid authentication credentials" | no Anthropic key in scope | `bajaclaw setup-token`, or `export ANTHROPIC_API_KEY=...` |
+| `404 unknown profile: <name>` | profile doesn't exist or isn't in `exposedProfiles` allowlist | `bajaclaw profile list`; remove from `exposedProfiles` or create the profile |
+| `401 missing bearer token` on every request | inbound `apiKey` set but client isn't sending it | add `Authorization: Bearer <key>` header |
+| `refusing to bind 0.0.0.0 without an API key` at startup | binding non-localhost without auth | pass `--api-key <secret>` |
+| Streaming hangs, no partial output | reverse proxy buffering | set `proxy_buffering off` (nginx) / `flush_interval -1` (Caddy) |
+| `usage` keeps coming back zeros | Haiku-tier cycle, or stream client disconnected before completion | use sonnet/opus, or check that the stream completes |
+| Server starts but every cycle fails fast | likely outbound auth bad; check the spawned `claude` command | `POST /v1/bajaclaw/cycle` returns the exact `command` array; run it manually |
+
+For deeper debugging:
+
+- `~/.bajaclaw/profiles/<profile>/logs/YYYY-MM-DD.jsonl` has structured
+  cycle logs (`cycle.start`, `cycle.stage`, `cycle.fail`, `cycle.ok`).
+- The dashboard's Cycles view shows full request/response/error per
+  cycle, including the assembled prompt.
