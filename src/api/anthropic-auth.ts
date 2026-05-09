@@ -23,10 +23,25 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
 export type AnthropicKeySource = "env" | "saved" | "setup-token";
+export type AnthropicKeyEnvVar = "ANTHROPIC_API_KEY" | "CLAUDE_CODE_OAUTH_TOKEN";
 
 export interface ResolvedAnthropicKey {
   source: AnthropicKeySource;
   key: string;
+  // Which env var to inject this key as into the spawned `claude`
+  // subprocess. `sk-ant-oat*` tokens are subscription OAuth tokens that
+  // only work via CLAUDE_CODE_OAUTH_TOKEN; `sk-ant-api*` and unknown
+  // prefixes default to ANTHROPIC_API_KEY (real API key path).
+  envVar: AnthropicKeyEnvVar;
+}
+
+// Subscription OAuth tokens (sk-ant-oat...) are scoped to the OAuth
+// flow; passing them as ANTHROPIC_API_KEY produces a real "Invalid API
+// key" rejection at the Anthropic edge. Real API keys (sk-ant-api...)
+// and unknown-prefix strings (test fixtures, future formats) default to
+// ANTHROPIC_API_KEY.
+export function envVarForToken(key: string): AnthropicKeyEnvVar {
+  return key.startsWith("sk-ant-oat") ? "CLAUDE_CODE_OAUTH_TOKEN" : "ANTHROPIC_API_KEY";
 }
 
 export interface ResolveOptions {
@@ -106,17 +121,24 @@ export async function runSetupTokenInteractively(): Promise<string | null> {
 }
 
 export async function resolveAnthropicKey(opts: ResolveOptions = {}): Promise<ResolvedAnthropicKey | null> {
-  const fromEnv = (process.env.ANTHROPIC_API_KEY ?? "").trim();
-  if (fromEnv) return { source: "env", key: fromEnv };
+  // Check both env vars: ANTHROPIC_API_KEY (real keys) and
+  // CLAUDE_CODE_OAUTH_TOKEN (subscription OAuth). Whichever is present
+  // wins; envVar derives from the token prefix, not from where we
+  // found it (a sk-ant-oat token in ANTHROPIC_API_KEY is still wrong
+  // and needs to route as CLAUDE_CODE_OAUTH_TOKEN).
+  const fromApiEnv = (process.env.ANTHROPIC_API_KEY ?? "").trim();
+  if (fromApiEnv) return { source: "env", key: fromApiEnv, envVar: envVarForToken(fromApiEnv) };
+  const fromOauthEnv = (process.env.CLAUDE_CODE_OAUTH_TOKEN ?? "").trim();
+  if (fromOauthEnv) return { source: "env", key: fromOauthEnv, envVar: envVarForToken(fromOauthEnv) };
 
   const saved = loadSavedAnthropicKey();
-  if (saved) return { source: "saved", key: saved };
+  if (saved) return { source: "saved", key: saved, envVar: envVarForToken(saved) };
 
   if (!opts.autoSetup || !ttyAvailable()) return null;
 
   const { confirm } = await import("../prompt.js");
   const yes = await confirm(
-    "No ANTHROPIC_API_KEY found. Run `claude setup-token` now to mint one (subscription users)?",
+    "No Anthropic auth found. Run `claude setup-token` now to mint one (subscription users)?",
     true,
   );
   if (!yes) return null;
@@ -130,5 +152,5 @@ export async function resolveAnthropicKey(opts: ResolveOptions = {}): Promise<Re
     console.error(`failed to save token to ~/.bajaclaw/api.json: ${(e as Error).message}`);
     return null;
   }
-  return { source: "setup-token", key: minted };
+  return { source: "setup-token", key: minted, envVar: envVarForToken(minted) };
 }

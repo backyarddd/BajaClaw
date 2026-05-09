@@ -11,7 +11,7 @@ What "full cycle" means per request:
 2. Memory recall against the task text.
 3. Skill matching against the task and tool allowlist.
 4. MCP config assembly (per-profile + optional desktop merge).
-5. Backend call to `claude` with `--bare` and the assembled prompt.
+5. Backend call to `claude` in lightweight mode with the assembled prompt.
 6. Response parsing, cost + token accounting, response storage.
 7. Post-cycle memory extraction (skipped on Haiku-tier and dry-run).
 
@@ -55,28 +55,36 @@ There are two independent auth layers. Don't confuse them:
 
 ### Outbound auth (bajaclaw -> Anthropic)
 
-Endpoint cycles run with `--bare` (see `src/claude.ts`). `--bare` strips
-host-machine sluttery: CLAUDE.md auto-discovery, hooks, plugin sync,
-attribution, auto-memory, background prefetches, keychain reads. Net
-effect: behavior is reproducible across machines, but Anthropic auth is
-tightened to one of:
+Endpoint cycles run in **lightweight mode** (v0.21.6+): the spawned
+`claude` gets `--setting-sources=local --strict-mcp-config
+--no-session-persistence`. This suppresses the user-level
+`~/.claude/CLAUDE.md`, user-level settings (where hooks live), and
+non-explicit MCP servers, while leaving auth working normally.
 
-- `ANTHROPIC_API_KEY` env var
-- `apiKeyHelper` in a settings file (a shell command that prints a key;
-  configure via `--settings <path>` if you want this path)
-- 3P provider creds: AWS (Bedrock), GCP (Vertex), Azure (Foundry)
+Two token formats are supported and routed automatically:
 
-OAuth and macOS keychain reads are explicitly disabled.
+- **`sk-ant-oat*`** -> subscription OAuth token (from `claude setup-token`).
+  Injected into the spawned `claude` as `CLAUDE_CODE_OAUTH_TOKEN`. Bills
+  against your Pro/Max/Team/Enterprise quota.
+- **`sk-ant-api*`** -> real Anthropic API key (from console.anthropic.com).
+  Injected as `ANTHROPIC_API_KEY`. Bills against your API account.
+
+Token type is detected by prefix; you don't pick the env var manually.
 
 `bajaclaw serve` resolves outbound auth at startup in this order:
 
-1. `process.env.ANTHROPIC_API_KEY` (if set, used as-is)
+1. `process.env.ANTHROPIC_API_KEY` or `process.env.CLAUDE_CODE_OAUTH_TOKEN`
 2. `anthropicApiKey` field in `~/.bajaclaw/api.json`
 3. **TTY only:** prompts to run `claude setup-token` and saves the result
 
 If none of those resolves and you're not on a TTY, the server starts
 anyway with a yellow warning; every `/v1/chat/completions` request will
 then 401 at the Anthropic layer until a key is in scope.
+
+(Earlier versions used `claude --bare`, which only accepts real API
+keys. Subscription OAuth tokens fail under `--bare` with "Invalid API
+key". v0.21.6 switched to the lightweight flags so subscription users
+work too.)
 
 #### Subscription users: `claude setup-token`
 
@@ -420,13 +428,13 @@ Response:
   "outputTokens": 256,
   "turns": 3,
   "prompt": "(the assembled prompt for this cycle, as sent to claude)",
-  "command": ["claude", "-p", "...", "--model", "claude-sonnet-4-6", "--bare", "..."],
+  "command": ["claude", "-p", "...", "--model", "claude-sonnet-4-6", "--setting-sources=local", "--strict-mcp-config", "--no-session-persistence", "..."],
   "source": "api"
 }
 ```
 
-Same `--bare` semantics apply: this endpoint resolves outbound auth via
-the same path as `/v1/chat/completions`.
+Same lightweight-mode semantics apply: this endpoint resolves outbound
+auth via the same path as `/v1/chat/completions`.
 
 `dryRun: true` runs the full pipeline (memory recall, skills, MCP
 assembly, prompt build) but skips the backend call. Returns
@@ -997,10 +1005,10 @@ server itself doesn't expose a CORS-policy knob.
 - **No SSE keep-alive ping.** If a cycle takes minutes, intermediaries
   may close the idle TCP connection. Reverse-proxy timeouts above are
   set to 1h; tune your client too.
-- **`--bare` and 3P providers.** `--bare` doesn't block 3P provider
-  routing (Bedrock, Vertex, Foundry). It only disables OAuth and
-  keychain reads on the Anthropic path. If you've configured `claude`
-  to use a 3P provider, that path keeps working.
+- **Lightweight mode and 3P providers.** Lightweight flags don't block
+  3P provider routing (Bedrock, Vertex, Foundry). If you've configured
+  `claude` to use a 3P provider via env vars or settings, that path
+  keeps working.
 - **The OpenAI endpoint and the daemon are independent.** `bajaclaw
   daemon` runs the heartbeat loop and channel adapters; `bajaclaw
   serve` runs the HTTP API. Run either, both, or neither.

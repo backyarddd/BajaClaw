@@ -67,9 +67,20 @@ export interface CycleInput {
   // here as tool-use events arrive. Channel-sourced cycles route
   // narration to the adapter's progress message instead.
   onNarration?: (u: NarrationUpdate) => void;
-  // Pass --bare to the underlying claude CLI invocation. Set by the
-  // OpenAI HTTP endpoint so API cycles run in minimal mode.
+  // Pass --bare to the underlying claude CLI invocation. Forces
+  // ANTHROPIC_API_KEY auth (no OAuth); OpenAI endpoint no longer uses
+  // this since v0.21.6.
   bare?: boolean;
+  // OAuth-friendly equivalent of --bare. Suppresses user-level CLAUDE.md
+  // and hooks via --setting-sources=local --strict-mcp-config. The
+  // OpenAI endpoint sets this on every request as of v0.21.6.
+  lightweight?: boolean;
+  // Env var injection for the spawned claude subprocess. Used by the
+  // OpenAI endpoint to plumb the resolved Anthropic auth without
+  // mutating process.env globally. envVar is one of
+  // "ANTHROPIC_API_KEY" or "CLAUDE_CODE_OAUTH_TOKEN" depending on
+  // whether the saved key is an API key or an OAuth token.
+  outboundAuthKey?: { key: string; envVar: string };
 }
 
 export interface CycleOutput {
@@ -260,6 +271,9 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       BAJACLAW_DASHBOARD_PORT: String(cfg.dashboardPort ?? 7337),
     };
     if (source && (editableSource || iMessageSource)) spawnEnv.BAJACLAW_SOURCE = source;
+    if (input.outboundAuthKey) {
+      spawnEnv[input.outboundAuthKey.envVar] = input.outboundAuthKey.key;
+    }
 
     const opts: ClaudeOptions & { dryRun?: boolean } = {
       model: picked.model,
@@ -276,6 +290,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       dryRun: input.dryRun,
       env: spawnEnv,
       bare: input.bare,
+      lightweight: input.lightweight,
     };
 
     // Optional shadow-git pre-snapshot. Off by default (cfg.snapshots.enabled).

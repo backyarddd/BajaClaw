@@ -60,11 +60,17 @@ export interface ClaudeOptions {
   // (CLAUDE.md auto-discovery, hooks, plugin sync, attribution,
   // auto-memory, background prefetches, keychain reads) and forces
   // strict ANTHROPIC_API_KEY / apiKeyHelper auth (OAuth + keychain are
-  // never read). BajaClaw's own memory/skills/MCP still flow through
-  // because they go into the assembled prompt, not Claude's
-  // auto-discovery. Used by the HTTP API for predictable, stateless
-  // request handling.
+  // never read). Subscription OAuth tokens (`sk-ant-oat*`) DO NOT work
+  // under --bare; use `lightweight` instead for OAuth-friendly hygiene.
   bare?: boolean;
+  // Lightweight mode: emits `--setting-sources=local --strict-mcp-config
+  // --no-session-persistence`. Suppresses the user-level CLAUDE.md and
+  // user-level settings (hooks live there) while leaving OAuth +
+  // keychain auth working. The OpenAI endpoint uses this so subscription
+  // users get host-state hygiene without the --bare auth-tightening.
+  // Verified empirically that user-level CLAUDE.md content does not
+  // appear in the cycle's context when this is set.
+  lightweight?: boolean;
 }
 
 export interface ClaudeResult {

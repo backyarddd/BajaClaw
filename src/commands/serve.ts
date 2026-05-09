@@ -34,16 +34,16 @@ export async function runServe(opts: ServeCmdOptions = {}): Promise<void> {
     process.exit(2);
   }
 
-  // Resolve outbound Anthropic auth before serving. --bare cycles need
-  // ANTHROPIC_API_KEY in env; we accept it from env, from api.json, or
-  // (on a TTY) we offer to mint one via `claude setup-token`.
+  // Resolve outbound Anthropic auth before serving. Lightweight cycles
+  // accept either an API key (sk-ant-api*) or a subscription OAuth
+  // token (sk-ant-oat*); we route to the right env var per token type.
+  // Sources, in order: env -> saved api.json -> interactive setup on TTY.
   const resolved = await resolveAnthropicKey({ autoSetup: true });
-  if (resolved) {
-    process.env.ANTHROPIC_API_KEY = resolved.key;
-  }
+  const outboundAuth = resolved ? { key: resolved.key, envVar: resolved.envVar } : undefined;
 
   serveApi({
     ...cfg,
+    outboundAuth,
     onReady: ({ host, port }) => {
       console.log(chalk.green(`✓ BajaClaw API listening on http://${host}:${port}/`));
       console.log(chalk.dim(`  OpenAI-compatible:  /v1/chat/completions  /v1/models`));
@@ -59,20 +59,22 @@ export async function runServe(opts: ServeCmdOptions = {}): Promise<void> {
       } else {
         console.log(chalk.dim(`  exposed profiles:   all`));
       }
-      console.log(chalk.dim(`  cycle mode:         --bare`));
+      console.log(chalk.dim(`  cycle mode:         lightweight (--setting-sources=local + --strict-mcp-config)`));
       if (resolved) {
         const sourceLabel =
           resolved.source === "env" ? "env"
           : resolved.source === "saved" ? "saved in ~/.bajaclaw/api.json"
           : "minted via claude setup-token";
-        console.log(chalk.dim(`  outbound auth:      ANTHROPIC_API_KEY (${sourceLabel})`));
+        const tokenKind = resolved.envVar === "CLAUDE_CODE_OAUTH_TOKEN" ? "OAuth (subscription)" : "API key";
+        console.log(chalk.dim(`  outbound auth:      ${resolved.envVar} (${tokenKind}, ${sourceLabel})`));
       } else {
-        console.log(chalk.yellow(`  WARNING: no ANTHROPIC_API_KEY resolved. API cycles run with --bare and will`));
+        console.log(chalk.yellow(`  WARNING: no Anthropic auth resolved. API cycles will 401 until you set one.`));
         if (isInteractive()) {
-          console.log(chalk.yellow(`           401 until a key is set. Run \`bajaclaw setup-token\` to mint one.`));
+          console.log(chalk.yellow(`           Run \`bajaclaw setup-token\` to mint one (subscription users) or`));
+          console.log(chalk.yellow(`           export ANTHROPIC_API_KEY (real API key) before starting serve.`));
         } else {
-          console.log(chalk.yellow(`           401 until a key is set. Run \`bajaclaw setup-token\` on a TTY to mint one,`));
-          console.log(chalk.yellow(`           or export ANTHROPIC_API_KEY in this process's env.`));
+          console.log(chalk.yellow(`           Run \`bajaclaw setup-token\` on a TTY first, or export`));
+          console.log(chalk.yellow(`           ANTHROPIC_API_KEY / CLAUDE_CODE_OAUTH_TOKEN in this process's env.`));
         }
       }
     },

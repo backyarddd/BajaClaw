@@ -107,10 +107,18 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   }
   // Minimal mode: skip CLAUDE.md auto-discovery, hooks, plugin sync,
   // attribution, auto-memory, keychain reads, background prefetches.
-  // Required for predictable behavior when serving the OpenAI-compatible
-  // endpoint - we don't want host-machine state leaking into API cycles.
-  // Forces strict ANTHROPIC_API_KEY / apiKeyHelper auth.
+  // Forces strict ANTHROPIC_API_KEY / apiKeyHelper auth (no OAuth).
   if (opts.bare) args.push("--bare");
+  // Lightweight mode: the OAuth-friendly equivalent of --bare for the
+  // OpenAI endpoint. --setting-sources=local excludes user-level + project
+  // settings (where user CLAUDE.md and hooks live). --strict-mcp-config
+  // pins MCP to the explicit --mcp-config we pass. --no-session-persistence
+  // skips writing session state to disk.
+  if (opts.lightweight) {
+    args.push("--setting-sources=local");
+    args.push("--strict-mcp-config");
+    args.push("--no-session-persistence");
+  }
   // JSON output always included when the flag is supported. runOnce checks support.
   return args;
 }
