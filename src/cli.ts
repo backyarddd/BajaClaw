@@ -588,6 +588,17 @@ program.command("serve")
     streamDelayMs: opts.streamDelay ? Number(opts.streamDelay) : undefined,
   }));
 
+// setup-token - mint an Anthropic inference token for `bajaclaw serve`
+// (--bare cycles need ANTHROPIC_API_KEY; subscription users get one
+// via `claude setup-token`, billed against subscription quota).
+program.command("setup-token")
+  .description("Mint a long-lived Anthropic inference token for the OpenAI endpoint")
+  .option("--force", "replace an existing saved token without prompting")
+  .action(async (opts) => {
+    const { runSetupTokenCmd } = await import("./commands/setup-token.js");
+    await runSetupTokenCmd({ force: !!opts.force });
+  });
+
 // Banner
 // Progress-ping for running cycles. Invoked from inside a spawned
 // `claude` subprocess via the Bash tool. Reads context from the env

@@ -14,9 +14,27 @@ go into the assembled prompt, not Claude's auto-discovery), so this
 strips host-machine state without losing anything BajaClaw injects.
 
 Auth implication: `--bare` forces strict `ANTHROPIC_API_KEY` (or
-`apiKeyHelper` via `--settings`). OAuth and keychain reads are disabled.
-Set `ANTHROPIC_API_KEY` in the env where `bajaclaw serve` runs, or every
-request will 401. `bajaclaw serve` warns at startup if the key is missing.
+`apiKeyHelper` via `--settings`, or 3P provider creds for
+Bedrock/Vertex/Foundry). OAuth and keychain reads are disabled.
+
+`bajaclaw serve` resolves outbound auth in this order:
+
+1. `process.env.ANTHROPIC_API_KEY` (whatever is exported)
+2. `anthropicApiKey` field in `~/.bajaclaw/api.json` (saved by setup)
+3. On a TTY: prompts to run `claude setup-token` and saves the result
+
+For Pro/Max/Team/Enterprise subscribers, **`claude setup-token` mints a
+1-year inference-scoped token** that works as `ANTHROPIC_API_KEY` and
+bills against subscription quota - no separate API credits needed.
+
+To pre-set up auth without an interactive `bajaclaw serve` start:
+
+```
+bajaclaw setup-token         # walks claude setup-token, saves to api.json
+bajaclaw setup-token --force # replace an existing saved token
+```
+
+The saved file is chmod 600.
 
 ## Starting the server
 
@@ -41,9 +59,15 @@ Instead of CLI flags, put defaults at `~/.bajaclaw/api.json`:
   "port": 8765,
   "apiKey": "your-long-secret",
   "exposedProfiles": ["default"],
-  "streamDelayMs": 20
+  "streamDelayMs": 20,
+  "anthropicApiKey": "sk-ant-..."
 }
 ```
+
+`apiKey` is the **inbound** bearer token clients must send to call this
+server. `anthropicApiKey` is the **outbound** key bajaclaw uses when
+spawning `claude` for each cycle - they're independent. The outbound
+key is normally written by `bajaclaw setup-token`, not by hand.
 
 CLI flags override the file.
 
@@ -326,4 +350,7 @@ it unless you've enabled auth.
   uses tools internally; the API returns the final assistant content.
 - `tools` and `tool_choice` fields in the request are ignored.
 - `--bare` strips host-machine state from the underlying claude call.
-  Set `ANTHROPIC_API_KEY` or every cycle 401s.
+  Resolved auth precedence: `ANTHROPIC_API_KEY` env → `anthropicApiKey`
+  in `~/.bajaclaw/api.json` → interactive `claude setup-token` prompt
+  on a TTY. Run `bajaclaw setup-token` once to pre-save a token for
+  headless `bajaclaw serve` (launchd / systemd).

@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.21.5
+
+**`bajaclaw serve` auto-resolves outbound Anthropic auth.**
+
+v0.21.4 made the OpenAI endpoint run cycles with `--bare` for predictable
+behavior, but `--bare` refuses OAuth/keychain auth and demands
+`ANTHROPIC_API_KEY` (or `apiKeyHelper`, or 3P provider creds). On
+subscription auth, that meant every endpoint request 401'd until the
+user manually ran `claude setup-token` and exported the result.
+
+`bajaclaw serve` now resolves outbound auth in three steps:
+
+1. `process.env.ANTHROPIC_API_KEY` (if exported)
+2. `anthropicApiKey` field in `~/.bajaclaw/api.json` (if previously saved)
+3. On a TTY: prompts to run `claude setup-token` now, captures the
+   pasted token, saves it to `~/.bajaclaw/api.json` (chmod 600)
+
+The resolved key is injected into `process.env.ANTHROPIC_API_KEY` so
+spawned `claude` cycles inherit it. `cleanSpawnEnv()` (landmine 19) does
+not strip `ANTHROPIC_API_KEY`, so the inheritance survives.
+
+For headless setups (launchd / systemd / non-TTY): run
+`bajaclaw setup-token` once on a TTY first; the saved token is picked
+up automatically on every subsequent `bajaclaw serve` start. Pass
+`--force` to replace an existing saved token without prompting.
+
+Subscription users (Pro/Max/Team/Enterprise) get a 1-year inference
+token via `claude setup-token` that bills against subscription quota -
+no separate API credits required.
+
+Startup banner now shows the auth source on each line ("env" / "saved
+in ~/.bajaclaw/api.json" / "minted via claude setup-token") and
+distinguishes inbound bearer auth from outbound Anthropic auth.
+
+New: `src/api/anthropic-auth.ts` (resolver + saver + setup runner),
+`src/commands/setup-token.ts` (the top-level CLI command),
+`tests/anthropic-auth.test.js` (5 hermetic tests via `BAJACLAW_HOME`).
+Module's local cross-file refs are lazy-imported per landmine 6 to keep
+it test-friendly under Node's type-strip path.
+
+Tests: 239 (was 234). Em-dash count: 0.
+
 ## 0.21.4
 
 **OpenAI endpoint: real `usage` in completions, all cycles run with `--bare`.**

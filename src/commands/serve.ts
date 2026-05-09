@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { bajaclawHome } from "../paths.js";
 import { serveApi } from "../api/server.js";
 import type { ApiConfig } from "../api/server.js";
+import { resolveAnthropicKey } from "../api/anthropic-auth.js";
+import { isInteractive } from "../prompt.js";
 
 export interface ServeCmdOptions {
   host?: string;
@@ -32,31 +34,46 @@ export async function runServe(opts: ServeCmdOptions = {}): Promise<void> {
     process.exit(2);
   }
 
+  // Resolve outbound Anthropic auth before serving. --bare cycles need
+  // ANTHROPIC_API_KEY in env; we accept it from env, from api.json, or
+  // (on a TTY) we offer to mint one via `claude setup-token`.
+  const resolved = await resolveAnthropicKey({ autoSetup: true });
+  if (resolved) {
+    process.env.ANTHROPIC_API_KEY = resolved.key;
+  }
+
   serveApi({
     ...cfg,
     onReady: ({ host, port }) => {
       console.log(chalk.green(`✓ BajaClaw API listening on http://${host}:${port}/`));
       console.log(chalk.dim(`  OpenAI-compatible:  /v1/chat/completions  /v1/models`));
       console.log(chalk.dim(`  Native:             /v1/bajaclaw/cycle   /v1/bajaclaw/tasks`));
-      if (cfg.apiKey) console.log(chalk.dim(`  auth: Bearer token required`));
+      if (cfg.apiKey) console.log(chalk.dim(`  inbound auth:       Bearer token required`));
       else if (host !== "127.0.0.1" && host !== "localhost") {
-        console.log(chalk.yellow(`  WARNING: auth disabled on non-localhost bind`));
+        console.log(chalk.yellow(`  WARNING: inbound auth disabled on non-localhost bind`));
       } else {
-        console.log(chalk.dim(`  auth: none (localhost-only)`));
+        console.log(chalk.dim(`  inbound auth:       none (localhost-only)`));
       }
       if (cfg.exposedProfiles?.length) {
-        console.log(chalk.dim(`  exposed profiles: ${cfg.exposedProfiles.join(", ")}`));
+        console.log(chalk.dim(`  exposed profiles:   ${cfg.exposedProfiles.join(", ")}`));
       } else {
-        console.log(chalk.dim(`  exposed profiles: all`));
+        console.log(chalk.dim(`  exposed profiles:   all`));
       }
-      console.log(chalk.dim(`  cycle mode:         --bare (Anthropic auth: ANTHROPIC_API_KEY only)`));
-      if (!process.env.ANTHROPIC_API_KEY) {
-        console.log(chalk.yellow(
-          `  WARNING: ANTHROPIC_API_KEY is not set. API cycles run with --bare, which`,
-        ));
-        console.log(chalk.yellow(
-          `           refuses OAuth/keychain auth. Every request will 401 until you set the key.`,
-        ));
+      console.log(chalk.dim(`  cycle mode:         --bare`));
+      if (resolved) {
+        const sourceLabel =
+          resolved.source === "env" ? "env"
+          : resolved.source === "saved" ? "saved in ~/.bajaclaw/api.json"
+          : "minted via claude setup-token";
+        console.log(chalk.dim(`  outbound auth:      ANTHROPIC_API_KEY (${sourceLabel})`));
+      } else {
+        console.log(chalk.yellow(`  WARNING: no ANTHROPIC_API_KEY resolved. API cycles run with --bare and will`));
+        if (isInteractive()) {
+          console.log(chalk.yellow(`           401 until a key is set. Run \`bajaclaw setup-token\` to mint one.`));
+        } else {
+          console.log(chalk.yellow(`           401 until a key is set. Run \`bajaclaw setup-token\` on a TTY to mint one,`));
+          console.log(chalk.yellow(`           or export ANTHROPIC_API_KEY in this process's env.`));
+        }
       }
     },
   });
@@ -68,7 +85,14 @@ export function userApiConfigPath(): string {
   return join(bajaclawHome(), "api.json");
 }
 
-interface ApiFileCfg extends ApiConfig {}
+interface ApiFileCfg extends ApiConfig {
+  // Outbound Anthropic key for the spawned `claude` subprocess. Read
+  // by anthropic-auth.ts; written by `bajaclaw setup-token` and the
+  // interactive auto-setup in `bajaclaw serve`. Independent from the
+  // inbound `apiKey` bearer token (which authenticates clients
+  // connecting TO the bajaclaw HTTP server).
+  anthropicApiKey?: string;
+}
 
 export function loadUserApiConfig(): ApiFileCfg {
   const p = userApiConfigPath();
