@@ -21,9 +21,19 @@ export interface OpenAIChatRequest {
   model: string;
   messages: OpenAIMessage[];
   stream?: boolean;
+  // OpenAI's stream_options. We honor `include_usage`: when true, the
+  // streaming response emits a final usage-only chunk (choices: []) with
+  // populated token counts before [DONE]. Default off (matches OpenAI).
+  stream_options?: { include_usage?: boolean };
   temperature?: number;
   max_tokens?: number;
   user?: string;
+}
+
+export interface ChatUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
 }
 
 export interface ChatChoice {
@@ -38,11 +48,7 @@ export interface ChatCompletion {
   created: number;
   model: string;
   choices: ChatChoice[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
+  usage: ChatUsage;
 }
 
 export interface ChatCompletionChunk {
@@ -55,6 +61,10 @@ export interface ChatCompletionChunk {
     delta: { role?: "assistant"; content?: string };
     finish_reason: null | "stop" | "length" | "error";
   }[];
+  // Populated only on the final usage chunk emitted when the request set
+  // stream_options.include_usage = true. Per the OpenAI streaming spec,
+  // that chunk has choices: [] and usage populated.
+  usage?: ChatUsage;
 }
 
 // Map the request's "model" field to a BajaClaw profile + optional
@@ -124,6 +134,22 @@ function labelFor(role: OpenAIMessage["role"]): string {
   }
 }
 
+// Build a ChatUsage from a CycleOutput. CycleOutput.inputTokens already
+// sums input + cache_creation + cache_read (see claude.ts parseResult)
+// so it matches the displayed "in" count and what the user is billed
+// for. completion_tokens maps directly to outputTokens. Either may be
+// undefined for haiku-tier or stream-aborted cycles; we coerce to 0 in
+// that case so the response is always a valid ChatUsage.
+export function usageFromCycle(out: CycleOutput): ChatUsage {
+  const prompt = out.inputTokens ?? 0;
+  const completion = out.outputTokens ?? 0;
+  return {
+    prompt_tokens: prompt,
+    completion_tokens: completion,
+    total_tokens: prompt + completion,
+  };
+}
+
 export function cycleToCompletion(model: string, out: CycleOutput): ChatCompletion {
   const id = `chatcmpl-bc-${out.cycleId}`;
   const finish: "stop" | "error" = out.ok ? "stop" : "error";
@@ -139,11 +165,20 @@ export function cycleToCompletion(model: string, out: CycleOutput): ChatCompleti
         finish_reason: finish,
       },
     ],
-    usage: {
-      prompt_tokens: 0,
-      completion_tokens: 0,
-      total_tokens: 0,
-    },
+    usage: usageFromCycle(out),
+  };
+}
+
+// OpenAI's terminal usage chunk for `stream_options.include_usage: true`:
+// choices: [] and usage populated. Emitted just before `data: [DONE]`.
+export function makeUsageChunk(id: string, model: string, usage: ChatUsage): ChatCompletionChunk {
+  return {
+    id,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [],
+    usage,
   };
 }
 

@@ -49,6 +49,15 @@ export async function runServe(opts: ServeCmdOptions = {}): Promise<void> {
       } else {
         console.log(chalk.dim(`  exposed profiles: all`));
       }
+      console.log(chalk.dim(`  cycle mode:         --bare (Anthropic auth: ANTHROPIC_API_KEY only)`));
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.log(chalk.yellow(
+          `  WARNING: ANTHROPIC_API_KEY is not set. API cycles run with --bare, which`,
+        ));
+        console.log(chalk.yellow(
+          `           refuses OAuth/keychain auth. Every request will 401 until you set the key.`,
+        ));
+      }
     },
   });
   // Keep the process alive.

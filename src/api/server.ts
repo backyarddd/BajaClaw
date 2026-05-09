@@ -27,6 +27,8 @@ import {
   resolveRequest,
   cycleToCompletion,
   makeChunk,
+  makeUsageChunk,
+  usageFromCycle,
   type OpenAIChatRequest,
 } from "./translate.js";
 import { KNOWN_MODELS } from "../model-picker.js";
@@ -100,7 +102,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ServeOpti
     const body = await readJson<{ profile?: string; task?: string; dryRun?: boolean }>(req);
     const profile = body.profile ?? "default";
     if (!profileExposed(profile, opts.exposedProfiles)) return sendJson(res, 404, err("unknown profile"));
-    const out = await runCycle({ profile, task: body.task, dryRun: !!body.dryRun });
+    const out = await runCycle({ profile, task: body.task, dryRun: !!body.dryRun, bare: true });
     return sendJson(res, 200, out);
   }
 
@@ -138,7 +140,12 @@ async function handleChat(
   const wantStream = !!body.stream;
 
   if (!wantStream) {
-    const out = await runCycle({ profile: resolved.profile, task, modelOverride: resolved.modelOverride });
+    const out = await runCycle({
+      profile: resolved.profile,
+      task,
+      modelOverride: resolved.modelOverride,
+      bare: true,
+    });
     const completion = cycleToCompletion(body.model ?? resolved.profile, out);
     return sendJson(res, 200, completion);
   }
@@ -168,11 +175,13 @@ async function handleChat(
   let aborted = false;
   res.on("close", () => { aborted = true; });
 
+  const includeUsage = body.stream_options?.include_usage === true;
   try {
     const out = await runCycle({
       profile: resolved.profile,
       task,
       modelOverride: resolved.modelOverride,
+      bare: true,
       onPartialText: (delta) => {
         if (aborted || !delta) return;
         streamed += delta;
@@ -192,6 +201,13 @@ async function handleChat(
         writeEvent(res, makeChunk(id, model, { content: out.text }));
       }
       writeEvent(res, makeChunk(id, model, {}, "stop"));
+      // OpenAI streaming spec: if the request opted into usage, emit a
+      // final chunk with choices: [] and the populated usage object
+      // before [DONE]. Successful cycles only - error paths already
+      // surfaced finish_reason: "error".
+      if (includeUsage) {
+        writeEvent(res, makeUsageChunk(id, model, usageFromCycle(out)));
+      }
     }
   } catch (e) {
     if (!aborted) writeEvent(res, makeChunk(id, model, { content: (e as Error).message }, "error"));
