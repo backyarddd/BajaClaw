@@ -56,6 +56,15 @@ export interface ClaudeOptions {
   // by runCycle to tell the spawned agent which profile/source/port to
   // target when it calls `bajaclaw say` for progress updates.
   env?: Record<string, string>;
+  // Pass --bare to the claude CLI. Strips host-machine sluttery
+  // (CLAUDE.md auto-discovery, hooks, plugin sync, attribution,
+  // auto-memory, background prefetches, keychain reads) and forces
+  // strict ANTHROPIC_API_KEY / apiKeyHelper auth (OAuth + keychain are
+  // never read). BajaClaw's own memory/skills/MCP still flow through
+  // because they go into the assembled prompt, not Claude's
+  // auto-discovery. Used by the HTTP API for predictable, stateless
+  // request handling.
+  bare?: boolean;
 }
 
 export interface ClaudeResult {

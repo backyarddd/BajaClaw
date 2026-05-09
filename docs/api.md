@@ -6,6 +6,18 @@ LangChain, LlamaIndex, curl, the `openai` SDKs - can drive BajaClaw as if
 it were an LLM. Each request is a full BajaClaw cycle: memory recall,
 skill matching, MCP inheritance, the backend call, post-cycle extract.
 
+**Endpoint cycles run with `--bare`** to keep API behavior predictable:
+the underlying `claude` invocation skips CLAUDE.md auto-discovery, hooks,
+plugin sync, attribution, auto-memory, background prefetches, and
+keychain reads. BajaClaw's own memory/skills/MCP still flow through (they
+go into the assembled prompt, not Claude's auto-discovery), so this
+strips host-machine state without losing anything BajaClaw injects.
+
+Auth implication: `--bare` forces strict `ANTHROPIC_API_KEY` (or
+`apiKeyHelper` via `--settings`). OAuth and keychain reads are disabled.
+Set `ANTHROPIC_API_KEY` in the env where `bajaclaw serve` runs, or every
+request will 401. `bajaclaw serve` warns at startup if the key is missing.
+
 ## Starting the server
 
 ```
@@ -129,9 +141,11 @@ Message handling:
       "finish_reason": "stop"
     }
   ],
-  "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+  "usage": {"prompt_tokens": 1234, "completion_tokens": 256, "total_tokens": 1490}
 }
 ```
+
+`prompt_tokens` is the displayed "in" count: input + cache_creation + cache_read summed together, matching what the cycle was billed for. `completion_tokens` is output tokens. Both fall back to `0` if the backend didn't report usage (haiku-tier or stream-aborted cycles).
 
 **Streaming response (`"stream": true`):**
 
@@ -149,8 +163,28 @@ data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"mod
 data: [DONE]
 ```
 
-Note: pseudo-streamed in v0.6 - the full cycle runs, then the response is
-chunked out. True token-streaming is on the roadmap.
+Real token streaming. Each `delta.content` chunk is emitted as the
+backend produces it (via claude's `--output-format stream-json`).
+
+**Streaming usage:** set `stream_options.include_usage: true` to receive
+a final usage-only chunk before `[DONE]`, matching OpenAI's spec:
+
+```json
+{
+  "model": "default",
+  "messages": [{"role":"user","content":"hi"}],
+  "stream": true,
+  "stream_options": {"include_usage": true}
+}
+```
+
+Final chunk shape (note `choices: []`):
+
+```
+data: {"id":"chatcmpl-bc-42","object":"chat.completion.chunk","created":...,"model":"default","choices":[],"usage":{"prompt_tokens":1234,"completion_tokens":256,"total_tokens":1490}}
+
+data: [DONE]
+```
 
 ### `POST /v1/bajaclaw/cycle`
 
@@ -290,4 +324,6 @@ it unless you've enabled auth.
   the memories table periodically.
 - No function/tool calling in the ChatCompletion contract yet. The agent
   uses tools internally; the API returns the final assistant content.
-- `tools` and `tool_choice` fields in the request are ignored in v0.6.
+- `tools` and `tool_choice` fields in the request are ignored.
+- `--bare` strips host-machine state from the underlying claude call.
+  Set `ANTHROPIC_API_KEY` or every cycle 401s.

@@ -105,6 +105,12 @@ export function buildCommand(prompt: string, opts: ClaudeOptions): string[] {
   if (opts.skipPermissions !== false) {
     args.push("--dangerously-skip-permissions");
   }
+  // Minimal mode: skip CLAUDE.md auto-discovery, hooks, plugin sync,
+  // attribution, auto-memory, keychain reads, background prefetches.
+  // Required for predictable behavior when serving the OpenAI-compatible
+  // endpoint - we don't want host-machine state leaking into API cycles.
+  // Forces strict ANTHROPIC_API_KEY / apiKeyHelper auth.
+  if (opts.bare) args.push("--bare");
   // JSON output always included when the flag is supported. runOnce checks support.
   return args;
 }

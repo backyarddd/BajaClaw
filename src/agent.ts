@@ -67,6 +67,9 @@ export interface CycleInput {
   // here as tool-use events arrive. Channel-sourced cycles route
   // narration to the adapter's progress message instead.
   onNarration?: (u: NarrationUpdate) => void;
+  // Pass --bare to the underlying claude CLI invocation. Set by the
+  // OpenAI HTTP endpoint so API cycles run in minimal mode.
+  bare?: boolean;
 }
 
 export interface CycleOutput {
@@ -272,6 +275,7 @@ async function runCycleInner(input: CycleInput): Promise<CycleOutput> {
       timeout: cfg.cycleTimeoutMs,
       dryRun: input.dryRun,
       env: spawnEnv,
+      bare: input.bare,
     };
 
     // Optional shadow-git pre-snapshot. Off by default (cfg.snapshots.enabled).

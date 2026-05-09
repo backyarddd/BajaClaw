@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.21.4
+
+**OpenAI endpoint: real `usage` in completions, all cycles run with `--bare`.**
+
+The `/v1/chat/completions` response previously returned
+`usage: {0, 0, 0}` even though the cycle had real token counts. Now
+`prompt_tokens` is set to the displayed "in" count (input +
+cache_creation + cache_read, matching what the cycle was billed for) and
+`completion_tokens` is the output token count. Both fall back to 0 when
+the backend didn't report usage.
+
+Streaming honors OpenAI's `stream_options.include_usage`. When set to
+`true`, the response emits a final usage-only chunk (`choices: []`,
+`usage` populated) before `[DONE]`, matching the OpenAI spec. Default
+off, no behavior change for clients that don't opt in.
+
+Endpoint cycles now invoke the underlying `claude` CLI with `--bare`,
+which strips host-machine state (CLAUDE.md auto-discovery, hooks, plugin
+sync, attribution, auto-memory, background prefetches, keychain reads).
+BajaClaw's own memory/skills/MCP still flow through because they go into
+the assembled prompt, not Claude's auto-discovery, so this strips
+nothing the API already exposes. Trade-off: `--bare` forces strict
+`ANTHROPIC_API_KEY` (or `apiKeyHelper`) auth - OAuth and keychain reads
+are disabled. `bajaclaw serve` warns at startup if the key is missing.
+
+`ClaudeOptions.bare` added; plumbs through `CycleInput` to
+`buildCommand`. Off by default everywhere except the OpenAI HTTP
+endpoint, which hardcodes it on for both `/v1/chat/completions` and
+`/v1/bajaclaw/cycle`.
+
+Tests: 234 (was 227). Em-dash count: 0.
+
 ## 0.21.3
 
 **Stop unref'ing the concurrency deadline timer.**
@@ -9,7 +41,7 @@ root cause. The actual issue was in `src/concurrency.ts`: the
 `deadline()` timer was `unref()`'d, which let Node 22's test runner
 exit the event loop while the timer was still pending and trigger
 "Promise resolution is still pending but the event loop has already
-resolved" — cancelling all three deadline-using concurrency tests.
+resolved" - cancelling all three deadline-using concurrency tests.
 
 Removed the unref. The cost is at most `deadlineMs` (typically tens
 to hundreds of ms) of extra one-shot CLI tail; the benefit is
@@ -77,8 +109,8 @@ Haiku per cycle to almost always return `[]`. Both replaced.
 
 ### CLI
 
-- `bajaclaw skill pin <name>` / `unpin` / `stats` — sidecar surface.
-- `bajaclaw curator run|status|approve|dry-run-only` — manual control.
+- `bajaclaw skill pin <name>` / `unpin` / `stats` - sidecar surface.
+- `bajaclaw curator run|status|approve|dry-run-only` - manual control.
 
 ### Removed
 
