@@ -45,6 +45,11 @@ export interface ApiConfig {
 }
 
 export interface ServeOptions extends ApiConfig {
+  // Resolved Anthropic auth, injected per-cycle into the spawned
+  // `claude` subprocess. envVar selects between ANTHROPIC_API_KEY (real
+  // API keys) and CLAUDE_CODE_OAUTH_TOKEN (subscription OAuth tokens).
+  // Resolved once at startup by `bajaclaw serve` and passed through.
+  outboundAuth?: { key: string; envVar: string };
   onReady?: (addr: { host: string; port: number }) => void;
 }
 
@@ -102,7 +107,13 @@ async function handle(req: IncomingMessage, res: ServerResponse, opts: ServeOpti
     const body = await readJson<{ profile?: string; task?: string; dryRun?: boolean }>(req);
     const profile = body.profile ?? "default";
     if (!profileExposed(profile, opts.exposedProfiles)) return sendJson(res, 404, err("unknown profile"));
-    const out = await runCycle({ profile, task: body.task, dryRun: !!body.dryRun, bare: true });
+    const out = await runCycle({
+      profile,
+      task: body.task,
+      dryRun: !!body.dryRun,
+      lightweight: true,
+      outboundAuthKey: opts.outboundAuth,
+    });
     return sendJson(res, 200, out);
   }
 
@@ -144,7 +155,8 @@ async function handleChat(
       profile: resolved.profile,
       task,
       modelOverride: resolved.modelOverride,
-      bare: true,
+      lightweight: true,
+      outboundAuthKey: opts.outboundAuth,
     });
     const completion = cycleToCompletion(body.model ?? resolved.profile, out);
     return sendJson(res, 200, completion);
@@ -181,7 +193,8 @@ async function handleChat(
       profile: resolved.profile,
       task,
       modelOverride: resolved.modelOverride,
-      bare: true,
+      lightweight: true,
+      outboundAuthKey: opts.outboundAuth,
       onPartialText: (delta) => {
         if (aborted || !delta) return;
         streamed += delta;

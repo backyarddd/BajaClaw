@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.21.6
+
+**Endpoint cycles run in lightweight mode (OAuth-friendly), not --bare.**
+
+v0.21.4 made the OpenAI endpoint pass `--bare` for host-state hygiene.
+v0.21.5 added auto-resolution of `ANTHROPIC_API_KEY` via `claude
+setup-token`. The combination didn't actually work for subscription
+users: `claude setup-token` mints `sk-ant-oat*` OAuth tokens, but
+`--bare` rejects those with "Invalid API key" because it requires a real
+`sk-ant-api*` key. So every endpoint request 401'd despite a saved
+token.
+
+This release replaces `--bare` for endpoint cycles with a flag combo
+that gives the same isolation but keeps OAuth working:
+
+- `--setting-sources=local` suppresses user-level `~/.claude/CLAUDE.md`
+  and user-level settings.json (where hooks live)
+- `--strict-mcp-config` ensures only the MCP servers we explicitly pass
+  via `--mcp-config` load
+- `--no-session-persistence` skips writing session state to disk
+
+Verified empirically: with these flags, claude does NOT see
+`~/.claude/CLAUDE.md` content (tested with a marker), and OAuth tokens
+authenticate normally.
+
+`ClaudeOptions.lightweight` added; emits the three flags above.
+`bare` is preserved for callers who explicitly want the strict-API-key
+path.
+
+The auth resolver now detects token format by prefix and routes to the
+correct env var:
+
+- `sk-ant-oat*` -> injected as `CLAUDE_CODE_OAUTH_TOKEN`
+- anything else -> injected as `ANTHROPIC_API_KEY`
+
+The injection happens per-cycle via `opts.env` (no global `process.env`
+mutation), so the spawned `claude` gets the right variable without
+polluting the serve process.
+
+`bajaclaw serve` startup banner now shows the resolved auth source AND
+the token kind: `outbound auth: CLAUDE_CODE_OAUTH_TOKEN (OAuth
+(subscription), saved in ~/.bajaclaw/api.json)`.
+
+Tests: 248 (was 239). 9 new: 4 covering the lightweight flag emission,
+4 covering envVar derivation + env-source precedence, plus an env
+restoration tweak in the test fixture for `CLAUDE_CODE_OAUTH_TOKEN`.
+
 ## 0.21.5
 
 **`bajaclaw serve` auto-resolves outbound Anthropic auth.**
