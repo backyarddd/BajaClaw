@@ -22,7 +22,7 @@ write to `~/.bajaclaw/`, they can do anything the agent can do.
   agents ship without Write/Edit/Bash (they delegate).
 - **Circuit breaker** (5 failures → 15min cooldown) so a pathological loop
   stops quickly.
-- **Rate limiter** (60 cycles/hour default).
+- **Rate limiter** (1000 cycles/hour default).
 - **Dry-run**: `bajaclaw start --dry-run` prints the exact prompt + argv
   without executing.
 - **No shell string concat**: every `execa` call passes args as an array

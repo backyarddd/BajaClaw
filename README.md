@@ -7,7 +7,7 @@
  ██╔══██╗██╔══██║██   ██║██╔══██║    ██║     ██║     ██╔══██║██║███╗██║
  ██████╔╝██║  ██║╚█████╔╝██║  ██║    ╚██████╗███████╗██║  ██║╚███╔███╔╝
  ╚═════╝ ╚═╝  ╚═╝ ╚════╝ ╚═╝  ╚═╝     ╚═════╝╚══════╝╚═╝  ╚═╝ ╚══╝╚══╝
-          autonomous agents on your terms  ·  MIT  ·  v0.21.6
+          autonomous agents on your terms  ·  MIT  ·  v0.21.7
 ```
 
 ## What BajaClaw is
@@ -500,7 +500,7 @@ BajaClaw is a thin wrapper around the `claude` CLI. It never sees credentials, n
 Built-in guards:
 
 - **Circuit breaker.** 5 consecutive failed cycles open the breaker for 15 minutes.
-- **Rate limiter.** 30 cycles/hour/profile by default.
+- **Rate limiter.** 1000 cycles/hour/profile by default.
 - **Cycle serialization.** At most one `claude` subprocess per profile at a time (see [`src/concurrency.ts`](src/concurrency.ts)). HTTP API hits queue instead of spawning parallel processes.
 - **Auto tier caps.** Haiku cycles get fewer memories, skills, and turns than Sonnet, and Sonnet fewer than Opus. Small tasks stay small.
 - **Per-cycle USD cap.** `"maxBudgetUsd": 5.0` in `config.json` aborts the cycle cleanly if it would exceed the cap.

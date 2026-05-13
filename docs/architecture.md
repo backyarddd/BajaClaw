@@ -96,6 +96,6 @@ entry. Step 10 is the only step that leaves the process boundary.
   (`ok=false`, row status `error`, `error` column populated).
 - A failed cycle increments the circuit-breaker count. 5 consecutive failures
   open the breaker for 15 minutes.
-- The rate limiter caps cycles at 60/hour by default (`src/safety.ts`).
+- The rate limiter caps cycles at 1000/hour by default (`src/safety.ts`).
 - The daemon wraps the loop with exponential backoff (1s → 5min).
 - All exec calls use `execa` with arg arrays and `shell: false`.
