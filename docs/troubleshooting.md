@@ -32,7 +32,7 @@ Five consecutive failed cycles tripped the breaker.
 
 ## "rate limit exceeded (N/hr)"
 
-BajaClaw caps cycles at 60/hour by default. Either wait, or edit the cap
+BajaClaw caps cycles at 1000/hour by default. Either wait, or edit the cap
 passed in `safety.ts` via a profile-level setting if you need more.
 
 ## Daemon won't start - "already running (pid N)"

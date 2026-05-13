@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.21.7
+
+**Default local rate limit raised to 1000/hr.**
+
+BajaClaw's own rolling per-profile cycle cap is now 1000/hour by
+default. The guard still prevents runaway loops, while leaving more
+headroom for high-throughput local setups. Upstream provider limits still
+apply.
+
+Tests: added a regression check for the default 1000/hr boundary.
+
 ## 0.21.6
 
 **Endpoint cycles run in lightweight mode (OAuth-friendly), not --bare.**

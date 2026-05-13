@@ -60,7 +60,7 @@ BajaClaw does not:
 Three independent guards keep BajaClaw from running loose:
 
 ### Rate limit
-Default: 30 cycles per rolling hour, per profile. Override with custom
+Default: 1000 cycles per rolling hour, per profile. Override with custom
 code in [`src/safety.ts`](../src/safety.ts). When the limit is reached,
 the next cycle fails with `rate limit exceeded (N/hr)` and the task
 stays in the queue.
