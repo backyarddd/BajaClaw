@@ -4,6 +4,6 @@ web/node_modules/
 *.log
 .DS_Store
 _temp/
-assets/ui-*.png
+assets/*.png
 .bajaclaw/
 .claude/

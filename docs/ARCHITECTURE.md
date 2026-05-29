@@ -21,6 +21,7 @@ bajaclaw (one npm package)
 │   ├── daemon/
 │   │   ├── daemon.mjs      launchd lifecycle (install/start/stop/status)
 │   │   ├── gateway.mjs     gateway: /health + /events (SSE) + an event bus
+│   │   ├── api.mjs         control API (/api/*) the web dashboard calls
 │   │   └── uiserver.mjs    static server for the built web UI
 │   ├── onboarding/         the seamless first-run wizard
 │   └── ui/theme.mjs        CLI visual identity
@@ -51,6 +52,11 @@ starts four things:
 4. **Channels** - any enabled messaging channels.
 
 All ports bind to `127.0.0.1` by default and are configurable.
+
+The gateway also serves a small JSON **control API** under `/api/*` (status,
+config, providers, channels, memory, skills, updates, cowork). The web dashboard
+is a client of this API; it is localhost-only and returns no secrets (keys and
+tokens are write-only).
 
 ## Request flow
 

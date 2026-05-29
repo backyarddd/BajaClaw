@@ -173,6 +173,28 @@ code.mono { background: var(--surface-2); padding: 1px 6px; border-radius: 5px; 
 }
 .composer textarea:focus-visible { border-color: var(--amber); outline: none; box-shadow: 0 0 0 3px var(--amber-wash); }
 
+/* ===== Chat raw toggle ===== */
+.toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); white-space: nowrap; user-select: none; }
+.toggle input { accent-color: var(--amber); }
+
+/* ===== Cowork steps ===== */
+.step { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.step:last-child { border-bottom: 0; }
+.step-title { font-weight: 600; font-size: 13.5px; }
+.step-note { color: var(--muted); font-size: 13px; }
+
+/* ===== Segmented control ===== */
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg-btn { border: 0; background: var(--bg); color: var(--muted); padding: 4px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.seg-btn.is-on { background: var(--amber); color: oklch(0.26 0.06 55); }
+.seg-btn:not(.is-on):hover { background: var(--surface-2); }
+
+/* ===== Switch ===== */
+.switch { width: 38px; height: 22px; border-radius: 999px; border: 0; background: var(--line-strong); position: relative; cursor: pointer; transition: background 0.16s var(--ease-out); padding: 0; }
+.switch i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px oklch(0.4 0 0 / 0.25); transition: transform 0.16s var(--ease-out); }
+.switch.is-on { background: var(--teal); }
+.switch.is-on i { transform: translateX(16px); }
+
 /* ===== Responsive ===== */
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }

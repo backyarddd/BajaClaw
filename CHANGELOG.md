@@ -2,6 +2,26 @@
 
 All notable changes to BajaClaw are documented here.
 
+## 1.1.0
+
+Bigger, more usable.
+
+### Added
+- **Extensive onboarding.** `bajaclaw onboard` is now a guided wizard: primary
+  model, fallback providers, the local API (and bare-mode default), channel
+  setup (Telegram/Discord tokens), feature toggles, and the boot daemon. Every
+  step has an Enter-to-accept default.
+- **Control API** on the gateway (`/api/status`, `/api/config`, `/api/providers`,
+  `/api/channels`, `/api/memory`, `/api/skills`, `/api/updates`, `/api/cowork`)
+  so the web dashboard is fully functional.
+- **Functional web dashboard.** Every view now does real work: set the default
+  provider and add API keys, enable channels and set tokens, search and clear
+  memory, browse learned skills, run Cowork goals, check for updates, toggle
+  features and the endpoint mode, and watch live activity over SSE.
+- **More CLI commands:** `ask`, `chat`, `cowork`, `providers`, `login`,
+  `logout`, `channels`, `memory`, `skills`, `config` (get/set), `logs`, and
+  `uninstall`.
+
 ## 1.0.0
 
 Complete ground-up rewrite. BajaClaw is now a standalone, all-in-one personal AI

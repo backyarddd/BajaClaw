@@ -27,7 +27,7 @@ function runCli(args) {
 }
 
 await section("CLI", async () => {
-  check("--version", runCli(["--version"]).trim() === "1.0.0");
+  check("--version", /^\d+\.\d+\.\d+$/.test(runCli(["--version"]).trim()));
   check("--help shows wordmark", /BAJACLAW/.test(runCli(["--help"])));
   check("doctor runs", /doctor/i.test(runCli(["doctor"])));
   check("status runs", /BajaClaw status/.test(runCli(["status"])));
@@ -157,6 +157,50 @@ await section("native gateway + channels", async () => {
   check("channel ids include telegram+discord", mgr.CHANNEL_IDS.includes("telegram") && mgr.CHANNEL_IDS.includes("discord"));
   const started = await mgr.startChannels({ log: () => {} });
   check("no channels start when none enabled", Array.isArray(started) && started.length === 0);
+});
+
+await section("control API (gateway /api/*)", async () => {
+  const { startGateway } = await import("../src/daemon/gateway.mjs");
+  const { load } = await import("../src/config/config.mjs");
+  const cfg = load(); cfg.gateway.port = 0;
+  const server = startGateway(cfg, { version: "1.0.0" });
+  await new Promise((r) => setTimeout(r, 150));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const j = async (p, opts) => (await fetch(base + p, opts)).json();
+
+  const status = await j("/api/status");
+  check("/api/status has ports + ready", !!status.ports && Array.isArray(status.ready));
+  const provs = await j("/api/providers");
+  check("/api/providers lists 9", provs.providers.length >= 9 && provs.providers.some((p) => p.id === "openai-codex"));
+  const chans = await j("/api/channels");
+  check("/api/channels lists telegram+discord", chans.channels.some((c) => c.id === "telegram") && chans.channels.some((c) => c.id === "discord"));
+  const cfgGet = await j("/api/config");
+  check("/api/config redacts channel tokens", !("token" in (cfgGet.channels.telegram || {})) || cfgGet.channels.telegram.token === undefined);
+  const patched = await j("/api/config", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ openaiEndpoint: { mode: "raw" } }) });
+  check("/api/config PATCH applies", patched.config.openaiEndpoint.mode === "raw");
+  // restore
+  await j("/api/config", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ openaiEndpoint: { mode: "agent" } }) });
+  const setKey = await j("/api/providers/anthropic/key", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "test" }) });
+  check("/api/providers key set", setKey.ok === true);
+  const provs2 = await j("/api/providers");
+  check("provider now configured via API", provs2.providers.find((p) => p.id === "anthropic").configured);
+  await j("/api/providers/anthropic", { method: "DELETE" });
+  const skills = await j("/api/skills");
+  check("/api/skills returns array", Array.isArray(skills.skills));
+  await new Promise((r) => server.close(r));
+});
+
+await section("new CLI commands", async () => {
+  const helpText = runCli(["--help"]);
+  check("help lists ask/chat/cowork", /ask/.test(helpText) && /chat/.test(helpText) && /cowork/.test(helpText));
+  check("help lists providers/channels/memory", /providers/.test(helpText) && /channels/.test(helpText) && /memory/.test(helpText));
+  check("providers command runs", /Providers/.test(runCli(["providers"])));
+  check("config (no arg) prints json", /defaultProvider/.test(runCli(["config"])));
+  check("config get works", runCli(["config", "get", "openaiEndpoint.port"]).trim() === "11435");
+  check("channels command lists", /Channels/.test(runCli(["channels"])));
+  check("memory command runs", /memory|Recent/i.test(runCli(["memory"])));
+  check("skills command runs", /skill/i.test(runCli(["skills"])));
+  check("ask without prompt errors", (() => { try { runCli(["ask"]); return false; } catch { return true; } })());
 });
 
 await section("config (standalone)", async () => {

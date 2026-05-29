@@ -38,9 +38,13 @@ export default function App() {
   const [route, setRoute] = useState("chat");
   const [gwState, setGwState] = useState("connecting");
   const [epUp, setEpUp] = useState(null);
+  const [events, setEvents] = useState([]);
 
   useEffect(() => {
-    const conn = connectGateway({ onStatus: (s) => s.gateway && setGwState(s.gateway) });
+    const conn = connectGateway({
+      onStatus: (s) => s.gateway && setGwState(s.gateway),
+      onEvent: (e) => setEvents((prev) => [...prev.slice(-99), e]),
+    });
     const t = setTimeout(() => setGwState((p) => (p === "connecting" ? "offline" : p)), 1500);
     let active = true;
     endpointHealth().then((ok) => active && setEpUp(ok));
@@ -94,7 +98,7 @@ export default function App() {
           </div>
         </header>
         <section className="content" key={route}>
-          <View gwState={gwState} endpoints={ENDPOINTS} />
+          <View gwState={gwState} endpoints={ENDPOINTS} events={events} />
         </section>
       </main>
     </div>
