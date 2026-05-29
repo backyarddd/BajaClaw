@@ -1,0 +1,52 @@
+{
+  "name": "bajaclaw",
+  "version": "1.0.0",
+  "description": "All-in-one personal AI agent — OpenClaw spine + Hermes brain + Cowork outcome mode, with ChatGPT-subscription login, a local OpenAI-compatible endpoint, and a clean web UI.",
+  "type": "module",
+  "bin": {
+    "bajaclaw": "bin/bajaclaw.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "plugins",
+    "web/dist",
+    "assets",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "start": "node bin/bajaclaw.mjs start",
+    "onboard": "node bin/bajaclaw.mjs onboard",
+    "smoketest": "node test/smoketest.mjs",
+    "ui:dev": "cd web && vite",
+    "ui:build": "cd web && vite build"
+  },
+  "keywords": [
+    "ai-agent",
+    "openclaw",
+    "hermes",
+    "cowork",
+    "chatgpt",
+    "openai-compatible",
+    "local-llm",
+    "personal-assistant",
+    "gateway"
+  ],
+  "peerDependencies": {
+    "openclaw": ">=2026.5.0"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "license": "MIT",
+  "author": "backyarddd",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/backyarddd/BajaClaw.git"
+  }
+}

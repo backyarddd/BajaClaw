@@ -1,0 +1,12 @@
+{
+  "id": "hermes-brain",
+  "name": "Hermes Brain",
+  "description": "Self-improving memory and skill synthesis (Hermes-inspired).",
+  "version": "1.0.0",
+  "activation": { "onStartup": true },
+  "enabledByDefault": true,
+  "contracts": {
+    "tools": ["brain.remember", "brain.recall", "brain.synthesize_skills"]
+  },
+  "main": "./index.mjs"
+}

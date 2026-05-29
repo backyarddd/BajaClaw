@@ -1,0 +1,15 @@
+# Published package = the "files" allowlist in package.json.
+# This file exists so npm does NOT fall back to .gitignore (which excludes web/dist).
+node_modules/
+web/node_modules/
+web/src/
+test/
+docs/
+*.log
+.DS_Store
+_temp/
+assets/ui-*.png
+.claude/
+.bajaclaw/
+PRODUCT.md
+DESIGN.md
