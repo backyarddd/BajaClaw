@@ -10,6 +10,7 @@
     "bin",
     "src",
     "plugins",
+    "channels",
     "web/dist",
     "assets",
     "README.md"
@@ -35,14 +36,6 @@
     "personal-assistant",
     "gateway"
   ],
-  "peerDependencies": {
-    "openclaw": ">=2026.5.0"
-  },
-  "peerDependenciesMeta": {
-    "openclaw": {
-      "optional": true
-    }
-  },
   "license": "MIT",
   "author": "backyarddd",
   "repository": {

@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // BajaClaw CLI. Branded, simple, one command to run everything.
-import { execFileSync, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { color, glyph, wordmark, brandline, panel, spinner } from "../src/ui/theme.mjs";
-import { load, save, isOnboarded, CONFIG_DIR } from "../src/config/config.mjs";
+import { load, isOnboarded, CONFIG_DIR } from "../src/config/config.mjs";
 import * as daemon from "../src/daemon/daemon.mjs";
 import { onboard, onboardNonInteractive } from "../src/onboarding/onboard.mjs";
 import { startEndpoint } from "../plugins/openai-endpoint/server.mjs";
 import { startUiServer } from "../src/daemon/uiserver.mjs";
+import { startGateway } from "../src/daemon/gateway.mjs";
+import { startChannels } from "../channels/manager.mjs";
+import { listReadyProviders } from "../src/agent/agent.mjs";
 import { check as checkUpdates } from "../plugins/self-updater/updater.mjs";
 
 const PKG_VERSION = "1.0.0";
@@ -36,11 +38,6 @@ function help() {
   console.log(color.dim(`  config: ${CONFIG_DIR}`) + "\n");
 }
 
-function hasOpenclaw() {
-  try { execFileSync("openclaw", ["--version"], { stdio: "ignore" }); return true; }
-  catch { return false; }
-}
-
 function openUrl(url) {
   const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
   try { execFileSync(opener, [url], { stdio: "ignore" }); return true; } catch { return false; }
@@ -60,7 +57,9 @@ async function cmdStart() {
     info(`OpenAI endpoint will serve at ${color.bold(`http://${cfg.openaiEndpoint.host}:${cfg.openaiEndpoint.port}/v1`)}`);
   }
   info(`Web UI: ${color.bold(`http://${cfg.ui.host}:${cfg.ui.port}/`)}`);
-  if (!hasOpenclaw()) warn("OpenClaw core not detected - install it with: npm i -g openclaw");
+  const ready = listReadyProviders();
+  if (!ready.length) warn("No model configured yet. Run 'bajaclaw onboard' to sign in with ChatGPT (or another provider).");
+  else info(`Models ready: ${ready.join(", ")}`);
   ok("BajaClaw started. After a reboot, just run 'bajaclaw start' again.");
 }
 
@@ -82,7 +81,7 @@ function cmdStatus() {
     `${glyph.bullet} web ui:        ${s.ui}`,
     `${glyph.bullet} openai endpoint: ${s.openaiEndpoint}`,
     `${glyph.bullet} plist:         ${color.dim(s.plist)}`,
-    `${glyph.bullet} openclaw core: ${hasOpenclaw() ? color.green("installed") : color.yellow("not installed")}`,
+    `${glyph.bullet} models ready:  ${listReadyProviders().join(", ") || color.yellow("none (run onboard)")}`,
   ]) + "\n");
 }
 
@@ -90,7 +89,7 @@ function cmdDoctor() {
   const checks = [];
   const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
   checks.push([nodeOk, `Node ${process.versions.node} (need >=22.19)`]);
-  checks.push([hasOpenclaw(), "OpenClaw core installed"]);
+  checks.push([listReadyProviders().length > 0, `A model is configured (${listReadyProviders().join(", ") || "none yet"})`]);
   checks.push([isOnboarded(), "Onboarded (config present)"]);
   checks.push([process.platform === "darwin", `Platform ${process.platform} (launchd daemon = macOS)`]);
   console.log("\n" + panel("doctor", checks.map(([good, label]) =>
@@ -118,26 +117,22 @@ function cmdUi() {
 // Internal: the supervised process the daemon runs. Boots gateway + endpoint.
 async function cmdServe() {
   const cfg = load();
-  // 1) OpenAI endpoint (always ours).
+  // 1) Native gateway: health + live event stream for the web UI.
+  startGateway(cfg, {
+    onListen: (g) => console.log(`[bajaclaw] gateway on http://${g.host}:${g.port}/`),
+    status: () => ({ models: listReadyProviders() }),
+  });
+  // 2) Local OpenAI-compatible endpoint (this agent as a local LLM).
   if (cfg.openaiEndpoint.enabled) {
     startEndpoint(cfg, { onListen: (ep) => console.log(`[bajaclaw] openai endpoint on http://${ep.host}:${ep.port}/v1`) });
   }
-  // 2) Web UI (served from web/dist).
+  // 3) Web UI (served from web/dist).
   const dist = join(import.meta.dirname, "..", "web", "dist");
   startUiServer({ dist, host: cfg.ui.host, port: cfg.ui.port,
     onListen: (u) => console.log(`[bajaclaw] web ui on http://${u.host}:${u.port}/`) });
-  // 3) Gateway = OpenClaw daemon as a child, if installed.
-  if (hasOpenclaw()) {
-    const child = spawn(
-      "openclaw",
-      ["gateway", "run", "--port", String(cfg.gateway.port), "--bind", "loopback", "--allow-unconfigured"],
-      { stdio: "inherit" }
-    );
-    child.on("exit", (c) => console.log(`[bajaclaw] gateway exited (${c}); endpoint + UI still serving`));
-  } else {
-    console.log("[bajaclaw] OpenClaw core not installed; endpoint-only mode. Install with: npm i -g openclaw");
-  }
-  // Keep alive.
+  // 4) Native channels (Telegram/Discord/... when enabled in config).
+  startChannels({ log: console.log }).catch((e) => console.log(`[channels] ${e.message}`));
+  // Keep the supervised process alive.
   process.stdin.resume();
 }
 

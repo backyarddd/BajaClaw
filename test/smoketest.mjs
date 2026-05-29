@@ -53,11 +53,53 @@ await section("onboarding (non-interactive)", async () => {
   check("onboard writes config", !!r.configPath && r.provider === "openai-codex");
 });
 
-await section("openai endpoint", async () => {
+await section("llm client + auth store", async () => {
+  const llm = await import("../src/llm/client.mjs");
+  check("registry has 9 providers", Object.keys(llm.REGISTRY).length >= 9);
+  check("codex + openai-compat + anthropic + google kinds present",
+    ["codex","openai-compat","anthropic","google"].every(k => Object.values(llm.REGISTRY).some(p => p.kind === k)));
+  check("local providers count as configured (no key)", llm.isConfigured("ollama") && llm.isConfigured("lmstudio"));
+  check("key provider not configured without cred", !llm.isConfigured("anthropic"));
+  const store = await import("../src/auth/store.mjs");
+  store.saveCred("anthropic", { type: "key", api_key: "test-key" });
+  check("cred save+load round-trip", store.loadCred("anthropic")?.api_key === "test-key");
+  check("now configured after saveCred", llm.isConfigured("anthropic"));
+  store.removeCred("anthropic");
+  check("cred removed", !store.hasCred("anthropic"));
+});
+
+await section("chatgpt oauth (PKCE construction)", async () => {
+  const oauth = await import("../src/auth/chatgpt-oauth.mjs");
+  const url = oauth.authorizeUrl({ challenge: "abc", state: "xyz" });
+  check("authorize url is auth.openai.com PKCE", url.startsWith("https://auth.openai.com/oauth/authorize") &&
+    url.includes("code_challenge=abc") && url.includes("code_challenge_method=S256") && url.includes("state=xyz"));
+  check("account id parses from id_token", (() => {
+    const claims = { "https://api.openai.com/auth": { chatgpt_account_id: "acct_123" } };
+    const fakeJwt = "h." + Buffer.from(JSON.stringify(claims)).toString("base64") + ".s";
+    return oauth.accountIdFromIdToken(fakeJwt) === "acct_123";
+  })());
+});
+
+await section("native agent (no provider -> graceful)", async () => {
+  const cfgMod = await import("../src/config/config.mjs");
+  const c = cfgMod.load();
+  c.providerOrder = []; c.defaultProvider = "openai-codex"; // hermetic: no candidates
+  cfgMod.save(c);
+  const agent = await import("../src/agent/agent.mjs");
+  check("no providers ready in clean env", agent.listReadyProviders().length === 0);
+  let text = "";
+  for await (const ch of agent.streamRespond([{ role: "user", content: "hi" }])) {
+    if (ch.text) text += ch.text; if (ch.delta) text += ch.delta;
+  }
+  check("agent yields a graceful no-provider message", /onboard|configured/.test(text));
+});
+
+await section("openai endpoint (native agent)", async () => {
   const { createServer } = await import("../plugins/openai-endpoint/server.mjs");
   const { load } = await import("../src/config/config.mjs");
   const cfg = load();
-  cfg.openaiEndpoint.useAgentBridge = false; // hermetic: force the mock path
+  cfg.defaultProvider = "openai-codex";
+  cfg.providerOrder = []; // hermetic: no reachable providers -> graceful message
   const server = createServer(cfg);
   await new Promise((res) => server.listen(0, "127.0.0.1", res));
   const port = server.address().port;
@@ -73,7 +115,8 @@ await section("openai endpoint", async () => {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ model: "bajaclaw", messages: [{ role: "user", content: "ping" }] }),
   })).json();
-  check("/v1/chat/completions json", chat.object === "chat.completion" && chat.choices[0].message.content.includes("ping"));
+  check("/v1/chat/completions OpenAI-shaped", chat.object === "chat.completion" &&
+    typeof chat.choices[0].message.content === "string" && chat.choices[0].message.content.length > 0);
 
   const streamRes = await fetch(`${base}/v1/chat/completions`, {
     method: "POST", headers: { "content-type": "application/json" },
@@ -83,6 +126,30 @@ await section("openai endpoint", async () => {
   check("/v1/chat/completions stream SSE", text.includes("chat.completion.chunk") && text.includes("[DONE]"));
 
   await new Promise((res) => server.close(res));
+});
+
+await section("native gateway + channels", async () => {
+  const { startGateway } = await import("../src/daemon/gateway.mjs");
+  const { load } = await import("../src/config/config.mjs");
+  const cfg = load();
+  cfg.gateway.port = 0;
+  const server = startGateway(cfg, { status: () => ({ models: [] }) });
+  await new Promise((r) => setTimeout(r, 120));
+  const port = server.address().port;
+  const h = await (await fetch(`http://127.0.0.1:${port}/health`)).json();
+  check("gateway /health ok", h.status === "ok" && h.service === "bajaclaw-gateway");
+  await new Promise((r) => server.close(r));
+
+  const mgr = await import("../channels/manager.mjs");
+  check("channel ids include telegram+discord", mgr.CHANNEL_IDS.includes("telegram") && mgr.CHANNEL_IDS.includes("discord"));
+  const started = await mgr.startChannels({ log: () => {} });
+  check("no channels start when none enabled", Array.isArray(started) && started.length === 0);
+});
+
+await section("config (standalone)", async () => {
+  const cfg = (await import("../src/config/config.mjs")).load();
+  check("endpoint port 11435 (avoids ollama)", cfg.openaiEndpoint.port === 11435);
+  check("channels section present", cfg.channels && "telegram" in cfg.channels && "discord" in cfg.channels);
 });
 
 await section("hermes brain", async () => {

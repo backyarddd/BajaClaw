@@ -2,30 +2,25 @@
 // Degrades gracefully: if the gateway WS isn't up, the UI still renders with
 // honest "offline" status instead of breaking.
 
-const GATEWAY_WS =
-  import.meta.env.VITE_GATEWAY_WS || `ws://${location.hostname || "127.0.0.1"}:18789/ws`;
+const host = () => location.hostname || "127.0.0.1";
+const GATEWAY_BASE =
+  import.meta.env.VITE_GATEWAY_BASE || `http://${host()}:18789`;
 const OPENAI_BASE =
-  import.meta.env.VITE_OPENAI_BASE || `http://${location.hostname || "127.0.0.1"}:11434`;
+  import.meta.env.VITE_OPENAI_BASE || `http://${host()}:11435`;
 
+// The native gateway exposes a live SSE stream at /events. EventSource gives us
+// connection status plus live activity without a WebSocket server dependency.
 export function connectGateway({ onStatus, onEvent } = {}) {
-  let ws;
-  let alive = false;
+  let es;
   try {
-    ws = new WebSocket(GATEWAY_WS);
-    ws.onopen = () => { alive = true; onStatus?.({ gateway: "connected" }); };
-    ws.onclose = () => { alive = false; onStatus?.({ gateway: "offline" }); };
-    ws.onerror = () => { alive = false; onStatus?.({ gateway: "offline" }); };
-    ws.onmessage = (e) => {
-      try { onEvent?.(JSON.parse(e.data)); } catch { /* ignore non-json */ }
-    };
+    es = new EventSource(`${GATEWAY_BASE}/events`);
+    es.onopen = () => onStatus?.({ gateway: "connected" });
+    es.onerror = () => onStatus?.({ gateway: "offline" });
+    es.onmessage = (e) => { try { onEvent?.(JSON.parse(e.data)); } catch { /* ignore */ } };
   } catch {
     onStatus?.({ gateway: "offline" });
   }
-  return {
-    send: (msg) => { if (alive) ws.send(JSON.stringify(msg)); },
-    close: () => ws?.close(),
-    isAlive: () => alive,
-  };
+  return { close: () => es?.close() };
 }
 
 // Stream a chat completion from the local OpenAI-compatible endpoint.
@@ -67,4 +62,4 @@ export async function endpointHealth() {
   } catch { return false; }
 }
 
-export const ENDPOINTS = { GATEWAY_WS, OPENAI_BASE };
+export const ENDPOINTS = { GATEWAY_BASE, OPENAI_BASE };
