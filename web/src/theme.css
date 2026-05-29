@@ -1,0 +1,71 @@
+/* BajaClaw design tokens - OKLCH. Warmth in brand colors, not the surface. */
+:root {
+  --bg: oklch(0.995 0.002 70);
+  --surface: oklch(0.985 0.004 70);
+  --surface-2: oklch(0.972 0.006 70);
+  --ink: oklch(0.22 0.02 60);
+  --muted: oklch(0.50 0.02 60);
+  --faint: oklch(0.66 0.015 60);
+  --line: oklch(0.90 0.01 70);
+  --line-strong: oklch(0.83 0.012 70);
+
+  --amber: oklch(0.72 0.16 65);
+  --amber-strong: oklch(0.66 0.17 60);
+  --amber-ink: oklch(0.42 0.13 55);
+  --amber-wash: oklch(0.95 0.04 70);
+
+  --teal: oklch(0.70 0.11 195);
+  --teal-ink: oklch(0.45 0.09 200);
+  --teal-wash: oklch(0.95 0.03 195);
+
+  --danger: oklch(0.58 0.20 25);
+  --danger-wash: oklch(0.95 0.04 25);
+
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow: 0 1px 2px oklch(0.5 0.02 60 / 0.06), 0 8px 24px oklch(0.5 0.02 60 / 0.06);
+
+  /* semantic z-scale, never arbitrary 9999 */
+  --z-sticky: 100;
+  --z-modal-backdrop: 200;
+  --z-modal: 210;
+  --z-toast: 300;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* expo-ish, no bounce */
+
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3 { text-wrap: balance; margin: 0; letter-spacing: -0.012em; }
+p { text-wrap: pretty; }
+button { font-family: inherit; }
+a { color: var(--teal-ink); }
+
+::selection { background: var(--amber-wash); }
+
+/* keyboard focus only, visible */
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
