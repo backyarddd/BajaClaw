@@ -1,9 +1,12 @@
+<div align="center">
+
 # BajaClaw
 
-A standalone, all-in-one personal AI agent. Inspired by OpenClaw, Hermes, and
-Cowork, but dependent on none of them. **ChatGPT-subscription login as the
-default model**, a clean web control room, native messaging channels, a local
-**OpenAI-compatible endpoint**, and a one-command start.
+**A standalone, all-in-one personal AI agent.**
+
+Sign in with ChatGPT, chat from a clean web UI or your favorite messaging app,
+and expose it to your other programs as a local OpenAI-compatible API. One
+command starts everything.
 
 ```
   ┌╶╶╶╮
@@ -11,41 +14,79 @@ default model**, a clean web control room, native messaging channels, a local
   the all-in-one personal agent
 ```
 
+</div>
+
+---
+
+BajaClaw is inspired by [OpenClaw](https://github.com/openclaw/openclaw),
+[Hermes](https://github.com/NousResearch/hermes-agent), and Claude Cowork, but
+depends on none of them. It is a single, self-contained tool you run on your own
+machine.
+
+- **Sign in with ChatGPT** as the default model (your own subscription, via PKCE
+  OAuth). Every other provider is available too, with automatic fallback.
+- **Clean web control room** to chat, watch activity, and manage everything.
+- **Native messaging channels** so you can reach your agent from Telegram or
+  Discord.
+- **Local OpenAI-compatible endpoint** so any OpenAI client can use BajaClaw as a
+  local LLM.
+- **Self-improving memory** that recalls relevant past outcomes.
+- **Cowork outcome mode**: describe a goal, get a finished deliverable.
+- **One-command start** with a launchd daemon, so it comes back after a reboot.
+
+![BajaClaw web control room](docs/screenshot.png)
+
 ## Install
+
+Requires Node.js >= 22.19.
 
 ```bash
 npm install -g bajaclaw
-bajaclaw onboard      # one screen: sign in with ChatGPT (or pick any other LLM)
-bajaclaw start        # starts the gateway daemon + web UI + local API + channels
+bajaclaw onboard      # sign in with ChatGPT (or pick any other provider)
+bajaclaw start        # start the gateway, web UI, local API, and channels
 ```
 
-No second package required. After a reboot, just run `bajaclaw start` again. On
-macOS the gateway is installed as a launchd daemon, so it also comes back on its
-own.
+That is the whole install. No second package. After a reboot, run
+`bajaclaw start` again (on macOS the launchd daemon also restores it on its own).
+
+Open the UI with `bajaclaw ui` (defaults to `http://127.0.0.1:18790`).
 
 ## Commands
 
 | Command | What it does |
 |---|---|
-| `bajaclaw onboard` | First-run setup. ChatGPT by default; all other LLMs available. |
-| `bajaclaw start` | Start everything (gateway + OpenAI endpoint + web UI + channels). |
+| `bajaclaw onboard` | First-run setup. ChatGPT by default; all other providers available. |
+| `bajaclaw start` | Start everything (gateway + web UI + local API + channels). |
 | `bajaclaw stop` / `restart` | Control the daemon. |
 | `bajaclaw status` | Health at a glance. |
 | `bajaclaw ui` | Open the web interface. |
-| `bajaclaw update` | Check inspiration sources and write an approve-to-merge proposal. |
-| `bajaclaw doctor` | Environment + health checks. |
+| `bajaclaw update` | Check upstream inspirations and write an approve-to-merge proposal. |
+| `bajaclaw doctor` | Environment and health checks. |
 
 ## Models
 
-ChatGPT (via your subscription) is the default, signed in natively with PKCE
-OAuth. Every other provider stays available with automatic fallback: Anthropic,
-Gemini, OpenRouter, OpenAI API, Ollama, LM Studio, Groq, DeepSeek. You log in
-with **your own** account; nothing is pooled or shared.
+ChatGPT (via your subscription) is the default, signed in with a native PKCE
+OAuth flow. Every other provider stays available, with automatic fallback if one
+is rate-limited:
+
+| Provider | Auth |
+|---|---|
+| **ChatGPT** (default) | Sign in with your subscription |
+| Anthropic / Claude | API key |
+| Google Gemini | API key |
+| OpenAI API | API key |
+| OpenRouter | API key (200+ models) |
+| Groq | API key |
+| DeepSeek | API key |
+| Ollama | Local, no key |
+| LM Studio | Local, no key |
+
+You log in with **your own** account. Nothing is pooled, shared, or resold.
 
 ## Local OpenAI endpoint
 
-Point any OpenAI client at BajaClaw to use it as a local LLM. It runs every
-request through BajaClaw's native agent (your configured provider).
+Point any OpenAI client at BajaClaw to use it as a local LLM. Every request runs
+through BajaClaw's agent and your configured provider.
 
 ```
 Base URL: http://127.0.0.1:11435/v1
@@ -55,51 +96,40 @@ Models:   bajaclaw, bajaclaw-chatgpt, bajaclaw-fast
 ```bash
 curl http://127.0.0.1:11435/v1/chat/completions \
   -H "content-type: application/json" \
-  -d '{"model":"bajaclaw","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"bajaclaw","messages":[{"role":"user","content":"hello"}]}'
 ```
 
-Binds to localhost only by default (single-user, personal use). Port 11435 keeps
-11434 free for Ollama.
+It binds to localhost only by default. Port 11435 leaves 11434 free for Ollama.
 
 ## Channels
 
 Reach BajaClaw where you already chat. Enable a channel and add its token in
-onboarding or `~/.bajaclaw/config.json`, then `bajaclaw restart`.
+onboarding or in `~/.bajaclaw/config.json`, then `bajaclaw restart`.
 
-- **Telegram**, **Discord**: native, working (pure HTTP / built-in WebSocket).
-- **Slack**, **WhatsApp**, **iMessage**: scaffolded with a clear native path.
+| Channel | Status |
+|---|---|
+| Telegram | Native, working (bot token from @BotFather) |
+| Discord | Native, working (bot token) |
+| Slack / WhatsApp / iMessage | Scaffolded with a clear native path |
 
-## Self-update
+See [docs/CHANNELS.md](docs/CHANNELS.md).
 
-A daily watcher diffs OpenClaw and Hermes and snapshots the Cowork changelog,
-then writes a proposal to `~/.bajaclaw/updates/`. They are inspiration sources,
-not dependencies; nothing is merged without your approval.
+## Documentation
 
-## How it fits together (all native)
+- [Architecture](docs/ARCHITECTURE.md) - how the pieces fit together.
+- [Configuration](docs/CONFIGURATION.md) - config file, ports, providers, channels.
+- [Channels](docs/CHANNELS.md) - setting up each messaging channel.
+- [Design](docs/DESIGN.md) - the visual and product design rationale.
+- [Contributing](CONTRIBUTING.md) - local development and pull requests.
+- [Changelog](CHANGELOG.md).
 
-```
-bajaclaw (standalone)
-├── src/llm           native multi-provider client (ChatGPT/Codex, OpenAI,
-│                     Anthropic, Gemini, OpenRouter, Groq, DeepSeek, Ollama, LM Studio)
-├── src/auth          native ChatGPT OAuth (PKCE) + credential store
-├── src/agent         agent loop: provider fallback + memory recall + outcome logging
-├── src/daemon        gateway (health + SSE events), UI server, launchd daemon
-├── channels/         native Telegram/Discord (+ Slack/WhatsApp/iMessage scaffolds)
-├── plugins/hermes-brain    self-improving memory + skill synthesis
-├── plugins/cowork-mode     goal in, finished deliverable out
-├── plugins/self-updater    daily inspiration watcher (propose, never auto-merge)
-├── plugins/openai-endpoint local /v1 OpenAI-compatible server
-└── web/              React control room (served on :18790)
-```
+## A note on the ChatGPT backend
 
-## Develop
-
-```bash
-npm run smoketest     # exercises every module
-npm run ui:build      # build the web UI
-node bin/bajaclaw.mjs --help
-```
+"Sign in with ChatGPT" uses the same subscription mechanism the Codex CLI uses.
+It is reverse-engineered and has no SLA, so it can change without notice. If it
+ever breaks, any other provider works as a drop-in via fallback. Use your own
+account only; do not pool or resell access.
 
 ## License
 
-MIT
+[MIT](LICENSE)
