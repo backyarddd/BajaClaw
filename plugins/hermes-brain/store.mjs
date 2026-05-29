@@ -37,6 +37,13 @@ export function all() {
   return _cache;
 }
 
+export function clear() {
+  ensure();
+  writeFileSync(MEM, "");
+  _cache = [];
+  _cacheKey = statKey();
+}
+
 export function remember({ task, outcome, success, tags = [], at } = {}) {
   ensure();
   const rec = {

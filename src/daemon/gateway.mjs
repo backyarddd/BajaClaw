@@ -3,6 +3,7 @@
 // publish events onto the bus; the UI subscribes via EventSource.
 import http from "node:http";
 import { EventEmitter } from "node:events";
+import { handleApi } from "./api.mjs";
 
 export const bus = new EventEmitter();
 bus.setMaxListeners(0);
@@ -13,16 +14,25 @@ export function publish(event) {
 
 function cors(res) {
   res.setHeader("access-control-allow-origin", "*");
+  res.setHeader("access-control-allow-methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
 }
 
-export function startGateway(cfg, { onListen, status } = {}) {
-  const server = http.createServer((req, res) => {
+export function startGateway(cfg, { onListen, status, version } = {}) {
+  const server = http.createServer(async (req, res) => {
     cors(res);
     const url = new URL(req.url, "http://localhost");
+
+    if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
 
     if (url.pathname === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
       return res.end(JSON.stringify({ status: "ok", service: "bajaclaw-gateway", ...(status?.() || {}) }));
+    }
+
+    if (url.pathname.startsWith("/api/")) {
+      const handled = await handleApi(req, res, url, { version, publish });
+      if (handled) return;
     }
 
     if (url.pathname === "/events") {

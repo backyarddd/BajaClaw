@@ -2,7 +2,7 @@
 // macOS: launchd. Other: detached process fallback.
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
 import { load, CONFIG_DIR } from "../config/config.mjs";
 
@@ -107,6 +107,12 @@ export function stop() {
     return { method: "launchd" };
   }
   return { method: "detached", note: "kill the bajaclaw _serve process manually" };
+}
+
+export function uninstall() {
+  stop();
+  if (existsSync(PLIST)) rmSync(PLIST);
+  return PLIST;
 }
 
 export function status() {

@@ -53,15 +53,41 @@ Open the UI with `bajaclaw ui` (defaults to `http://127.0.0.1:18790`).
 
 ## Commands
 
+**Run**
+
 | Command | What it does |
 |---|---|
-| `bajaclaw onboard` | First-run setup. ChatGPT by default; all other providers available. |
+| `bajaclaw onboard` | Guided setup: model, fallbacks, local API, channels, features, daemon. |
 | `bajaclaw start` | Start everything (gateway + web UI + local API + channels). |
 | `bajaclaw stop` / `restart` | Control the daemon. |
-| `bajaclaw status` | Health at a glance. |
+| `bajaclaw status` / `doctor` | Health and environment. |
 | `bajaclaw ui` | Open the web interface. |
-| `bajaclaw update` | Check upstream inspirations and write an approve-to-merge proposal. |
-| `bajaclaw doctor` | Environment and health checks. |
+| `bajaclaw uninstall` | Remove the boot daemon. |
+
+**Talk**
+
+| Command | What it does |
+|---|---|
+| `bajaclaw ask "…"` | One-shot question, streamed to your terminal. |
+| `bajaclaw chat` | Interactive terminal chat. |
+| `bajaclaw cowork "…"` | Run a goal end-to-end and print the steps. |
+
+**Manage**
+
+| Command | What it does |
+|---|---|
+| `bajaclaw providers` | List providers and what is configured. |
+| `bajaclaw login <id>` / `logout <id>` | Provider auth (ChatGPT OAuth or API key). |
+| `bajaclaw channels [enable\|disable\|token] <id>` | Messaging channels. |
+| `bajaclaw memory [query\|clear]` | Browse, search, or clear memory. |
+| `bajaclaw skills` | Learned skills. |
+| `bajaclaw update` | Check upstreams and write an approve-to-merge proposal. |
+| `bajaclaw config [get\|set]` | View or change settings. |
+| `bajaclaw logs` | Tail the daemon logs. |
+
+The web dashboard mirrors most of this: set your default model and keys, enable
+channels, search memory, run Cowork goals, toggle features, and watch live
+activity.
 
 ## Models
 
