@@ -90,7 +90,7 @@ through BajaClaw's agent and your configured provider.
 
 ```
 Base URL: http://127.0.0.1:11435/v1
-Models:   bajaclaw, bajaclaw-chatgpt, bajaclaw-fast
+Models:   bajaclaw, bajaclaw-chatgpt, bajaclaw-fast, bajaclaw-raw
 ```
 
 ```bash
@@ -100,6 +100,21 @@ curl http://127.0.0.1:11435/v1/chat/completions \
 ```
 
 It binds to localhost only by default. Port 11435 leaves 11434 free for Ollama.
+
+### Bare mode
+
+By default the endpoint runs the agent: it adds a system prompt, recalls relevant
+memory, and logs the outcome. For a plain model passthrough with none of that (no
+system prompt, no memory, no logging, no tools), use the **`bajaclaw-raw`** model:
+
+```bash
+curl http://127.0.0.1:11435/v1/chat/completions \
+  -d '{"model":"bajaclaw-raw","messages":[{"role":"user","content":"hello"}]}'
+```
+
+To make the whole endpoint bare by default, set `openaiEndpoint.mode` to `"raw"`
+in `~/.bajaclaw/config.json`. Either way it still picks your configured provider
+and falls back between providers; "bare" only strips the agent extras.
 
 ## Channels
 

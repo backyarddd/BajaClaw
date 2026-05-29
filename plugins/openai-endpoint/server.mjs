@@ -4,13 +4,14 @@
 //
 // Routes: GET /health, GET /v1/models, POST /v1/chat/completions (stream + json).
 import http from "node:http";
-import { streamRespond } from "../../src/agent/agent.mjs";
+import { streamRespond, streamRaw } from "../../src/agent/agent.mjs";
 import { REGISTRY } from "../../src/llm/client.mjs";
 
 const MODELS = [
   { id: "bajaclaw", owned_by: "bajaclaw" },
   { id: "bajaclaw-chatgpt", owned_by: "bajaclaw" },
   { id: "bajaclaw-fast", owned_by: "bajaclaw" },
+  { id: "bajaclaw-raw", owned_by: "bajaclaw" }, // bare passthrough: no system prompt, memory, or tools
 ];
 
 function json(res, code, obj) {
@@ -60,6 +61,14 @@ function modelHint(model) {
   return {};
 }
 
+// Pick agent (memory + system prompt + logging) vs raw passthrough. The model
+// alias `bajaclaw-raw` always forces raw; otherwise the endpoint's configured
+// mode decides ("raw" makes the whole endpoint bare by default).
+function pickRunner(model, cfg) {
+  const raw = model === "bajaclaw-raw" || cfg.openaiEndpoint?.mode === "raw";
+  return raw ? streamRaw : streamRespond;
+}
+
 async function handleChat(req, res, cfg) {
   const body = await readBody(req);
   const model = body.model || "bajaclaw";
@@ -77,9 +86,11 @@ async function handleChat(req, res, cfg) {
     return res.end();
   }
 
+  const run = pickRunner(model, cfg);
+
   if (!wantStream) {
     let content = "";
-    for await (const c of streamRespond(messages, modelHint(model))) {
+    for await (const c of run(messages, modelHint(model))) {
       if (c.delta) content += c.delta;
       else if (c.text) content = c.text;
     }
@@ -92,7 +103,7 @@ async function handleChat(req, res, cfg) {
   });
   const id = nowId();
   res.write(streamChunk(id, model, { role: "assistant" }));
-  for await (const c of streamRespond(messages, modelHint(model))) {
+  for await (const c of run(messages, modelHint(model))) {
     const piece = c.delta ?? c.text;
     if (piece) res.write(streamChunk(id, model, { content: piece }));
   }

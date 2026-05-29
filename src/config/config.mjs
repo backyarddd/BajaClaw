@@ -41,6 +41,10 @@ export const DEFAULTS = {
     host: "127.0.0.1", // localhost-only by default: keeps ChatGPT-OAuth use ToS-safe.
     port: 11435, // local-LLM endpoint (11434 is Ollama's port, kept free for that provider).
     apiKey: "", // optional shared secret for local clients; empty = no auth.
+    // "agent" (default): adds system prompt + memory recall + outcome logging.
+    // "raw": bare passthrough (no system prompt, memory, logging, or tools).
+    // Per request, the model `bajaclaw-raw` always forces raw regardless of this.
+    mode: "agent",
   },
   channels: {
     // Native channels. Enable + add a token, then `bajaclaw restart`.

@@ -92,6 +92,11 @@ await section("native agent (no provider -> graceful)", async () => {
     if (ch.text) text += ch.text; if (ch.delta) text += ch.delta;
   }
   check("agent yields a graceful no-provider message", /onboard|configured/.test(text));
+  let rawText = "";
+  for await (const ch of agent.streamRaw([{ role: "user", content: "hi" }])) {
+    if (ch.text) rawText += ch.text; if (ch.delta) rawText += ch.delta;
+  }
+  check("raw mode also resolves (graceful when no provider)", rawText.length > 0);
 });
 
 await section("openai endpoint (native agent)", async () => {
@@ -110,6 +115,14 @@ await section("openai endpoint (native agent)", async () => {
 
   const models = await (await fetch(`${base}/v1/models`)).json();
   check("/v1/models shape", models.object === "list" && models.data.some(m => m.id === "bajaclaw"));
+  check("/v1/models includes bare-mode model", models.data.some(m => m.id === "bajaclaw-raw"));
+
+  const rawChat = await (await fetch(`${base}/v1/chat/completions`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model: "bajaclaw-raw", messages: [{ role: "user", content: "ping" }] }),
+  })).json();
+  check("bajaclaw-raw returns OpenAI-shaped completion", rawChat.object === "chat.completion" &&
+    typeof rawChat.choices[0].message.content === "string");
 
   const chat = await (await fetch(`${base}/v1/chat/completions`, {
     method: "POST", headers: { "content-type": "application/json" },
