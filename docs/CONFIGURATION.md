@@ -33,6 +33,7 @@ for advanced changes. Defaults are merged in, so the file can be partial.
 | `ui.host` / `ui.port` | The web UI server. Default `127.0.0.1:18790`. |
 | `openaiEndpoint.enabled` | Whether to run the local OpenAI API. |
 | `openaiEndpoint.host` / `.port` | Default `127.0.0.1:11435` (11434 is left free for Ollama). |
+| `openaiEndpoint.mode` | `"agent"` (default: system prompt + memory + logging) or `"raw"` (bare passthrough). Per request, the model `bajaclaw-raw` always forces raw. |
 | `openaiEndpoint.upstream` | Optional `{ url, key }` to pass requests straight through to another OpenAI-compatible server instead of the agent. |
 | `selfUpdate.mode` | `propose` (write an approve-to-merge proposal), the only safe default. |
 | `channels.<id>` | `{ enabled, token }` per channel. See [CHANNELS.md](CHANNELS.md). |

@@ -223,7 +223,7 @@ export function EndpointView({ endpoints }) {
       <p className="lede">Point any OpenAI client at BajaClaw to use it as a local LLM.</p>
       <div className="card">
         <Field label="Base URL" value={`${base}/v1`} mono />
-        <Field label="Models" value="bajaclaw · bajaclaw-chatgpt · bajaclaw-fast" mono />
+        <Field label="Models" value="bajaclaw · bajaclaw-chatgpt · bajaclaw-fast · bajaclaw-raw" mono />
         <Field label="Routes" value="/v1/chat/completions · /v1/models · /health" mono />
         <Field label="Bind" value="localhost only (personal use)" />
       </div>
