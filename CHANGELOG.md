@@ -18,6 +18,9 @@ agent that depends on no external agent framework.
   `bajaclaw start` that runs as a launchd daemon and restores after reboot.
 - Local OpenAI-compatible endpoint (`/v1/chat/completions`, `/v1/models`,
   `/health`) on port 11435 so other programs can use BajaClaw as a local LLM.
+- Bare mode for the local endpoint: the `bajaclaw-raw` model (or
+  `openaiEndpoint.mode: "raw"`) streams straight from the configured provider
+  with no system prompt, memory, logging, or tools.
 - Native messaging channels: Telegram and Discord (working), with scaffolds for
   Slack, WhatsApp, and iMessage.
 - Self-improving memory store with skill synthesis (Hermes-inspired).

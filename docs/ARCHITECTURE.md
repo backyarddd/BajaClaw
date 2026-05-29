@@ -14,8 +14,9 @@ bajaclaw (one npm package)
 │   ├── llm/client.mjs      native multi-provider client. One shared SSE reader;
 │   │                       each provider is a request builder + a delta picker.
 │   ├── auth/               ChatGPT OAuth (PKCE) + per-provider credential store
-│   ├── agent/agent.mjs     agent loop: provider selection + fallback, memory
-│   │                       recall, outcome logging
+│   ├── agent/agent.mjs     two modes over one provider-fallback loop:
+│   │                       streamRespond (system prompt + memory + logging) and
+│   │                       streamRaw (bare passthrough)
 │   ├── config/config.mjs   single source of truth for paths, ports, defaults
 │   ├── daemon/
 │   │   ├── daemon.mjs      launchd lifecycle (install/start/stop/status)
@@ -54,16 +55,23 @@ All ports bind to `127.0.0.1` by default and are configurable.
 ## Request flow
 
 A message (from the web UI, the local API, or a channel) becomes an OpenAI-style
-message list and is handed to `src/agent/agent.mjs`:
+message list and is handed to `src/agent/agent.mjs`. Both modes share one
+provider-fallback loop:
 
 1. Build the candidate provider list from `defaultProvider` + `providerOrder`,
    keeping only those that are configured.
-2. Recall relevant past outcomes from the Hermes brain and add them as context.
-3. Stream from the first working provider; on failure, fall through to the next.
-4. On success, record the outcome to memory.
+2. Stream from the first working provider; on failure, fall through to the next.
 
-The web chat and the local OpenAI endpoint both call this same loop, so they
-always behave identically.
+**Agent mode** (`streamRespond`) wraps that loop with extras: a system prompt,
+relevant memory recalled from the Hermes brain, and outcome logging after a
+successful reply. The web chat uses this.
+
+**Raw mode** (`streamRaw`) skips all of it: your messages go straight to the
+provider, with no system prompt, memory, logging, or tools.
+
+The local OpenAI endpoint picks the mode per request: the model `bajaclaw-raw`
+forces raw, and `openaiEndpoint.mode: "raw"` makes the whole endpoint bare by
+default. Other model aliases use agent mode.
 
 ## Providers
 
