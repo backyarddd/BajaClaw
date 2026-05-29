@@ -1,9 +1,0 @@
-{
-  "id": "openai-endpoint",
-  "name": "Local OpenAI Endpoint",
-  "description": "Exposes BajaClaw as a local OpenAI-compatible LLM (/v1/chat/completions, /v1/models).",
-  "version": "1.0.0",
-  "activation": { "onStartup": true },
-  "enabledByDefault": true,
-  "main": "./server.mjs"
-}

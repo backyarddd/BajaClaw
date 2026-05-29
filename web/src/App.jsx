@@ -44,7 +44,9 @@ export default function App() {
     const t = setTimeout(() => setGwState((p) => (p === "connecting" ? "offline" : p)), 1500);
     let active = true;
     endpointHealth().then((ok) => active && setEpUp(ok));
-    const poll = setInterval(() => endpointHealth().then((ok) => active && setEpUp(ok)), 8000);
+    const poll = setInterval(() => {
+      if (!document.hidden) endpointHealth().then((ok) => active && setEpUp(ok));
+    }, 8000);
     return () => { active = false; clearTimeout(t); clearInterval(poll); conn.close(); };
   }, []);
 
@@ -79,7 +81,7 @@ export default function App() {
           ))}
         </nav>
         <div className="rail-foot">
-          <span className="mono">v1.0.0</span>
+          <span className="mono">v{__APP_VERSION__}</span>
         </div>
       </aside>
 

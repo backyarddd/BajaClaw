@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // BajaClaw CLI. Branded, simple, one command to run everything.
-import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import { color, glyph, wordmark, brandline, panel, spinner } from "../src/ui/theme.mjs";
+import { openUrl } from "../src/util.mjs";
 import { load, isOnboarded, CONFIG_DIR } from "../src/config/config.mjs";
 import * as daemon from "../src/daemon/daemon.mjs";
 import { onboard, onboardNonInteractive } from "../src/onboarding/onboard.mjs";
@@ -13,7 +14,7 @@ import { startChannels } from "../channels/manager.mjs";
 import { listReadyProviders } from "../src/agent/agent.mjs";
 import { check as checkUpdates } from "../plugins/self-updater/updater.mjs";
 
-const PKG_VERSION = "1.0.0";
+const PKG_VERSION = createRequire(import.meta.url)("../package.json").version;
 const argv = process.argv.slice(2);
 const cmd = argv[0];
 const flags = new Set(argv.filter((a) => a.startsWith("-")));
@@ -36,11 +37,6 @@ function help() {
     `${color.bold("bajaclaw doctor")}     ${color.dim("environment + health checks")}`,
   ]) + "\n");
   console.log(color.dim(`  config: ${CONFIG_DIR}`) + "\n");
-}
-
-function openUrl(url) {
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  try { execFileSync(opener, [url], { stdio: "ignore" }); return true; } catch { return false; }
 }
 
 async function cmdStart() {
@@ -88,8 +84,9 @@ function cmdStatus() {
 function cmdDoctor() {
   const checks = [];
   const nodeOk = Number(process.versions.node.split(".")[0]) >= 22;
+  const ready = listReadyProviders();
   checks.push([nodeOk, `Node ${process.versions.node} (need >=22.19)`]);
-  checks.push([listReadyProviders().length > 0, `A model is configured (${listReadyProviders().join(", ") || "none yet"})`]);
+  checks.push([ready.length > 0, `A model is configured (${ready.join(", ") || "none yet"})`]);
   checks.push([isOnboarded(), "Onboarded (config present)"]);
   checks.push([process.platform === "darwin", `Platform ${process.platform} (launchd daemon = macOS)`]);
   console.log("\n" + panel("doctor", checks.map(([good, label]) =>

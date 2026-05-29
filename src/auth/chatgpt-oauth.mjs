@@ -6,8 +6,8 @@
 // exchange -> store {access, refresh, account_id, expires}. Auto-refresh.
 import http from "node:http";
 import { createHash, randomBytes } from "node:crypto";
-import { execFile } from "node:child_process";
 import { saveCred, loadCred } from "./store.mjs";
+import { openUrl } from "../util.mjs";
 
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"; // public Codex client id
 const AUTHORIZE = "https://auth.openai.com/oauth/authorize";
@@ -65,11 +65,6 @@ async function exchange(code, verifier) {
   return r.json();
 }
 
-function openBrowser(url) {
-  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  execFile(opener, [url], () => {});
-}
-
 function persist(tok) {
   const cred = {
     type: "oauth",
@@ -119,7 +114,7 @@ export function login({ timeoutMs = 300000, print = console.log } = {}) {
     server.listen(1455, "127.0.0.1", () => {
       print(`Opening your browser to sign in with ChatGPT...`);
       print(`If it does not open, visit:\n${url}`);
-      openBrowser(url);
+      openUrl(url);
     });
   });
 }

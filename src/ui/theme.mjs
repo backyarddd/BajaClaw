@@ -10,7 +10,6 @@ const sgr = (open, close) => (s) =>
 // Palette: warm amber + teal/sand. OpenClaw leans lobster-red; we go desert/baja.
 // 256-color helpers (xterm-256 for broad terminal portability)
 const fg = (n) => (s) => (enabled ? `\x1b[38;5;${n}m${s}\x1b[39m` : String(s));
-const bg = (n) => (s) => (enabled ? `\x1b[48;5;${n}m${s}\x1b[49m` : String(s));
 
 export const color = {
   amber: fg(214), // primary
@@ -18,15 +17,9 @@ export const color = {
   teal: fg(43), // secondary / success accents
   sea: fg(38),
   dim: fg(245),
-  faint: fg(240),
   red: fg(203),
-  green: fg(78),
   yellow: fg(221),
-  white: fg(255),
-  onAmber: (s) => bg(214)(fg(232)(s)),
   bold: sgr(1, 22),
-  italic: sgr(3, 23),
-  underline: sgr(4, 24),
 };
 
 // Status glyphs - distinct set (OpenClaw uses ✓/✗/•; we use these).
@@ -38,7 +31,6 @@ export const glyph = {
   info: color.sea("›"),
   bullet: color.sand("▪"),
   arrow: color.amber("→"),
-  wave: color.teal("≈"),
 };
 
 // Wordmark - a dune/wave motif, not OpenClaw's lobster banner.
@@ -95,5 +87,3 @@ export function spinner(label) {
     },
   };
 }
-
-export const isColor = enabled;

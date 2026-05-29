@@ -21,25 +21,36 @@ async function agentReply(text, meta = {}) {
   return out;
 }
 
+const _handles = new Map(); // id -> { stop, info, pending }
+
 export async function startChannels({ log = console.log } = {}) {
   const cfg = load();
-  const started = [];
-  const chCfg = cfg.channels || {};
-  for (const [id, conf] of Object.entries(chCfg)) {
+  const active = [];
+  for (const [id, conf] of Object.entries(cfg.channels || {})) {
     if (!conf?.enabled) continue;
     const loader = CHANNELS[id];
     if (!loader) { log(`[channels] unknown channel: ${id}`); continue; }
     try {
       const mod = await loader();
-      await mod.start({ id, config: conf, onMessage: agentReply, log, publish });
-      started.push(id);
-      log(`[channels] ${id} started`);
+      const handle = await mod.start({ id, config: conf, onMessage: agentReply, log, publish });
+      _handles.set(id, handle);
+      if (handle?.pending) {
+        log(`[channels] ${id} scaffold loaded (not active)`);
+      } else {
+        active.push(id);
+        log(`[channels] ${id} active${handle?.info ? ` (${handle.info})` : ""}`);
+      }
     } catch (e) {
       log(`[channels] ${id} failed: ${e.message}`);
     }
   }
-  if (!started.length) log("[channels] none enabled (configure tokens in onboarding or ~/.bajaclaw/config.json)");
-  return started;
+  if (!active.length) log("[channels] no active channels (enable + add a token in onboarding or ~/.bajaclaw/config.json)");
+  return active;
+}
+
+export function stopChannels() {
+  for (const h of _handles.values()) { try { h?.stop?.(); } catch {} }
+  _handles.clear();
 }
 
 export const CHANNEL_IDS = Object.keys(CHANNELS);

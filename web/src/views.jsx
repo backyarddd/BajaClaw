@@ -122,19 +122,26 @@ export function ActivityView({ gwState }) {
 export function SessionsView() {
   return <Empty title="No active sessions">Conversations across channels appear here once the gateway is running.</Empty>;
 }
+const CHANNELS = [
+  { name: "Telegram", native: true },
+  { name: "Discord", native: true },
+  { name: "Slack" },
+  { name: "WhatsApp" },
+  { name: "iMessage" },
+];
 export function ChannelsView() {
-  const ch = ["Telegram", "Slack", "Discord", "WhatsApp", "Signal", "iMessage", "Email"];
   return (
     <div className="stack">
-      <p className="lede">Reach BajaClaw on the channels you already use. Connect them in onboarding or here.</p>
+      <p className="lede">Reach BajaClaw on the channels you already use. Enable one and add its token in onboarding or your config.</p>
       <ul className="list">
-        {ch.map((c) => (
-          <li key={c} className="list-row">
-            <span>{c}</span><Pill tone="neutral">not connected</Pill>
+        {CHANNELS.map((c) => (
+          <li key={c.name} className="list-row">
+            <span>{c.name}</span>
+            <Pill tone={c.native ? "teal" : "neutral"}>{c.native ? "native" : "scaffold"}</Pill>
           </li>
         ))}
       </ul>
-      <p className="muted">Channels are provided by OpenClaw extensions and configured via the gateway.</p>
+      <p className="muted">Telegram and Discord are native and ready once you add a bot token.</p>
     </div>
   );
 }
@@ -248,13 +255,14 @@ export function UpdatesView() {
 }
 
 /* ---------- Settings ---------- */
-export function SettingsView() {
+export function SettingsView({ endpoints }) {
+  const strip = (u, d) => (u || d).replace(/^https?:\/\//, "");
   return (
     <div className="stack">
       <div className="card">
         <Field label="Config" value="~/.bajaclaw/config.json" mono />
-        <Field label="Gateway" value="127.0.0.1:18789" mono />
-        <Field label="Local API" value="127.0.0.1:11435" mono />
+        <Field label="Gateway" value={strip(endpoints?.GATEWAY_BASE, "http://127.0.0.1:18789")} mono />
+        <Field label="Local API" value={strip(endpoints?.OPENAI_BASE, "http://127.0.0.1:11435")} mono />
         <Field label="Daemon" value="com.bajaclaw.gateway (launchd)" mono />
       </div>
       <p className="muted">After a reboot, run <code className="mono">bajaclaw start</code> to bring everything back up.</p>

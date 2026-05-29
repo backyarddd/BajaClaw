@@ -2,15 +2,15 @@
 // macOS: launchd. Other: detached process fallback.
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { writeFileSync, mkdirSync, existsSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { execFileSync, spawn } from "node:child_process";
-import { load } from "../config/config.mjs";
+import { load, CONFIG_DIR } from "../config/config.mjs";
 
 const HOME = homedir();
 const LABEL = "com.bajaclaw.gateway";
 const LA_DIR = join(HOME, "Library", "LaunchAgents");
 const PLIST = join(LA_DIR, `${LABEL}.plist`);
-const LOG_DIR = join(HOME, ".bajaclaw", "logs");
+const LOG_DIR = join(CONFIG_DIR, "logs");
 const isMac = platform() === "darwin";
 
 function uid() {
@@ -107,12 +107,6 @@ export function stop() {
     return { method: "launchd" };
   }
   return { method: "detached", note: "kill the bajaclaw _serve process manually" };
-}
-
-export function uninstall() {
-  stop();
-  if (existsSync(PLIST)) rmSync(PLIST);
-  return PLIST;
 }
 
 export function status() {

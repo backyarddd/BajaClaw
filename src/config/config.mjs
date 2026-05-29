@@ -1,7 +1,7 @@
 // BajaClaw config layer. Stores under ~/.bajaclaw (fresh in v2).
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 
 export const HOME = homedir();
 export const CONFIG_DIR = process.env.BAJACLAW_HOME || join(HOME, ".bajaclaw");
@@ -70,19 +70,35 @@ export function ensureDir() {
   if (!existsSync(CONFIG_DIR)) mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
 }
 
+// Cache the merged config to avoid re-reading + re-parsing on every request
+// (load() sits on the agent hot path). Invalidated by file mtime/size or save().
+// Always returns a fresh clone so callers can mutate their copy safely.
+let _merged = null;
+let _key = null;
+function fileKey() {
+  try { const s = statSync(CONFIG_PATH); return `${s.mtimeMs}:${s.size}`; } catch { return "none"; }
+}
+
 export function load() {
-  if (!existsSync(CONFIG_PATH)) return structuredClone(DEFAULTS);
-  try {
-    const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-    return deepMerge(structuredClone(DEFAULTS), raw);
-  } catch {
-    return structuredClone(DEFAULTS);
+  const k = fileKey();
+  if (_merged && _key === k) return structuredClone(_merged);
+  if (!existsSync(CONFIG_PATH)) {
+    _merged = structuredClone(DEFAULTS);
+  } else {
+    try {
+      _merged = deepMerge(structuredClone(DEFAULTS), JSON.parse(readFileSync(CONFIG_PATH, "utf8")));
+    } catch {
+      _merged = structuredClone(DEFAULTS);
+    }
   }
+  _key = k;
+  return structuredClone(_merged);
 }
 
 export function save(cfg) {
   ensureDir();
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  _key = null; // invalidate cache; next load() re-reads
   return CONFIG_PATH;
 }
 
