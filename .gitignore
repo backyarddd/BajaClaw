@@ -7,3 +7,4 @@ _temp/
 assets/*.png
 .bajaclaw/
 .claude/
+.npmrc
