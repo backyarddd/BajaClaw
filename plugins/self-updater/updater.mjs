@@ -3,13 +3,12 @@
 //   - openclaw/openclaw         (GitHub releases)  -> our core dependency
 //   - NousResearch/hermes-agent (GitHub releases)  -> brain ideas
 //   - Claude Cowork             (Anthropic page)   -> closed source: snapshot+diff
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { CONFIG_DIR } from "../../src/config/config.mjs";
 
-const HOME = homedir();
-const DIR = process.env.BAJACLAW_HOME || join(HOME, ".bajaclaw");
+const DIR = CONFIG_DIR;
 const STATE = join(DIR, "update-state.json");
 const UPDATES_DIR = join(DIR, "updates");
 

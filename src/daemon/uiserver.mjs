@@ -15,6 +15,7 @@ const MIME = {
 };
 
 export function startUiServer({ dist, host = "127.0.0.1", port = 18790, onListen } = {}) {
+  const cache = new Map(); // path -> Buffer; the built bundle is immutable per run
   const server = http.createServer((req, res) => {
     if (!existsSync(dist)) {
       res.writeHead(503, { "content-type": "text/html" });
@@ -27,8 +28,13 @@ export function startUiServer({ dist, host = "127.0.0.1", port = 18790, onListen
     if (!file.startsWith(dist)) file = join(dist, "index.html");
     if (!existsSync(file)) file = join(dist, "index.html"); // SPA fallback
     try {
-      res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
-      res.end(readFileSync(file));
+      let body = cache.get(file);
+      if (!body) { body = readFileSync(file); cache.set(file, body); }
+      res.writeHead(200, {
+        "content-type": MIME[extname(file)] || "application/octet-stream",
+        "cache-control": "no-cache",
+      });
+      res.end(body);
     } catch {
       res.writeHead(404);
       res.end("not found");

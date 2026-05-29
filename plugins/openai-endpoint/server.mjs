@@ -5,6 +5,7 @@
 // Routes: GET /health, GET /v1/models, POST /v1/chat/completions (stream + json).
 import http from "node:http";
 import { streamRespond } from "../../src/agent/agent.mjs";
+import { REGISTRY } from "../../src/llm/client.mjs";
 
 const MODELS = [
   { id: "bajaclaw", owned_by: "bajaclaw" },
@@ -55,7 +56,7 @@ function streamChunk(id, model, delta, finish = null) {
 
 // Map an OpenAI model alias to a provider hint (bajaclaw-chatgpt forces ChatGPT).
 function modelHint(model) {
-  if (model === "bajaclaw-chatgpt") return { model: "gpt-5.5" };
+  if (model === "bajaclaw-chatgpt") return { model: REGISTRY["openai-codex"].defaultModel };
   return {};
 }
 
