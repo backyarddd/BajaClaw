@@ -209,7 +209,7 @@ export function ProvidersView() {
 
 /* ---------- Local API endpoint ---------- */
 export function EndpointView({ endpoints }) {
-  const base = endpoints?.OPENAI_BASE || "http://127.0.0.1:11434";
+  const base = endpoints?.OPENAI_BASE || "http://127.0.0.1:11435";
   const curl = `curl ${base}/v1/chat/completions \\\n  -H "content-type: application/json" \\\n  -d '{"model":"bajaclaw","messages":[{"role":"user","content":"hi"}]}'`;
   return (
     <div className="stack">
@@ -232,7 +232,7 @@ export function EndpointView({ endpoints }) {
 export function UpdatesView() {
   return (
     <div className="stack">
-      <p className="lede">BajaClaw watches OpenClaw, Hermes, and Cowork daily and writes proposals. Nothing is merged without your approval.</p>
+      <p className="lede">BajaClaw watches its inspirations (OpenClaw, Hermes, Cowork) daily and writes proposals. Nothing is merged without your approval.</p>
       <div className="card">
         <Field label="Watching" value="openclaw/openclaw · NousResearch/hermes-agent · Claude Cowork" mono />
         <Field label="Mode" value="propose · approve to merge" />
@@ -254,7 +254,7 @@ export function SettingsView() {
       <div className="card">
         <Field label="Config" value="~/.bajaclaw/config.json" mono />
         <Field label="Gateway" value="127.0.0.1:18789" mono />
-        <Field label="Local API" value="127.0.0.1:11434" mono />
+        <Field label="Local API" value="127.0.0.1:11435" mono />
         <Field label="Daemon" value="com.bajaclaw.gateway (launchd)" mono />
       </div>
       <p className="muted">After a reboot, run <code className="mono">bajaclaw start</code> to bring everything back up.</p>

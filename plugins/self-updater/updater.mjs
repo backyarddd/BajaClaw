@@ -43,14 +43,6 @@ async function ghLatest(repo) {
   return { repo, version: null, error: "unreachable or rate-limited" };
 }
 
-async function npmLatest(pkg) {
-  try {
-    const r = await fetch(`https://registry.npmjs.org/${pkg}/latest`);
-    if (r.ok) { const j = await r.json(); return j.version; }
-  } catch {}
-  return null;
-}
-
 async function coworkSnapshot(url) {
   try {
     const r = await fetch(url, { headers: { "user-agent": "bajaclaw-self-updater" } });
@@ -66,10 +58,9 @@ async function coworkSnapshot(url) {
 export async function check(cfg, { write = true } = {}) {
   const watch = cfg.selfUpdate.watch;
   const state = loadState();
-  const [openclaw, hermes, npmOpenclaw, cowork] = await Promise.all([
+  const [openclaw, hermes, cowork] = await Promise.all([
     ghLatest(watch.openclaw),
     ghLatest(watch.hermes),
-    npmLatest("openclaw"),
     coworkSnapshot(watch.coworkChangelog),
   ]);
 
@@ -81,25 +72,24 @@ export async function check(cfg, { write = true } = {}) {
     state.seen[key] = cur ?? prev;
   };
 
-  consider("openclaw.release", openclaw.version, "OpenClaw (core dependency)", { url: openclaw.url, notes: openclaw.notes });
-  consider("openclaw.npm", npmOpenclaw, "openclaw npm package", {});
-  consider("hermes.release", hermes.version, "Hermes Agent (brain ideas)", { url: hermes.url, notes: hermes.notes });
+  consider("openclaw.release", openclaw.version, "OpenClaw (inspiration)", { url: openclaw.url, notes: openclaw.notes });
+  consider("hermes.release", hermes.version, "Hermes Agent (inspiration)", { url: hermes.url, notes: hermes.notes });
   consider("cowork.snapshot", cowork.hash, "Claude Cowork page (closed source)", { url: cowork.url });
 
   state.lastRun = new Date().toISOString();
   if (write) saveState(state);
 
-  const proposal = renderProposal({ findings, openclaw, hermes, npmOpenclaw, cowork, mode: cfg.selfUpdate.mode });
+  const proposal = renderProposal({ findings, openclaw, hermes, cowork, mode: cfg.selfUpdate.mode });
   let proposalPath = null;
   if (write && findings.length) {
     if (!existsSync(UPDATES_DIR)) mkdirSync(UPDATES_DIR, { recursive: true });
     proposalPath = join(UPDATES_DIR, `proposal-${state.lastRun.slice(0, 10)}.md`);
     writeFileSync(proposalPath, proposal);
   }
-  return { findings, proposal, proposalPath, raw: { openclaw, hermes, npmOpenclaw, cowork } };
+  return { findings, proposal, proposalPath, raw: { openclaw, hermes, cowork } };
 }
 
-function renderProposal({ findings, npmOpenclaw, mode }) {
+function renderProposal({ findings, mode }) {
   const lines = [];
   lines.push(`# BajaClaw upstream update proposal`);
   lines.push(`Generated: ${new Date().toISOString()}  ·  mode: ${mode}`);
@@ -118,8 +108,8 @@ function renderProposal({ findings, npmOpenclaw, mode }) {
     lines.push("");
   }
   lines.push("## Suggested action");
-  if (npmOpenclaw) lines.push(`- Core bump: \`npm i openclaw@${npmOpenclaw}\` then \`bajaclaw restart\`.`);
-  lines.push("- Hermes/Cowork changes are idea sources - port worthwhile features into plugins/.");
+  lines.push("- BajaClaw is standalone; these are inspiration sources, not dependencies.");
+  lines.push("- Port any worthwhile feature natively into src/ or plugins/, then `bajaclaw restart`.");
   lines.push("- This file is a proposal only. Nothing was changed automatically.");
   return lines.join("\n");
 }

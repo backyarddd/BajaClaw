@@ -25,7 +25,9 @@ export const DEFAULTS = {
   version: 1,
   // ChatGPT-OAuth default; precedence is the fallback order if a provider is rate-limited.
   defaultProvider: "openai-codex",
-  providerOrder: ["openai-codex", "anthropic", "openrouter", "google", "ollama"],
+  // Fallback order among providers you have set up. Local providers (ollama,
+  // lmstudio) are opt-in via onboarding so a fresh install reports honestly.
+  providerOrder: ["openai-codex", "anthropic", "openrouter", "google"],
   gateway: {
     host: "127.0.0.1",
     port: 18789, // OpenClaw gateway default; the daemon is the gateway.
@@ -37,8 +39,16 @@ export const DEFAULTS = {
   openaiEndpoint: {
     enabled: true,
     host: "127.0.0.1", // localhost-only by default: keeps ChatGPT-OAuth use ToS-safe.
-    port: 11434, // familiar local-LLM port; configurable.
+    port: 11435, // local-LLM endpoint (11434 is Ollama's port, kept free for that provider).
     apiKey: "", // optional shared secret for local clients; empty = no auth.
+  },
+  channels: {
+    // Native channels. Enable + add a token, then `bajaclaw restart`.
+    telegram: { enabled: false, token: "" },
+    discord: { enabled: false, token: "" },
+    slack: { enabled: false, token: "" },
+    whatsapp: { enabled: false, token: "" },
+    imessage: { enabled: false },
   },
   selfUpdate: {
     enabled: true,
